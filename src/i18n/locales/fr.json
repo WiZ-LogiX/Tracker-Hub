@@ -1,0 +1,54 @@
+{
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "add": "Ajouter",
+    "search": "Rechercher",
+    "loading": "Chargement...",
+    "back": "Retour",
+    "home": "Accueil",
+    "logout": "Déconnexion",
+    "login": "Connexion",
+    "signup": "S'inscrire",
+    "language": "Langue",
+    "theme": "Thème",
+    "lightMode": "Clair",
+    "darkMode": "Sombre",
+    "systemMode": "Système"
+  },
+  "errors": {
+    "notFoundTitle": "Page introuvable",
+    "notFoundDesc": "La page que vous recherchez n'existe pas.",
+    "backHome": "Retour à l'accueil",
+    "somethingWrong": "Une erreur est survenue",
+    "retry": "Réessayer"
+  },
+  "admin": {
+    "panel": "Panneau d'administration",
+    "noAccess": "Votre compte n'a pas accès à l'administration.",
+    "nav": {
+      "home": "Tableau de bord",
+      "requests": "Demandes clients",
+      "configurator": "Configurateur produit",
+      "quotes": "Devis",
+      "invoices": "Factures",
+      "orders": "Suivi production",
+      "products": "Modèles produits",
+      "materials": "Matériaux",
+      "materialVariants": "Variantes matériaux",
+      "suppliers": "Fournisseurs",
+      "finishes": "Finitions",
+      "veneers": "Placages",
+      "accessories": "Accessoires",
+      "pricingFactors": "Facteurs de prix",
+      "wastageRules": "Règles de perte",
+      "pricingRules": "Règles de prix",
+      "discounts": "Remises",
+      "notifications": "Notifications",
+      "workers": "Ouvriers",
+      "remakes": "Reprises"
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "loading": "Loading...",
+    "back": "Back",
+    "home": "Home",
+    "logout": "Sign out",
+    "login": "Sign in",
+    "signup": "Sign up",
+    "language": "Language",
+    "theme": "Theme",
+    "lightMode": "Light",
+    "darkMode": "Dark",
+    "systemMode": "System"
+  },
+  "errors": {
+    "notFoundTitle": "Page not found",
+    "notFoundDesc": "The page you are looking for does not exist.",
+    "backHome": "Back to home",
+    "somethingWrong": "Something went wrong",
+    "retry": "Try again"
+  },
+  "admin": {
+    "panel": "Admin Panel",
+    "noAccess": "Your account does not have admin access.",
+    "nav": {
+      "home": "Dashboard",
+      "requests": "Customer Requests",
+      "configurator": "Product Configurator",
+      "quotes": "Quotes",
+      "invoices": "Invoices",
+      "orders": "Production Tracking",
+      "products": "Product Templates",
+      "materials": "Materials",
+      "materialVariants": "Material Variants",
+      "suppliers": "Suppliers",
+      "finishes": "Finishes",
+      "veneers": "Veneers",
+      "accessories": "Accessories",
+      "pricingFactors": "Pricing Factors",
+      "wastageRules": "Wastage Rules",
+      "pricingRules": "Pricing Rules",
+      "discounts": "Discounts",
+      "notifications": "Notifications",
+      "workers": "Workers",
+      "remakes": "Remakes"
+    }
+  }
+}

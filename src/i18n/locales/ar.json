@@ -1,0 +1,54 @@
+{
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "add": "إضافة",
+    "search": "بحث",
+    "loading": "جارٍ التحميل...",
+    "back": "رجوع",
+    "home": "الرئيسية",
+    "logout": "تسجيل الخروج",
+    "login": "تسجيل الدخول",
+    "signup": "إنشاء حساب",
+    "language": "اللغة",
+    "theme": "المظهر",
+    "lightMode": "وضع فاتح",
+    "darkMode": "وضع داكن",
+    "systemMode": "حسب النظام"
+  },
+  "errors": {
+    "notFoundTitle": "الصفحة غير موجودة",
+    "notFoundDesc": "الصفحة اللي بتدور عليها مش موجودة.",
+    "backHome": "العودة للرئيسية",
+    "somethingWrong": "حصل خطأ ما",
+    "retry": "حاول مرة أخرى"
+  },
+  "admin": {
+    "panel": "لوحة الإدارة",
+    "noAccess": "حسابك ليس له صلاحية وصول للوحة الإدارة.",
+    "nav": {
+      "home": "الرئيسية",
+      "requests": "طلبات العملاء",
+      "configurator": "مكوّن المنتج",
+      "quotes": "عروض الأسعار",
+      "invoices": "الفواتير",
+      "orders": "تتبع الإنتاج",
+      "products": "قوالب المنتجات",
+      "materials": "الخامات",
+      "materialVariants": "متغيرات الخامات",
+      "suppliers": "الموردون",
+      "finishes": "التشطيبات",
+      "veneers": "القشرة",
+      "accessories": "الإكسسوارات",
+      "pricingFactors": "عوامل التسعير",
+      "wastageRules": "قواعد الهدر",
+      "pricingRules": "قواعد التسعير",
+      "discounts": "الخصومات",
+      "notifications": "الإشعارات",
+      "workers": "العمال",
+      "remakes": "إعادة التصنيع"
+    }
+  }
+}
