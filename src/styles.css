@@ -1,0 +1,134 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: 'Cairo', 'Inter', system-ui, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+}
+
+/* Emerald Prestige palette: deep emerald + muted gold + warm cream */
+:root {
+  --radius: 0.5rem;
+  /* base */
+  --background: oklch(0.985 0.012 95);          /* cream #f5f0e0 */
+  --foreground: oklch(0.22 0.05 165);           /* near-black emerald */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.05 165);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.05 165);
+  /* primary = deep emerald */
+  --primary: oklch(0.33 0.085 165);             /* #064e3b */
+  --primary-foreground: oklch(0.985 0.012 95);
+  /* secondary = lighter emerald */
+  --secondary: oklch(0.50 0.10 165);            /* #0d7a5f */
+  --secondary-foreground: oklch(1 0 0);
+  --muted: oklch(0.95 0.014 95);
+  --muted-foreground: oklch(0.45 0.03 160);
+  --accent: oklch(0.93 0.025 95);
+  --accent-foreground: oklch(0.22 0.05 165);
+  --destructive: oklch(0.52 0.20 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.88 0.02 100);
+  --input: oklch(0.92 0.018 100);
+  --ring: oklch(0.50 0.10 165);
+  --gold: oklch(0.74 0.12 85);                  /* #c9a84c */
+  --gold-foreground: oklch(0.22 0.05 165);
+  --sidebar: oklch(0.30 0.075 165);
+  --sidebar-foreground: oklch(0.95 0.018 95);
+  --sidebar-primary: oklch(0.74 0.12 85);
+  --sidebar-primary-foreground: oklch(0.22 0.05 165);
+  --sidebar-accent: oklch(0.38 0.085 165);
+  --sidebar-accent-foreground: oklch(0.985 0.012 95);
+  --sidebar-border: oklch(0.40 0.08 165);
+  --sidebar-ring: oklch(0.74 0.12 85);
+}
+
+.dark {
+  --background: oklch(0.18 0.025 165);
+  --foreground: oklch(0.96 0.012 95);
+  --card: oklch(0.22 0.035 165);
+  --card-foreground: oklch(0.96 0.012 95);
+  --popover: oklch(0.22 0.035 165);
+  --popover-foreground: oklch(0.96 0.012 95);
+  --primary: oklch(0.74 0.12 85);              /* gold becomes primary accent in dark */
+  --primary-foreground: oklch(0.18 0.025 165);
+  --secondary: oklch(0.50 0.10 165);
+  --secondary-foreground: oklch(0.98 0 0);
+  --muted: oklch(0.26 0.03 165);
+  --muted-foreground: oklch(0.72 0.025 95);
+  --accent: oklch(0.30 0.05 165);
+  --accent-foreground: oklch(0.96 0.012 95);
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.32 0.04 165);
+  --input: oklch(0.30 0.04 165);
+  --ring: oklch(0.74 0.12 85);
+  --gold: oklch(0.78 0.13 85);
+  --gold-foreground: oklch(0.18 0.025 165);
+  --sidebar: oklch(0.14 0.025 165);
+  --sidebar-foreground: oklch(0.95 0.018 95);
+  --sidebar-primary: oklch(0.74 0.12 85);
+  --sidebar-primary-foreground: oklch(0.18 0.025 165);
+  --sidebar-accent: oklch(0.24 0.04 165);
+  --sidebar-accent-foreground: oklch(0.985 0.012 95);
+  --sidebar-border: oklch(0.28 0.05 165);
+  --sidebar-ring: oklch(0.74 0.12 85);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { font-family: var(--font-sans); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+  h1, h2, h3, h4 { font-family: var(--font-serif); letter-spacing: -0.01em; }
+  [dir="rtl"] .rtl-flip { transform: scaleX(-1); }
+}
+
+@layer utilities {
+  .text-gold { color: var(--color-gold); }
+  .bg-gold { background-color: var(--color-gold); }
+  .border-gold { border-color: var(--color-gold); }
+  .gradient-emerald {
+    background: linear-gradient(135deg, oklch(0.30 0.075 165), oklch(0.45 0.09 165));
+  }
+}
