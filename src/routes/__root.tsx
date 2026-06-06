@@ -13,6 +13,7 @@ import { AuthProvider } from "@/lib/useAuth";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LanguageProvider } from "@/components/language-provider";
 import "@/i18n";
+import { ClientThemeInit } from "@/components/client-theme-init";
 
 import appCss from "../styles.css?url";
 
@@ -68,11 +69,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" },
     ],
-    scripts: [
-      {
-        children: `(function(){try{var t=localStorage.getItem('pelecanon-theme')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');var l=localStorage.getItem('pelecanon-lang')||'ar';document.documentElement.lang=l;document.documentElement.dir=(l==='ar')?'rtl':'ltr';}catch(e){}})();`,
-      },
-    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -99,6 +95,7 @@ function RootComponent() {
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>
+            <ClientThemeInit />
             <Outlet />
             <Toaster position="top-center" richColors />
           </AuthProvider>
