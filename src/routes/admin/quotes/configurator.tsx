@@ -70,7 +70,7 @@ function ConfiguratorBuilder() {
       supabase.from('customers').select('*').order('created_at', { ascending: false }),
       supabase.from('pricing_factors').select('*').eq('active', true),
       supabase.from('pricing_rules').select('*').eq('status', 'active').maybeSingle(),
-      supabase.from('wastage_rules').select('*').eq('active', true),
+      supabase.from('wastage_rules').select('*').eq('active', true).order('material_id').order('min_dimension'),
     ]).then(([t, c, m, sp, f, v, a, cu, pf, pr, wr]) => {
       setTemplates(t.data ?? []); setCategories(c.data ?? []); setMaterials(m.data ?? []);
       setVariants([]); setSuppliers(sp.data ?? []);
@@ -78,9 +78,9 @@ function ConfiguratorBuilder() {
       setAccessories(a.data ?? []); setCustomers(cu.data ?? []); setFactors(pf.data ?? []);
       setActiveRule(pr.data ?? null); setWastageRules(wr.data ?? []);
       
-      // Check if wastage_rules has material_id column
-      if (wr.error && wr.error.message.includes("material_id")) {
-        setDbError("wastage_rules_missing_material_id");
+      // Check if wastage_rules has dimension columns
+      if (wr.error && (wr.error.message.includes("min_dimension") || wr.error.message.includes("max_dimension"))) {
+        setDbError("wastage_rules_missing_dimension_cols");
       }
     });
   }, []);
@@ -91,19 +91,37 @@ function ConfiguratorBuilder() {
     return m;
   }, [suppliers]);
 
-  // Build wastage lookup map: material_id -> wastage_pct (from wastage_rules table)
+  // Build wastage lookup map: material_id -> array of { min, max, wastage_pct }
   const wastageMap = useMemo(() => {
-    const map: Record<string, number> = {};
+    const map: Record<string, Array<{ min: number; max: number | null; pct: number }>> = {};
     for (const wr of wastageRules) {
-      if (wr.material_id) map[wr.material_id] = Number(wr.wastage_pct);
+      if (wr.material_id) {
+        if (!map[wr.material_id]) map[wr.material_id] = [];
+        map[wr.material_id].push({
+          min: Number(wr.min_dimension ?? 0),
+          max: wr.max_dimension != null ? Number(wr.max_dimension) : null,
+          pct: Number(wr.wastage_pct),
+        });
+      }
+    }
+    // Sort each material's rules by min_dimension
+    for (const key of Object.keys(map)) {
+      map[key].sort((a, b) => a.min - b.min);
     }
     return map;
   }, [wastageRules]);
 
   function lookupWastage(materialId: string | null | undefined, materialType: string | undefined, dim: number): number | null {
     if (!materialId) return null;
-    // First priority: material-specific wastage rule
-    if (wastageMap[materialId] != null) return wastageMap[materialId];
+    // First priority: dimension-based wastage rules
+    const rules = wastageMap[materialId];
+    if (rules && rules.length > 0) {
+      for (const rule of rules) {
+        if (dim >= rule.min && (rule.max === null || dim < rule.max)) {
+          return rule.pct;
+        }
+      }
+    }
     // Fallback: material's own wastage_pct column
     const material = materials.find(m => m.id === materialId);
     if (material?.wastage_pct != null) return Number(material.wastage_pct);
@@ -223,7 +241,7 @@ function ConfiguratorBuilder() {
     nav({ to: '/admin/quotes/$id', params: { id: quote.id } });
   }
 
-  if (dbError === "wastage_rules_missing_material_id") {
+  if (dbError === "wastage_rules_missing_dimension_cols") {
     return (
       <div className="space-y-6">
         <Card className="border-yellow-500/50 bg-yellow-50/50">
@@ -235,7 +253,7 @@ function ConfiguratorBuilder() {
               <div>
                 <h3 className="font-semibold">قاعدة البيانات تحتاج لترقية</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  جدول <code>wastage_rules</code> لا يحتوي على عمود <code>material_id</code>.
+                  جدول <code>wastage_rules</code> لا يحتوي على أعمدة <code>min_dimension</code> و <code>max_dimension</code>.
                   اذهب إلى تبويب <strong>قواعد الهدر</strong> واضغط <strong>"ترقية قاعدة البيانات"</strong>.
                 </p>
               </div>
@@ -308,7 +326,14 @@ function ConfiguratorBuilder() {
                         {materials.map(m => (
                           <SelectItem key={m.id} value={m.id}>
                             {m.name_ar} • {formatEGP(Number(m.price_per_unit))}/{m.unit}
-                            {(wastageMap[m.id] != null || m.wastage_pct) && ` • هدر: ${wastageMap[m.id] ?? m.wastage_pct}%`}
+                            {(() => {
+                              const rules = wastageMap[m.id];
+                              if (rules && rules.length > 0) {
+                                return ` • أبعاد: ${rules.map(r => `${r.min}–${r.max ?? '∞'}:${r.pct}%`).join(', ')}`;
+                              }
+                              if (m.wastage_pct) return ` • هدر: ${m.wastage_pct}%`;
+                              return '';
+                            })()}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -316,9 +341,16 @@ function ConfiguratorBuilder() {
                     {ci.material && (
                       <div className="mt-1 text-[11px] text-muted-foreground">
                         {ci.supplier?.name ?? '—'} • {ci.material.country_of_origin ?? '—'}
-                        {(wastageMap[ci.material.id] != null || ci.material.wastage_pct) && (
-                          <span className="text-gold ml-2">هدر: {wastageMap[ci.material.id] ?? ci.material.wastage_pct}%</span>
-                        )}
+                        {(() => {
+                          const rules = wastageMap[ci.material.id];
+                          if (rules && rules.length > 0) {
+                            return <span className="text-gold ml-2">أبعاد: {rules.map(r => `${r.min}–${r.max ?? '∞'}:${r.pct}%`).join(', ')}</span>;
+                          }
+                          if (ci.material.wastage_pct) {
+                            return <span className="text-gold ml-2">هدر: {ci.material.wastage_pct}%</span>;
+                          }
+                          return null;
+                        })()}
                       </div>
                     )}
                   </div>
