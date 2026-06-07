@@ -83,19 +83,21 @@ function OrdersPage() {
         const { key, uploadUrl } = uploads[i];
         
         try {
-          // Upload directly to R2 using presigned URL
-          const uploadRes = await fetch(uploadUrl, {
-            method: 'PUT',
-            body: file,
-            headers: { 'Content-Type': file.type || 'image/jpeg' },
-          });
-          
-          console.log('[R2 Upload] Response status:', uploadRes.status);
-          if (!uploadRes.ok) {
-            const errText = await uploadRes.text();
-            console.error('[R2 Upload] Error response:', errText);
-            throw new Error(`Upload failed: ${uploadRes.status} - ${errText}`);
-          }
+        // Upload directly to R2 using presigned URL
+        console.log('[R2 Upload] Attempting PUT to:', uploadUrl);
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'image/jpeg' },
+        });
+        
+        console.log('[R2 Upload] Response status:', uploadRes.status, uploadRes.statusText);
+        console.log('[R2 Upload] Response headers:', [...uploadRes.headers.entries()]);
+        if (!uploadRes.ok) {
+          const errText = await uploadRes.text();
+          console.error('[R2 Upload] Error response:', errText);
+          throw new Error(`Upload failed: ${uploadRes.status} - ${errText}`);
+        }
 
           // Store the R2 key and generate a public URL for display
           const photoUrl = getR2PublicUrl(key);
