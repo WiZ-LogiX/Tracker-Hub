@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Inbox, FileText, Receipt, ClipboardList,
   Package, Layers3, Palette, Wrench, Ticket, LogOut, Menu,
   Truck, Trees, SlidersHorizontal, GitBranch, Sparkles, Bell,
-  Users, RefreshCcw, BarChart3, Cloud
+  Users, RefreshCcw, BarChart3
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -37,7 +37,6 @@ const NAV = [
   { to: "/admin/notifications", labelKey: "admin.nav.notifications", icon: Bell },
   { to: "/admin/workers", labelKey: "admin.nav.workers", icon: Users },
   { to: "/admin/remakes", labelKey: "admin.nav.remakes", icon: RefreshCcw },
-  { to: "/admin/r2-migration", labelKey: "admin.nav.r2Migration", icon: Cloud },
 ];
 
 
