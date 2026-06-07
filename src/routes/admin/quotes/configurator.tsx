@@ -51,6 +51,7 @@ function ConfiguratorBuilder() {
   const [factors, setFactors] = useState<any[]>([]);
   const [wastageRules, setWastageRules] = useState<any[]>([]);
   const [activeRule, setActiveRule] = useState<any>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   const [customerId, setCustomerId] = useState('');
   const [items, setItems] = useState<Item[]>([blankItem()]);
@@ -61,7 +62,7 @@ function ConfiguratorBuilder() {
     Promise.all([
       supabase.from('product_templates').select('*').eq('active', true),
       supabase.from('categories').select('*'),
-      supabase.from('materials').select('*, wastage_rules!left(wastage_pct)').eq('active', true),
+      supabase.from('materials').select('*').eq('active', true),
       supabase.from('suppliers').select('*').eq('active', true),
       supabase.from('finishes').select('*').eq('active', true),
       supabase.from('veneers').select('*').eq('active', true),
@@ -76,6 +77,11 @@ function ConfiguratorBuilder() {
       setFinishes(f.data ?? []); setVeneers(v.data ?? []);
       setAccessories(a.data ?? []); setCustomers(cu.data ?? []); setFactors(pf.data ?? []);
       setActiveRule(pr.data ?? null); setWastageRules(wr.data ?? []);
+      
+      // Check if wastage_rules has material_id column
+      if (wr.error && wr.error.message.includes("material_id")) {
+        setDbError("wastage_rules_missing_material_id");
+      }
     });
   }, []);
 
@@ -215,6 +221,29 @@ function ConfiguratorBuilder() {
     setSaving(false);
     toast.success(status === 'draft' ? "تم الحفظ كمسودة" : "تم إرسال العرض");
     nav({ to: '/admin/quotes/$id', params: { id: quote.id } });
+  }
+
+  if (dbError === "wastage_rules_missing_material_id") {
+    return (
+      <div className="space-y-6">
+        <Card className="border-yellow-500/50 bg-yellow-50/50">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                <Sparkles className="h-5 w-5 text-yellow-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">قاعدة البيانات تحتاج لترقية</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  جدول <code>wastage_rules</code> لا يحتوي على عمود <code>material_id</code>.
+                  اذهب إلى تبويب <strong>قواعد الهدر</strong> واضغط <strong>"ترقية قاعدة البيانات"</strong>.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (

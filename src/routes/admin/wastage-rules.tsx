@@ -3,13 +3,14 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { listMaterials, upsertMaterial } from "@/lib/materials.functions";
+import { applyWastageRulesMigration } from "@/lib/apply-migration.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Sparkles, RefreshCw } from "lucide-react";
+import { Plus, Sparkles, RefreshCw, Database } from "lucide-react";
 import { toast } from "sonner";
 import { formatEGP } from "@/lib/pricing";
 
@@ -19,8 +20,10 @@ function WastageRulesPage() {
   const [materials, setMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
   const listFn = useServerFn(listMaterials);
   const upsertFn = useServerFn(upsertMaterial);
+  const applyMigration = useServerFn(applyWastageRulesMigration);
 
   async function load() {
     setLoading(true);
@@ -28,12 +31,37 @@ function WastageRulesPage() {
       const { items } = await listFn();
       setMaterials(items ?? []);
     } catch (e: any) {
-      toast.error(e?.message ?? "فشل التحميل");
+      // If the error is about missing column, show migration button
+      if (e.message.includes("material_id") || e.message.includes("relationship")) {
+        setMigrationStatus("migration_needed");
+      } else {
+        toast.error(e?.message ?? "فشل التحميل");
+      }
     } finally {
       setLoading(false);
     }
   }
   useEffect(() => { load(); }, []);
+
+  async function runMigration() {
+    setLoading(true);
+    try {
+      const result = await applyMigration();
+      if (result.success) {
+        toast.success("تم تطبيق الترقية بنجاح");
+        setMigrationStatus(null);
+        load();
+      } else {
+        toast.error(`فشل الترقية: ${result.error}`);
+        setMigrationStatus("failed");
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل الترقية");
+      setMigrationStatus("failed");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function saveWastage(material: any, wastagePct: number) {
     setSaving(material.id);
@@ -64,7 +92,6 @@ function WastageRulesPage() {
   async function syncAllMaterials() {
     setLoading(true);
     try {
-      // Fetch all materials and ensure they have wastage rules
       const { data } = await supabase.from("materials").select("id, wastage_pct").eq("active", true);
       for (const m of data ?? []) {
         if (m.wastage_pct && m.wastage_pct > 0) {
@@ -95,10 +122,31 @@ function WastageRulesPage() {
             كل خامة لها نسبة هدر واحدة. يتم تطبيقها تلقائياً في منشئ عروض الأسعار.
           </p>
         </div>
-        <Button variant="outline" onClick={syncAllMaterials} disabled={loading} className="gap-2">
-          <RefreshCw className="h-4 w-4" /> مزامنة مع الخامات
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={syncAllMaterials} disabled={loading} className="gap-2">
+            <RefreshCw className="h-4 w-4" /> مزامنة مع الخامات
+          </Button>
+          {migrationStatus === "migration_needed" && (
+            <Button variant="default" onClick={runMigration} disabled={loading} className="gap-2">
+              <Database className="h-4 w-4" /> {loading ? "جارٍ الترقية..." : "ترقية قاعدة البيانات"}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {migrationStatus === "migration_needed" && (
+        <Card className="border-yellow-500/50 bg-yellow-50/50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Database className="h-5 w-5 text-yellow-600" />
+              <div>
+                <p className="font-medium">تحتاج قاعدة البيانات للترقية</p>
+                <p className="text-sm text-muted-foreground">يجب إضافة عمود material_id إلى جدول wastage_rules. اضغط "ترقية قاعدة البيانات" أعلاه.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -106,10 +154,10 @@ function WastageRulesPage() {
         </CardHeader>
         <CardContent>
           {loading && <div className="py-8 text-center text-muted-foreground">جارٍ التحميل...</div>}
-          {!loading && materials.length === 0 && (
+          {!loading && migrationStatus !== "migration_needed" && materials.length === 0 && (
             <div className="py-8 text-center text-muted-foreground">لا توجد خامات.</div>
           )}
-          {!loading && materials.length > 0 && (
+          {!loading && migrationStatus !== "migration_needed" && materials.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
