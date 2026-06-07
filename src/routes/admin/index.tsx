@@ -2,10 +2,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Inbox, FileText, Receipt, ClipboardList, ArrowLeft } from "lucide-react";
+import { Inbox, FileText, Receipt, ClipboardList, ArrowLeft, Trash2, AlertTriangle } from "lucide-react";
 import { formatEGP } from "@/lib/pricing";
 import { STAGE_LABEL_AR, OrderStage } from "@/lib/stages";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { cleanupAllData } from "@/lib/cleanup.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/admin/")({ component: Dashboard });
 
@@ -13,6 +18,8 @@ function Dashboard() {
   const [stats, setStats] = useState({ rfqs: 0, quotes: 0, invoices: 0, orders: 0, revenue: 0 });
   const [recentRfqs, setRecentRfqs] = useState<any[]>([]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const cleanup = useServerFn(cleanupAllData);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -30,6 +37,26 @@ function Dashboard() {
     setStats({ rfqs: rfqs ?? 0, quotes: quotes ?? 0, invoices: invoices ?? 0, orders: orders ?? 0, revenue });
     setRecentRfqs(rfq.data ?? []);
     setActiveOrders(ord.data ?? []);
+  }
+
+  async function handleCleanup() {
+    setCleanupLoading(true);
+    try {
+      const result = await cleanup();
+      if (result.success) {
+        let total = 0;
+        for (const [table, r] of Object.entries(result.results)) {
+          total += r.deleted;
+          if (r.error) console.error(`Cleanup ${table}:`, r.error);
+        }
+        toast.success(`تم التنظيف — حُذِف ${total} سجل من ${Object.keys(result.results).length} جدول`);
+        load();
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل التنظيف");
+    } finally {
+      setCleanupLoading(false);
+    }
   }
 
   const tiles = [
@@ -63,7 +90,7 @@ function Dashboard() {
       </div>
 
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-6 space-y-2 text-sm">
           <div className="text-xs text-muted-foreground mb-1">إجمالي قيمة الفواتير</div>
           <div className="text-4xl font-bold font-serif text-primary">{formatEGP(stats.revenue)}</div>
         </CardContent>
@@ -116,6 +143,42 @@ function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Cleanup Section */}
+      <Card className="border-destructive/50">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" /> تنظيف شامل (بداية جديدة)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            سيحذف هذا الإجراء <strong>جميع</strong> عروض الأسعار، الفواتير، أوامر الإنتاج، بنود العروض، سجلات الإنتاج، الفحوصات، الصور، والملاحظات الداخلية.
+            <br />العملاء، المنتجات، الخامات، الإعدادات ستبقى كما هي.
+          </p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="gap-2" disabled={cleanupLoading}>
+                <Trash2 className="h-4 w-4" /> {cleanupLoading ? "جارٍ التنظيف..." : "تنظيف كل شيء الآن"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>تأكيد التنظيف الشامل</AlertDialogTitle>
+                <AlertDialogDescription>
+                  لا يمكن التراجع عن هذا الإجراء. سيتم حذف جميع البيانات التجارية نهائياً.
+                  اكتب "DELETE" للتأكيد.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                <AlertDialogAction onClick={handleCleanup} disabled={cleanupLoading}>
+                  {cleanupLoading ? "جارٍ الحذف..." : "نعم، احذف كل شيء"}
+                </AlertDialogAction>
+              </AlertDialogFooter            </AlertDialogContent>
+          </AlertDialog>
+        </CardContent>
+      </Card>
     </div>
   );
 }

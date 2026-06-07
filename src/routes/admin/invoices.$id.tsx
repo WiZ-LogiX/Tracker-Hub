@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { sendNotification } from "@/lib/notifications.functions";
+import { createOrder } from "@/lib/order.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ function InvoiceDetail() {
   const [order, setOrder] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const notify = useServerFn(sendNotification);
+  const createOrderFn = useServerFn(createOrder);
 
   useEffect(() => { load(); }, [id]);
   async function load() {
@@ -44,23 +46,21 @@ function InvoiceDetail() {
     setBusy(false); toast.success("تم تسجيل السداد"); load();
   }
 
-  async function createOrder() {
+  async function createOrderFromInvoice() {
     if (!inv || order) return;
     setBusy(true);
-    const expected = new Date(); expected.setDate(expected.getDate() + 30);
-    const { data: ord, error } = await supabase.from("orders").insert({
-      quote_id: inv.quote_id, invoice_id: inv.id, customer_id: inv.customer_id,
-      total: inv.total, deposit: inv.deposit_amount,
-      contract_date: new Date().toISOString().slice(0, 10),
-      expected_delivery: expected.toISOString().slice(0, 10),
-    }).select("id").single();
-    setBusy(false);
-    if (error) return toast.error(error.message);
-    if (ord) {
-      try { await notify({ data: { event: 'order_opened', entityType: 'order', entityId: ord.id } }); } catch {}
+    try {
+      const { orderId, orderNumber } = await createOrderFn({ data: { invoiceId: inv.id, customerId: inv.customer_id } });
+      if (orderId) {
+        try { await notify({ data: { event: 'order_opened', entityType: 'order', entityId: orderId } }); } catch {}
+      }
+      setBusy(false);
+      toast.success(`تم إنشاء أمر الإنتاج: ${orderNumber}`);
+      nav({ to: "/admin/orders" });
+    } catch (e: any) {
+      setBusy(false);
+      toast.error(e?.message ?? "فشل إنشاء الأمر");
     }
-    toast.success("تم إنشاء أمر الإنتاج");
-    nav({ to: "/admin/orders" });
   }
 
   if (!inv) return <div className="text-muted-foreground">جارٍ التحميل...</div>;
@@ -175,7 +175,7 @@ function InvoiceDetail() {
 
       <div className="flex gap-2 flex-wrap">
         {!paid && <Button onClick={markPaid} disabled={busy} className="gap-2"><CheckCircle2 className="h-4 w-4" /> تسجيل سداد كامل</Button>}
-        {!order && depositPaid && <Button variant="secondary" onClick={createOrder} disabled={busy} className="gap-2"><Factory className="h-4 w-4" /> إنشاء أمر إنتاج</Button>}
+        {!order && depositPaid && <Button variant="secondary" onClick={createOrderFromInvoice} disabled={busy} className="gap-2"><Factory className="h-4 w-4" /> إنشاء أمر إنتاج</Button>}
         {order && <Link to="/admin/orders"><Button variant="outline" className="gap-2"><Factory className="h-4 w-4" /> عرض أمر الإنتاج</Button></Link>}
         <Button variant="outline" onClick={() => window.print()}>طباعة / PDF</Button>
       </div>

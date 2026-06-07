@@ -12,6 +12,7 @@ import { Trash2, Plus } from "lucide-react";
 import { calculateLine, calculateQuoteTotals, formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
 import { z } from "zod";
+import { getNextPLCNumber } from "@/lib/numbering";
 
 const searchSchema = z.object({ rfq: z.string().optional() });
 
@@ -43,6 +44,7 @@ function QuoteBuilder() {
   const [appliedDiscount, setAppliedDiscount] = useState<any>(null);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [quoteNumber, setQuoteNumber] = useState<string>("");
 
   useEffect(() => {
     Promise.all([
@@ -55,6 +57,9 @@ function QuoteBuilder() {
       setProducts(p.data ?? []); setMaterials(m.data ?? []); setFinishes(f.data ?? []);
       setAccessories(a.data ?? []); setCustomers(c.data ?? []);
     });
+    
+    // Generate PLC number on load
+    getNextPLCNumber("quote").then(setQuoteNumber).catch(() => setQuoteNumber("PLC-00001"));
   }, []);
 
   useEffect(() => {
@@ -125,6 +130,7 @@ function QuoteBuilder() {
       vat_pct: 14, vat_amount: totals.vatAmount,
       total: totals.total,
       notes: notes || null,
+      quote_number: quoteNumber, // Use PLC-XXXXX format
       snapshot: { items: calculatedItems.map(c => ({ product: c.product?.name_ar, material: c.material?.name_ar, finish: c.finish?.name_ar, breakdown: c.breakdown })) } as any,
     }).select('id').single();
     if (error || !quote) { setSaving(false); return toast.error(error?.message ?? "خطأ"); }
@@ -175,7 +181,7 @@ function QuoteBuilder() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">بنود العرض</CardTitle>
+          <CardTitle className="text-lg">رقم العرض: <span className="font-mono text-primary">{quoteNumber}</span></CardTitle>
           <Button size="sm" variant="outline" onClick={addItem} className="gap-1"><Plus className="h-4 w-4" /> إضافة بند</Button>
         </CardHeader>
         <CardContent className="space-y-4">
