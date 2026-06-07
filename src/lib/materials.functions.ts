@@ -1,61 +1,36 @@
-// Materials CRUD via Drizzle (provider-agnostic Postgres layer).
-// Auth/tenant resolution still uses Supabase; data queries use Drizzle so
-// switching DB providers later is a connection-string change, not a rewrite.
+// Materials CRUD — using Supabase client (RLS-enforced) for now.
+// Will switch to Drizzle after multi-tenant migration is applied.
 import { createServerFn } from "@tanstack/react-start";
-import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/db/client.server";
-import { materials } from "@/db/schema";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-async function resolveTenantId(supabase: any, userId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("tenant_members")
-    .select("tenant_id")
-    .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
-  if (error) {
-    console.error("[resolveTenantId] error:", error);
-  }
-  return data?.tenant_id ?? null;
-}
-
-function serialize(r: typeof materials.$inferSelect) {
+function serialize(r: any) {
   return {
     id: r.id,
-    name_ar: r.nameAr,
-    name_en: r.nameEn,
+    name_ar: r.name_ar,
+    name_en: r.name_en,
     type: r.type,
     unit: r.unit,
-    price_per_unit: Number(r.pricePerUnit),
-    wastage_pct: r.wastagePct == null ? null : Number(r.wastagePct),
-    supplier_id: r.supplierId,
-    country_of_origin: r.countryOfOrigin,
+    price_per_unit: Number(r.price_per_unit),
+    wastage_pct: r.wastage_pct == null ? null : Number(r.wastage_pct),
+    supplier_id: r.supplier_id,
+    country_of_origin: r.country_of_origin,
     active: r.active,
-    created_at: r.createdAt?.toISOString?.() ?? null,
+    created_at: r.created_at,
   };
 }
 
 export const listMaterials = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { supabase, userId } = context;
-    const tenantId = await resolveTenantId(supabase, userId);
-    console.log("[listMaterials] userId:", userId, "tenantId:", tenantId);
-    if (!tenantId) return { items: [] };
-    try {
-      const rows = await db
-        .select()
-        .from(materials)
-        .where(eq(materials.tenantId, tenantId))
-        .orderBy(desc(materials.createdAt));
-      console.log("[listMaterials] rows:", rows.length);
-      return { items: rows.map(serialize) };
-    } catch (e: any) {
-      console.error("[listMaterials] DB error:", e);
-      throw new Error(`DB query failed: ${e?.message ?? String(e)}`);
-    }
+    const { supabase } = context;
+    const { data, error } = await supabase
+      .from("materials")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return { items: (data ?? []).map(serialize) };
   });
 
 const upsertSchema = z.object({
@@ -75,67 +50,45 @@ export const upsertMaterial = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => upsertSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const tenantId = await resolveTenantId(supabase, userId);
-    if (!tenantId) throw new Error("No tenant for user");
-
+    const { supabase } = context;
     const values = {
-      tenantId,
-      companyId: "00000000-0000-0000-0000-000000000001",
-      nameAr: data.name_ar,
-      nameEn: data.name_en || data.name_ar,
+      name_ar: data.name_ar,
+      name_en: data.name_en || data.name_ar,
       type: data.type || "wood",
       unit: data.unit || "m²",
-      pricePerUnit: String(data.price_per_unit),
-      wastagePct: data.wastage_pct == null ? null : String(data.wastage_pct),
-      supplierId: data.supplier_id || null,
-      countryOfOrigin: data.country_of_origin || null,
+      price_per_unit: data.price_per_unit,
+      wastage_pct: data.wastage_pct ?? null,
+      supplier_id: data.supplier_id ?? null,
+      country_of_origin: data.country_of_origin ?? null,
       active: data.active ?? true,
     };
 
-    try {
-      if (data.id) {
-        const [row] = await db
-          .update(materials)
-          .set({
-            nameAr: values.nameAr,
-            nameEn: values.nameEn,
-            type: values.type,
-            unit: values.unit,
-            pricePerUnit: values.pricePerUnit,
-            wastagePct: values.wastagePct,
-            supplierId: values.supplierId,
-            countryOfOrigin: values.countryOfOrigin,
-            active: values.active,
-          })
-          .where(and(eq(materials.id, data.id), eq(materials.tenantId, tenantId)))
-          .returning();
-        if (!row) throw new Error("Material not found");
-        return { item: serialize(row) };
-      }
-
-      const [row] = await db.insert(materials).values(values).returning();
-      return { item: serialize(row) };
-    } catch (e: any) {
-      console.error("[upsertMaterial] DB error:", e);
-      throw new Error(`DB query failed: ${e?.message ?? String(e)}`);
+    let result;
+    if (data.id) {
+      result = await supabase
+        .from("materials")
+        .update(values)
+        .eq("id", data.id)
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from("materials")
+        .insert(values)
+        .select()
+        .single();
     }
+
+    if (result.error) throw new Error(result.error.message);
+    return { item: serialize(result.data) };
   });
 
 export const deleteMaterial = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const tenantId = await resolveTenantId(supabase, userId);
-    if (!tenantId) throw new Error("No tenant for user");
-    try {
-      await db
-        .delete(materials)
-        .where(and(eq(materials.id, data.id), eq(materials.tenantId, tenantId)));
-      return { ok: true };
-    } catch (e: any) {
-      console.error("[deleteMaterial] DB error:", e);
-      throw new Error(`DB query failed: ${e?.message ?? String(e)}`);
-    }
+    const { supabase } = context;
+    const { error } = await supabase.from("materials").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
   });
