@@ -11,6 +11,7 @@ import { sendNotification } from "@/lib/notifications.functions";
 import { toast } from "sonner";
 import { ArrowRight, FileCheck2, Factory } from "lucide-react";
 import { InternalNotes } from "@/components/admin/InternalNotes";
+import { createOrder } from "@/lib/order.functions";
 
 export const Route = createFileRoute("/admin/quotes/$id")({ component: QuoteDetail });
 
@@ -35,6 +36,7 @@ function QuoteDetail() {
   }
 
   const notify = useServerFn(sendNotification);
+  const createOrderFn = useServerFn(createOrder);
 
   async function changeStatus(status: string) {
     setWorking(true);
@@ -59,16 +61,19 @@ function QuoteDetail() {
     if (error) { setWorking(false); return toast.error(error.message); }
     await supabase.from('quotes').update({ status: 'converted' as any }).eq('id', quote.id);
 
-    // Create order automatically
-    const { data: ord } = await supabase.from('orders').insert({
-      quote_id: quote.id, invoice_id: inv!.id, customer_id: quote.customer_id,
-      total: quote.total, deposit,
-    }).select('id').single();
-    if (ord) {
-      try { await notify({ data: { event: 'order_opened', entityType: 'order', entityId: ord.id } }); } catch {}
+    // Create order using server function (handles PLC numbering)
+    try {
+      const { orderId, orderNumber } = await createOrderFn({ data: { invoiceId: inv!.id, customerId: quote.customer_id } });
+      if (orderId) {
+        try { await notify({ data: { event: 'order_opened', entityType: 'order', entityId: orderId } }); } catch {}
+        toast.success(`تم تحويل العرض لفاتورة + إنشاء أمر إنتاج: ${orderNumber}`);
+      } else {
+        toast.success("تم تحويل العرض لفاتورة");
+      }
+    } catch (e: any) {
+      toast.error(`فشل إنشاء أمر الإنتاج: ${e.message}`);
     }
     setWorking(false);
-    toast.success("تم تحويل العرض لفاتورة + إنشاء أمر إنتاج");
     nav({ to: '/admin/invoices' });
   }
 
