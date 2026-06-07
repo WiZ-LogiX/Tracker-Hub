@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Inbox, FileText, Receipt, ClipboardList,
   Package, Layers3, Palette, Wrench, Ticket, LogOut, Menu,
   Truck, Trees, SlidersHorizontal, GitBranch, Sparkles, Bell,
-  Users, RefreshCcw, BarChart3
+  Users, RefreshCcw, BarChart3, UserCircle
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -22,6 +22,7 @@ const NAV = [
   { to: "/admin/quotes/configurator", labelKey: "admin.nav.configurator", icon: Sparkles },
   { to: "/admin/invoices", labelKey: "admin.nav.invoices", icon: Receipt },
   { to: "/admin/orders", labelKey: "admin.nav.orders", icon: ClipboardList },
+  { to: "/admin/customers", labelKey: "admin.nav.customers", icon: UserCircle },
   { to: "/admin/products", labelKey: "admin.nav.products", icon: Package },
   { to: "/admin/materials", labelKey: "admin.nav.materials", icon: Layers3 },
   

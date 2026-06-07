@@ -35,6 +35,7 @@
       "configurator": "منشئ عروض الأسعار",
       "invoices": "الفواتير",
       "orders": "تتبع الإنتاج",
+      "customers": "العملاء",
       "products": "قوالب المنتجات",
       "materials": "الخامات",
       "materialVariants": "متغيرات الخامات",
@@ -49,8 +50,7 @@
       "discounts": "الخصومات",
       "notifications": "الإشعارات",
       "workers": "العمال",
-      "remakes": "إعادة التصنيع",
-      "r2Migration": "نقل التخزين (R2)"
+      "remakes": "إعادة التصنيع"
     }
   }
 }

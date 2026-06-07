@@ -35,6 +35,7 @@
       "configurator": "Quotation Builder",
       "invoices": "Invoices",
       "orders": "Production Tracking",
+      "customers": "Customers",
       "products": "Product Templates",
       "materials": "Materials",
       "materialVariants": "Material Variants",
@@ -49,8 +50,7 @@
       "discounts": "Discounts",
       "notifications": "Notifications",
       "workers": "Workers",
-      "remakes": "Remakes",
-      "r2Migration": "Storage Migration (R2)"
+      "remakes": "Remakes"
     }
   }
 }

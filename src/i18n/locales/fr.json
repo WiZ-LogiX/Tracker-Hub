@@ -35,6 +35,7 @@
       "configurator": "Créateur de devis",
       "invoices": "Factures",
       "orders": "Suivi production",
+      "customers": "Clients",
       "products": "Modèles produits",
       "materials": "Matériaux",
       "materialVariants": "Variantes matériaux",
@@ -49,8 +50,7 @@
       "discounts": "Remises",
       "notifications": "Notifications",
       "workers": "Ouvriers",
-      "remakes": "Reprises",
-      "r2Migration": "Migration Stockage (R2)"
+      "remakes": "Reprises"
     }
   }
 }
