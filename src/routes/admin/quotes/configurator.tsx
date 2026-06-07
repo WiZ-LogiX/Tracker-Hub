@@ -21,13 +21,13 @@ interface Item {
   custom_name: string;
   category_id: string | null;
   material_id: string | null;
-  variant_id: string | null;   // material_variant
+  variant_id: string | null;
   finish_id: string | null;
   veneer_id: string | null;
   accessories: string[];
   dimension_value: number;
   qty: number;
-  overrides: FactorMap;        // luxury, complexity, rush
+  overrides: FactorMap;
 }
 
 const blankItem = (): Item => ({
@@ -61,7 +61,7 @@ function ConfiguratorBuilder() {
     Promise.all([
       supabase.from('product_templates').select('*').eq('active', true),
       supabase.from('categories').select('*'),
-      supabase.from('materials').select('*').eq('active', true),
+      supabase.from('materials').select('*, wastage_rules!left(wastage_pct)').eq('active', true),
       supabase.from('suppliers').select('*').eq('active', true),
       supabase.from('finishes').select('*').eq('active', true),
       supabase.from('veneers').select('*').eq('active', true),
@@ -85,7 +85,23 @@ function ConfiguratorBuilder() {
     return m;
   }, [suppliers]);
 
-  function lookupWastage(materialType: string | undefined, dim: number): number | null {
+  // Build wastage lookup map: material_id -> wastage_pct (from wastage_rules table)
+  const wastageMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const wr of wastageRules) {
+      if (wr.material_id) map[wr.material_id] = Number(wr.wastage_pct);
+    }
+    return map;
+  }, [wastageRules]);
+
+  function lookupWastage(materialId: string | null | undefined, materialType: string | undefined, dim: number): number | null {
+    if (!materialId) return null;
+    // First priority: material-specific wastage rule
+    if (wastageMap[materialId] != null) return wastageMap[materialId];
+    // Fallback: material's own wastage_pct column
+    const material = materials.find(m => m.id === materialId);
+    if (material?.wastage_pct != null) return Number(material.wastage_pct);
+    // Legacy fallback: dimension-based rules by material_type
     if (!materialType) return null;
     const matches = wastageRules.filter(r =>
       r.material_type === materialType &&
@@ -127,15 +143,14 @@ function ConfiguratorBuilder() {
     const accessoriesCost = accSelected.reduce((s, a) => s + Number(a.unit_price), 0);
 
     const selections: EngineSelections = { basePrice, materialCost, finishCost, veneerCost, accessoriesCost, qty: it.qty };
-    const matWastage = material?.wastage_pct != null ? Number(material.wastage_pct) : null;
-    const autoWastage = matWastage != null ? matWastage : lookupWastage(material?.type, it.dimension_value);
+    const autoWastage = lookupWastage(it.material_id, material?.type, it.dimension_value);
     const merged: FactorMap = { ...globalFactors, ...it.overrides };
     if (autoWastage != null && (it.overrides.wastage == null)) merged.wastage = autoWastage;
 
     const formula = (activeRule?.formula as any) ?? DEFAULT_FORMULA;
     const breakdown = runFormula(formula, selections, merged, activeRule?.version ?? 1);
     return { it, template, material, variant, supplier, finish, veneer, accSelected, breakdown, selections, autoWastage };
-  }), [items, templates, materials, suppliers, finishes, veneers, accessories, globalFactors, activeRule, wastageRules, supplierById]);
+  }), [items, templates, materials, suppliers, finishes, veneers, accessories, globalFactors, activeRule, wastageMap, wastageRules, supplierById]);
 
   const totals = useMemo(() => calculateQuoteTotals({
     itemsLineTotalSum: computed.reduce((s, c) => s + c.breakdown.lineTotal, 0),
@@ -180,7 +195,6 @@ function ConfiguratorBuilder() {
     }));
     const { data: insertedItems } = await supabase.from('quote_items').insert(itemsToInsert as any).select('id');
 
-    // store configurations linked to quote_items
     if (insertedItems) {
       const configs = insertedItems.map((qi, i) => ({
         quote_item_id: qi.id,
@@ -261,11 +275,21 @@ function ConfiguratorBuilder() {
                     <Label>الخامة</Label>
                     <Select value={it.material_id ?? ''} onValueChange={v => updateItem(idx, { material_id: v, variant_id: null })}>
                       <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
-                      <SelectContent>{materials.map(m => <SelectItem key={m.id} value={m.id}>{m.name_ar} • {formatEGP(Number(m.price_per_unit))}/{m.unit}</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        {materials.map(m => (
+                          <SelectItem key={m.id} value={m.id}>
+                            {m.name_ar} • {formatEGP(Number(m.price_per_unit))}/{m.unit}
+                            {(wastageMap[m.id] != null || m.wastage_pct) && ` • هدر: ${wastageMap[m.id] ?? m.wastage_pct}%`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
                     </Select>
                     {ci.material && (
                       <div className="mt-1 text-[11px] text-muted-foreground">
                         {ci.supplier?.name ?? '—'} • {ci.material.country_of_origin ?? '—'}
+                        {(wastageMap[ci.material.id] != null || ci.material.wastage_pct) && (
+                          <span className="text-gold ml-2">هدر: {wastageMap[ci.material.id] ?? ci.material.wastage_pct}%</span>
+                        )}
                       </div>
                     )}
                   </div>

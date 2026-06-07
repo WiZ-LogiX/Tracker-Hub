@@ -1,145 +1,262 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { listMaterials, upsertMaterial } from "@/lib/materials.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Plus, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Sparkles, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { formatEGP } from "@/lib/pricing";
 
 export const Route = createFileRoute("/admin/wastage-rules")({ component: WastageRulesPage });
 
-const MATERIAL_TYPES = [
-  { value: "wood", label: "خشب طبيعي (Solid wood)" },
-  { value: "mdf", label: "MDF" },
-  { value: "plywood", label: "خشب لاتيه (Plywood)" },
-  { value: "veneer", label: "قشرة (Veneer)" },
-  { value: "metal", label: "معدن" },
-  { value: "glass", label: "زجاج" },
-];
-
-const DEFAULTS = [
-  { material_type: "wood", min_dimension: 0, max_dimension: 2, wastage_pct: 12 },
-  { material_type: "wood", min_dimension: 2, max_dimension: 5, wastage_pct: 10 },
-  { material_type: "wood", min_dimension: 5, max_dimension: null, wastage_pct: 8 },
-  { material_type: "mdf", min_dimension: 0, max_dimension: 3, wastage_pct: 8 },
-  { material_type: "mdf", min_dimension: 3, max_dimension: null, wastage_pct: 6 },
-  { material_type: "plywood", min_dimension: 0, max_dimension: null, wastage_pct: 7 },
-  { material_type: "veneer", min_dimension: 0, max_dimension: null, wastage_pct: 15 },
-];
-
 function WastageRulesPage() {
-  const [rows, setRows] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ material_type: "wood", min_dimension: 0, max_dimension: "" as any, wastage_pct: 8 });
+  const [saving, setSaving] = useState<string | null>(null);
+  const listFn = useServerFn(listMaterials);
+  const upsertFn = useServerFn(upsertMaterial);
 
   async function load() {
-    const { data } = await supabase.from("wastage_rules").select("*").order("material_type").order("min_dimension");
-    setRows(data ?? []);
+    setLoading(true);
+    try {
+      const { items } = await listFn();
+      setMaterials(items ?? []);
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل التحميل");
+    } finally {
+      setLoading(false);
+    }
   }
   useEffect(() => { load(); }, []);
 
-  async function add() {
+  async function saveWastage(material: any, wastagePct: number) {
+    setSaving(material.id);
+    try {
+      await upsertFn({
+        data: {
+          id: material.id,
+          name_ar: material.name_ar,
+          name_en: material.name_en,
+          type: material.type,
+          unit: material.unit,
+          price_per_unit: material.price_per_unit,
+          wastage_pct: wastagePct,
+          supplier_id: material.supplier_id,
+          country_of_origin: material.country_of_origin,
+          active: material.active,
+        },
+      });
+      toast.success(`تم تحديث هدر ${material.name_ar}`);
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل الحفظ");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function syncAllMaterials() {
     setLoading(true);
-    const payload: any = {
-      material_type: form.material_type,
-      min_dimension: Number(form.min_dimension) || 0,
-      max_dimension: form.max_dimension === "" ? null : Number(form.max_dimension),
-      wastage_pct: Number(form.wastage_pct),
-    };
-    const { error } = await supabase.from("wastage_rules").insert(payload);
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("تمت الإضافة");
-    setForm({ material_type: "wood", min_dimension: 0, max_dimension: "" as any, wastage_pct: 8 });
-    load();
+    try {
+      // Fetch all materials and ensure they have wastage rules
+      const { data } = await supabase.from("materials").select("id, wastage_pct").eq("active", true);
+      for (const m of data ?? []) {
+        if (m.wastage_pct && m.wastage_pct > 0) {
+          await supabase.from("wastage_rules").upsert({
+            material_id: m.id,
+            wastage_pct: m.wastage_pct,
+            active: true,
+          }, { onConflict: "material_id" });
+        }
+      }
+      toast.success("تمت مزامنة قواعد الهدر مع الخامات");
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل المزامنة");
+    } finally {
+      setLoading(false);
+    }
   }
-
-  async function remove(id: string) {
-    if (!confirm("حذف هذه القاعدة؟")) return;
-    const { error } = await supabase.from("wastage_rules").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    load();
-  }
-
-  async function seedDefaults() {
-    if (!confirm("سيتم إضافة القواعد الافتراضية. متابعة؟")) return;
-    const { error } = await supabase.from("wastage_rules").insert(DEFAULTS as any);
-    if (error) return toast.error(error.message);
-    toast.success("تمت إضافة الافتراضيات");
-    load();
-  }
-
-  const grouped: Record<string, any[]> = {};
-  for (const r of rows) (grouped[r.material_type] ||= []).push(r);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-serif text-3xl font-bold flex items-center gap-2"><Sparkles className="h-6 w-6 text-primary" /> قواعد الهدر (Wastage)</h1>
-          <p className="text-sm text-muted-foreground mt-1">يتم تطبيقها تلقائياً في الـ Configurator حسب نوع الخامة والقياس.</p>
+          <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-primary" /> قواعد الهدر حسب الخامة
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            كل خامة لها نسبة هدر واحدة. يتم تطبيقها تلقائياً في منشئ عروض الأسعار.
+          </p>
         </div>
-        {rows.length === 0 && <Button variant="outline" onClick={seedDefaults}>إضافة الافتراضيات</Button>}
+        <Button variant="outline" onClick={syncAllMaterials} disabled={loading} className="gap-2">
+          <RefreshCw className="h-4 w-4" /> مزامنة مع الخامات
+        </Button>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">إضافة قاعدة</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-lg">نسب الهدر للخامات النشطة</CardTitle>
+        </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-5 gap-3 items-end">
-            <div>
-              <Label>نوع الخامة</Label>
-              <Select value={form.material_type} onValueChange={v => setForm(s => ({ ...s, material_type: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{MATERIAL_TYPES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>من (م²/م)</Label>
-              <Input type="number" step="0.1" value={form.min_dimension} onChange={e => setForm(s => ({ ...s, min_dimension: Number(e.target.value) }))} />
-            </div>
-            <div>
-              <Label>إلى (فارغ = بدون حد)</Label>
-              <Input type="number" step="0.1" value={form.max_dimension} onChange={e => setForm(s => ({ ...s, max_dimension: e.target.value }))} placeholder="∞" />
-            </div>
-            <div>
-              <Label>نسبة الهدر %</Label>
-              <Input type="number" step="0.1" value={form.wastage_pct} onChange={e => setForm(s => ({ ...s, wastage_pct: Number(e.target.value) }))} />
-            </div>
-            <Button onClick={add} disabled={loading} className="gap-1"><Plus className="h-4 w-4" /> إضافة</Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {Object.keys(grouped).map(type => (
-        <Card key={type}>
-          <CardHeader><CardTitle className="text-base">{MATERIAL_TYPES.find(m => m.value === type)?.label ?? type}</CardTitle></CardHeader>
-          <CardContent>
+          {loading && <div className="py-8 text-center text-muted-foreground">جارٍ التحميل...</div>}
+          {!loading && materials.length === 0 && (
+            <div className="py-8 text-center text-muted-foreground">لا توجد خامات.</div>
+          )}
+          {!loading && materials.length > 0 && (
             <Table>
               <TableHeader>
-                <TableRow><TableHead>من</TableHead><TableHead>إلى</TableHead><TableHead>الهدر %</TableHead><TableHead></TableHead></TableRow>
+                <TableRow>
+                  <TableHead>الخامة</TableHead>
+                  <TableHead>النوع</TableHead>
+                  <TableHead>الوحدة</TableHead>
+                  <TableHead>السعر / الوحدة</TableHead>
+                  <TableHead className="w-32">نسبة الهدر %</TableHead>
+                  <TableHead>حالة القاعدة</TableHead>
+                </TableRow>
               </TableHeader>
               <TableBody>
-                {grouped[type].map(r => (
-                  <TableRow key={r.id}>
-                    <TableCell>{Number(r.min_dimension)}</TableCell>
-                    <TableCell>{r.max_dimension == null ? '∞' : Number(r.max_dimension)}</TableCell>
-                    <TableCell className="font-bold text-gold">{Number(r.wastage_pct)}%</TableCell>
-                    <TableCell><Button size="icon" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                {materials.map(m => (
+                  <TableRow key={m.id}>
+                    <TableCell className="font-medium">{m.name_ar}</TableCell>
+                    <TableCell>{m.type}</TableCell>
+                    <TableCell>{m.unit}</TableCell>
+                    <TableCell>{formatEGP(m.price_per_unit)} / {m.unit}</TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        value={m.wastage_rule?.wastage_pct ?? m.wastage_pct ?? 0}
+                        onChange={e => saveWastage(m, Number(e.target.value) || 0)}
+                        disabled={saving === m.id}
+                        className="w-24 text-center"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {m.wastage_rule ? (
+                        <Badge variant="default" className="gap-1">
+                          <span className="h-2 w-2 rounded-full bg-green-500" /> نشطة
+                        </Badge>
+                      ) : (m.wastage_pct && m.wastage_pct > 0 ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <span className="h-2 w-2 rounded-full bg-yellow-500" /> بانتظار المزامنة
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">لا توجد قاعدة</Badge>
+                      ))}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      ))}
+          )}
+        </CardContent>
+      </Card>
 
-      {rows.length === 0 && (
-        <Card><CardContent className="py-10 text-center text-muted-foreground">لا توجد قواعد. أضف قاعدة أو اضغط "إضافة الافتراضيات".</CardContent></Card>
-      )}
+      <Card>
+        <CardHeader><CardTitle className="text-lg">إضافة خامة جديدة (مع قاعدة هدر تلقائياً)</CardTitle></CardHeader>
+        <CardContent>
+          <AddMaterialForm onSuccess={load} />
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+function AddMaterialForm({ onSuccess }: { onSuccess: () => void }) {
+  const [form, setForm] = useState({
+    name_ar: "", name_en: "", type: "wood", unit: "m²",
+    price_per_unit: 0, wastage_pct: 8, supplier_id: "", country_of_origin: "", active: true,
+  });
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const upsertFn = useServerFn(upsertMaterial);
+
+  useEffect(() => {
+    supabase.from("suppliers").select("id, name").eq("active", true).then(({ data }) => setSuppliers(data ?? []));
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await upsertFn({
+        data: {
+          name_ar: form.name_ar,
+          name_en: form.name_en || form.name_ar,
+          type: form.type,
+          unit: form.unit,
+          price_per_unit: Number(form.price_per_unit),
+          wastage_pct: Number(form.wastage_pct),
+          supplier_id: form.supplier_id || null,
+          country_of_origin: form.country_of_origin || null,
+          active: form.active,
+        },
+      });
+      toast.success("تمت إضافة الخامة مع قاعدة الهدر");
+      onSuccess();
+      setForm({ name_ar: "", name_en: "", type: "wood", unit: "m²", price_per_unit: 0, wastage_pct: 8, supplier_id: "", country_of_origin: "", active: true });
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل الإضافة");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid md:grid-cols-4 gap-3 items-end">
+      <div className="md:col-span-2 space-y-1.5">
+        <Label>الاسم بالعربي *</Label>
+        <Input value={form.name_ar} onChange={e => setForm({ ...form, name_ar: e.target.value })} required />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Name (EN)</Label>
+        <Input value={form.name_en} onChange={e => setForm({ ...form, name_en: e.target.value })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>النوع</Label>
+        <Input value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="wood / mdf / metal..." />
+      </div>
+      <div className="space-y-1.5">
+        <Label>الوحدة</Label>
+        <Input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>السعر / الوحدة</Label>
+        <Input type="number" step="0.01" value={form.price_per_unit} onChange={e => setForm({ ...form, price_per_unit: Number(e.target.value) })} required />
+      </div>
+      <div className="space-y-1.5">
+        <Label>نسبة الهدر % *</Label>
+        <Input type="number" step="0.1" min="0" max="100" value={form.wastage_pct} onChange={e => setForm({ ...form, wastage_pct: Number(e.target.value) })} required />
+      </div>
+      <div className="space-y-1.5">
+        <Label>المورد</Label>
+        <select value={form.supplier_id} onChange={e => setForm({ ...form, supplier_id: e.target.value })} className="w-full border rounded-md px-3 py-2 bg-background">
+          <option value="">— اختر —</option>
+          {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label>بلد المنشأ</Label>
+        <Input value={form.country_of_origin} onChange={e => setForm({ ...form, country_of_origin: e.target.value })} />
+      </div>
+      <div className="flex items-end">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} className="h-4 w-4" />
+          <span className="text-sm">نشط</span>
+        </label>
+      </div>
+      <Button type="submit" disabled={saving} className="gap-2 h-10">
+        <Plus className="h-4 w-4" /> {saving ? "جارٍ الحفظ..." : "إضافة الخامة + قاعدة هدر"}
+      </Button>
+    </form>
   );
 }

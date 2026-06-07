@@ -27,10 +27,13 @@ export const listMaterials = createServerFn({ method: "GET" })
     const { supabase } = context;
     const { data, error } = await supabase
       .from("materials")
-      .select("*")
+      .select("*, wastage_rules!left(wastage_pct)")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return { items: (data ?? []).map(serialize) };
+    return { items: (data ?? []).map((r: any) => ({
+      ...serialize(r),
+      wastage_rule: r.wastage_rules?.[0] ? { wastage_pct: Number(r.wastage_rules[0].wastage_pct) } : null,
+    })) };
   });
 
 const upsertSchema = z.object({
@@ -63,12 +66,14 @@ export const upsertMaterial = createServerFn({ method: "POST" })
       active: data.active ?? true,
     };
 
+    let materialId = data.id;
     let result;
-    if (data.id) {
+
+    if (materialId) {
       result = await supabase
         .from("materials")
         .update(values)
-        .eq("id", data.id)
+        .eq("id", materialId)
         .select()
         .single();
     } else {
@@ -80,6 +85,21 @@ export const upsertMaterial = createServerFn({ method: "POST" })
     }
 
     if (result.error) throw new Error(result.error.message);
+    materialId = result.data.id;
+
+    // Auto-create/update wastage rule for this material
+    const wastagePct = data.wastage_pct ?? 0;
+    if (wastagePct > 0) {
+      const { error: wrError } = await supabase
+        .from("wastage_rules")
+        .upsert({
+          material_id: materialId,
+          wastage_pct: wastagePct,
+          active: true,
+        }, { onConflict: "material_id" });
+      if (wrError) console.error("[upsertMaterial] wastage rule upsert error:", wrError);
+    }
+
     return { item: serialize(result.data) };
   });
 
@@ -88,7 +108,24 @@ export const deleteMaterial = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
+    // wastage_rules will cascade delete due to FK
     const { error } = await supabase.from("materials").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// Get wastage rule for a specific material
+export const getMaterialWastage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ materialId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const { data: rule, error } = await supabase
+      .from("wastage_rules")
+      .select("wastage_pct")
+      .eq("material_id", data.materialId)
+      .eq("active", true)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return { wastagePct: rule ? Number(rule.wastage_pct) : 0 };
   });
