@@ -74,6 +74,9 @@ function OrdersPage() {
         data: { files: fileInfos, entityType: 'production-photos', entityId: selected.id },
       });
 
+      console.log('[R2 Upload] Origin:', window.location.origin);
+      console.log('[R2 Upload] Upload URLs:', uploads.map(u => u.uploadUrl));
+
       let ok = 0, fail = 0;
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -87,8 +90,10 @@ function OrdersPage() {
             headers: { 'Content-Type': file.type || 'image/jpeg' },
           });
           
+          console.log('[R2 Upload] Response status:', uploadRes.status);
           if (!uploadRes.ok) {
             const errText = await uploadRes.text();
+            console.error('[R2 Upload] Error response:', errText);
             throw new Error(`Upload failed: ${uploadRes.status} - ${errText}`);
           }
 
