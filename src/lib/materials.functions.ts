@@ -25,30 +25,36 @@ export const listMaterials = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase } = context;
-    // First get materials
+    
+    // Get materials
     const { data: materials, error: matError } = await supabase
       .from("materials")
       .select("*")
       .order("created_at", { ascending: false });
     if (matError) throw new Error(matError.message);
 
-    // Then get wastage rules separately
+    // Get wastage rules - handle case where material_id column doesn't exist yet
+    let wastageMap = new Map<string, number>();
     const { data: wastageRules, error: wrError } = await supabase
       .from("wastage_rules")
       .select("material_id, wastage_pct")
       .eq("active", true);
-    if (wrError) throw new Error(wrError.message);
-
-    // Build lookup map
-    const wastageMap = new Map<string, number>();
-    for (const wr of wastageRules ?? []) {
-      if (wr.material_id) wastageMap.set(wr.material_id, Number(wr.wastage_pct));
+    
+    if (!wrError && wastageRules) {
+      for (const wr of wastageRules) {
+        if (wr.material_id) wastageMap.set(wr.material_id, Number(wr.wastage_pct));
+      }
     }
+    // If material_id column doesn't exist, wrError will be set but we continue with empty map
+    // Fallback to materials.wastage_pct happens in the map below
 
     return { 
       items: (materials ?? []).map((r: any) => ({
         ...serialize(r),
-        wastage_rule: wastageMap.has(r.id) ? { wastage_pct: wastageMap.get(r.id)! } : null,
+        // Priority: wastage_rules table > materials.wastage_pct column
+        wastage_rule: wastageMap.has(r.id) 
+          ? { wastage_pct: wastageMap.get(r.id)! } 
+          : (r.wastage_pct != null && r.wastage_pct > 0 ? { wastage_pct: Number(r.wastage_pct) } : null),
       })) 
     };
   });
@@ -104,7 +110,7 @@ export const upsertMaterial = createServerFn({ method: "POST" })
     if (result.error) throw new Error(result.error.message);
     materialId = result.data.id;
 
-    // Auto-create/update wastage rule for this material
+    // Auto-create/update wastage rule for this material (if material_id column exists)
     const wastagePct = data.wastage_pct ?? 0;
     if (wastagePct > 0) {
       const { error: wrError } = await supabase
@@ -114,7 +120,10 @@ export const upsertMaterial = createServerFn({ method: "POST" })
           wastage_pct: wastagePct,
           active: true,
         }, { onConflict: "material_id" });
-      if (wrError) console.error("[upsertMaterial] wastage rule upsert error:", wrError);
+      // Ignore error if material_id column doesn't exist yet
+      if (wrError && !wrError.message.includes("material_id")) {
+        console.error("[upsertMaterial] wastage rule upsert error:", wrError);
+      }
     }
 
     return { item: serialize(result.data) };
@@ -125,7 +134,6 @@ export const deleteMaterial = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    // wastage_rules will cascade delete due to FK
     const { error } = await supabase.from("materials").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
@@ -143,6 +151,15 @@ export const getMaterialWastage = createServerFn({ method: "POST" })
       .eq("material_id", data.materialId)
       .eq("active", true)
       .maybeSingle();
+    // If material_id column doesn't exist, fall back to materials table
+    if (error && error.message.includes("material_id")) {
+      const { data: mat } = await supabase
+        .from("materials")
+        .select("wastage_pct")
+        .eq("id", data.materialId)
+        .single();
+      return { wastagePct: mat?.wastage_pct ? Number(mat.wastage_pct) : 0 };
+    }
     if (error) throw new Error(error.message);
     return { wastagePct: rule ? Number(rule.wastage_pct) : 0 };
   });

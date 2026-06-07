@@ -3,14 +3,13 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { listMaterials, upsertMaterial } from "@/lib/materials.functions";
-import { applyWastageRulesMigration } from "@/lib/apply-migration.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Sparkles, RefreshCw, Database } from "lucide-react";
+import { Plus, Sparkles, RefreshCw, Database, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { formatEGP } from "@/lib/pricing";
 
@@ -20,20 +19,19 @@ function WastageRulesPage() {
   const [materials, setMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
-  const [migrationStatus, setMigrationStatus] = useState<string | null>(null);
+  const [migrationNeeded, setMigrationNeeded] = useState(false);
   const listFn = useServerFn(listMaterials);
   const upsertFn = useServerFn(upsertMaterial);
-  const applyMigration = useServerFn(applyWastageRulesMigration);
 
   async function load() {
     setLoading(true);
     try {
       const { items } = await listFn();
       setMaterials(items ?? []);
+      setMigrationNeeded(false);
     } catch (e: any) {
-      // If the error is about missing column, show migration button
       if (e.message.includes("material_id") || e.message.includes("relationship")) {
-        setMigrationStatus("migration_needed");
+        setMigrationNeeded(true);
       } else {
         toast.error(e?.message ?? "فشل التحميل");
       }
@@ -42,26 +40,6 @@ function WastageRulesPage() {
     }
   }
   useEffect(() => { load(); }, []);
-
-  async function runMigration() {
-    setLoading(true);
-    try {
-      const result = await applyMigration();
-      if (result.success) {
-        toast.success("تم تطبيق الترقية بنجاح");
-        setMigrationStatus(null);
-        load();
-      } else {
-        toast.error(`فشل الترقية: ${result.error}`);
-        setMigrationStatus("failed");
-      }
-    } catch (e: any) {
-      toast.error(e?.message ?? "فشل الترقية");
-      setMigrationStatus("failed");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function saveWastage(material: any, wastagePct: number) {
     setSaving(material.id);
@@ -93,19 +71,27 @@ function WastageRulesPage() {
     setLoading(true);
     try {
       const { data } = await supabase.from("materials").select("id, wastage_pct").eq("active", true);
+      let count = 0;
       for (const m of data ?? []) {
         if (m.wastage_pct && m.wastage_pct > 0) {
-          await supabase.from("wastage_rules").upsert({
+          const { error } = await supabase.from("wastage_rules").upsert({
             material_id: m.id,
             wastage_pct: m.wastage_pct,
             active: true,
           }, { onConflict: "material_id" });
+          if (!error) count++;
         }
       }
-      toast.success("تمت مزامنة قواعد الهدر مع الخامات");
+      if (count > 0) toast.success(`تمت مزامنة ${count} قاعدة هدر`);
+      else toast.info("لا توجد خامات بها نسبة هدر للمزامنة");
       load();
     } catch (e: any) {
-      toast.error(e?.message ?? "فشل المزامنة");
+      if (e.message.includes("material_id")) {
+        setMigrationNeeded(true);
+        toast.error("يجب تشغيل سكريبت الترقية في Supabase أولاً (انظر الزر أدناه)");
+      } else {
+        toast.error(e?.message ?? "فشل المزامنة");
+      }
     } finally {
       setLoading(false);
     }
@@ -126,24 +112,41 @@ function WastageRulesPage() {
           <Button variant="outline" onClick={syncAllMaterials} disabled={loading} className="gap-2">
             <RefreshCw className="h-4 w-4" /> مزامنة مع الخامات
           </Button>
-          {migrationStatus === "migration_needed" && (
-            <Button variant="default" onClick={runMigration} disabled={loading} className="gap-2">
-              <Database className="h-4 w-4" /> {loading ? "جارٍ الترقية..." : "ترقية قاعدة البيانات"}
-            </Button>
-          )}
         </div>
       </div>
 
-      {migrationStatus === "migration_needed" && (
+      {migrationNeeded && (
         <Card className="border-yellow-500/50 bg-yellow-50/50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Database className="h-5 w-5 text-yellow-600" />
-              <div>
-                <p className="font-medium">تحتاج قاعدة البيانات للترقية</p>
-                <p className="text-sm text-muted-foreground">يجب إضافة عمود material_id إلى جدول wastage_rules. اضغط "ترقية قاعدة البيانات" أعلاه.</p>
-              </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-yellow-800">
+              <Database className="h-5 w-5" /> ترقية قاعدة البيانات مطلوبة
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              جدول <code>wastage_rules</code> لا يحتوي على عمود <code>material_id</code> بعد.
+              يجب تشغيل السكريبت التالي في <strong>Supabase Dashboard → SQL Editor</strong>:
             </div>
+            <div className="bg-gray-900 text-gray-100 p-4 rounded-md text-xs font-mono overflow-x-auto relative">
+              <button 
+                onClick={() => navigator.clipboard.writeText(migrationSQL)}
+                className="absolute top-2 right-2 text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
+              >
+                نسخ
+              </button>
+              <pre>{migrationSQL}</pre>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="default" onClick={() => { navigator.clipboard.writeText(migrationSQL); toast.success("تم النسخ - الصق في Supabase SQL Editor"); }}>
+                <Copy className="h-4 w-4" /> نسخ السكريبت
+              </Button>
+              <Button variant="outline" onClick={load} disabled={loading}>
+                <RefreshCw className="h-4 w-4" /> أعد التحميل بعد التشغيل
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              بعد تشغيل السكريبت في Supabase، اضغط "أعد التحميل" أعلاه.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -154,10 +157,15 @@ function WastageRulesPage() {
         </CardHeader>
         <CardContent>
           {loading && <div className="py-8 text-center text-muted-foreground">جارٍ التحميل...</div>}
-          {!loading && migrationStatus !== "migration_needed" && materials.length === 0 && (
+          {!loading && migrationNeeded && (
+            <div className="py-8 text-center text-muted-foreground">
+              شغل سكريبت الترقية أعلاه أولاً، ثم اضغط "أعد التحميل".
+            </div>
+          )}
+          {!loading && !migrationNeeded && materials.length === 0 && (
             <div className="py-8 text-center text-muted-foreground">لا توجد خامات.</div>
           )}
-          {!loading && migrationStatus !== "migration_needed" && materials.length > 0 && (
+          {!loading && !migrationNeeded && materials.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -195,7 +203,7 @@ function WastageRulesPage() {
                         </Badge>
                       ) : (m.wastage_pct && m.wastage_pct > 0 ? (
                         <Badge variant="secondary" className="gap-1">
-                          <span className="h-2 w-2 rounded-full bg-yellow-500" /> بانتظار المزامنة
+                          <span className="h-2 w-2 rounded-full bg-yellow-500" /> تنتظر المزامنة
                         </Badge>
                       ) : (
                         <Badge variant="outline">لا توجد قاعدة</Badge>
@@ -218,6 +226,27 @@ function WastageRulesPage() {
     </div>
   );
 }
+
+const migrationSQL = `-- COPY AND RUN IN SUPABASE DASHBOARD → SQL EDITOR
+ALTER TABLE public.wastage_rules
+  ADD COLUMN IF NOT EXISTS material_id uuid;
+
+ALTER TABLE public.wastage_rules
+  ADD CONSTRAINT wastage_rules_material_id_fkey
+  FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS wastage_rules_material_id_unique
+  ON public.wastage_rules (material_id)
+  WHERE material_id IS NOT NULL;
+
+INSERT INTO public.wastage_rules (material_id, wastage_pct, active, created_at)
+SELECT m.id, m.wastage_pct, true, now()
+FROM public.materials m
+LEFT JOIN public.wastage_rules wr ON wr.material_id = m.id
+WHERE m.wastage_pct IS NOT NULL
+  AND m.wastage_pct > 0
+  AND wr.material_id IS NULL
+ON CONFLICT (material_id) DO NOTHING;`;
 
 function AddMaterialForm({ onSuccess }: { onSuccess: () => void }) {
   const [form, setForm] = useState({
