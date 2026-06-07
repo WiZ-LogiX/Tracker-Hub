@@ -175,7 +175,8 @@ function Dashboard() {
                 <AlertDialogAction onClick={handleCleanup} disabled={cleanupLoading}>
                   {cleanupLoading ? "جارٍ الحذف..." : "نعم، احذف كل شيء"}
                 </AlertDialogAction>
-              </AlertDialogFooter            </AlertDialogContent>
+              </AlertDialogFooter>
+            </AlertDialogContent>
           </AlertDialog>
         </CardContent>
       </Card>
