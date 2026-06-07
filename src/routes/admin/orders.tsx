@@ -16,7 +16,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { sendNotification } from "@/lib/notifications.functions";
 import { InternalNotes } from "@/components/admin/InternalNotes";
 import { getR2BatchUploadUrls, deleteR2Object } from "@/lib/r2.functions";
-import { getR2PublicUrl } from "@/lib/r2.server";
+import { getR2PublicUrl, extractR2Key } from "@/lib/r2.utils";
 
 export const Route = createFileRoute("/admin/orders")({ component: OrdersPage });
 
@@ -114,14 +114,7 @@ function OrdersPage() {
   }
   async function deletePhoto(p: any) {
     // Extract R2 key from photo_url if it's an R2 URL
-    let r2Key: string | null = null;
-    if (p.photo_url) {
-      const { R2_ACCOUNT_ID, R2_BUCKET_NAME = 'pelecanon-assets' } = process.env;
-      const publicUrlBase = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}/`;
-      if (p.photo_url.startsWith(publicUrlBase)) {
-        r2Key = p.photo_url.slice(publicUrlBase.length);
-      }
-    }
+    const r2Key = p.photo_url ? extractR2Key(p.photo_url) : null;
 
     // Delete from database first
     const { error } = await supabase.from('production_photos').delete().eq('id', p.id);

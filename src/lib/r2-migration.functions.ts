@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { getUploadUrl, getR2PublicUrl } from "@/lib/r2.server";
+import { getUploadUrl, getPublicUrl } from "@/lib/r2.server";
 
 const MigrationInput = z.object({
   batchSize: z.number().int().positive().max(100).default(50),
@@ -114,7 +114,7 @@ export const migratePhotosToR2 = createServerFn({ method: "POST" })
         }
 
         // Update database with new R2 public URL
-        const newPhotoUrl = getR2PublicUrl(r2Key);
+        const newPhotoUrl = getPublicUrl(r2Key);
         const { error: updateError } = await supabaseAdmin
           .from("production_photos")
           .update({ photo_url: newPhotoUrl })

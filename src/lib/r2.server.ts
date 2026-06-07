@@ -12,8 +12,9 @@ import {
   S3RequestPresigner,
 } from "@aws-sdk/s3-request-presigner";
 import { createHash } from "crypto";
+import type { R2Config } from "./r2.config";
 
-function getR2Config() {
+function getR2Config(): R2Config {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
@@ -37,6 +38,7 @@ function getR2Config() {
     },
     bucketName,
     publicUrl,
+    accountId,
   };
 }
 
@@ -199,20 +201,4 @@ export async function objectExists(key: string): Promise<boolean> {
     }
     throw err;
   }
-}
-
-/**
- * Get the public URL for an object (R2 public bucket or custom domain).
- * This is a synchronous helper for generating display URLs.
- */
-export function getR2PublicUrl(key: string): string {
-  const { bucketName, publicUrl } = getR2Config();
-
-  if (publicUrl) {
-    return `${publicUrl.replace(/\/$/, "")}/${key}`;
-  }
-
-  // Default public URL format (requires bucket to be public)
-  const { R2_ACCOUNT_ID } = process.env;
-  return `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucketName}/${key}`;
 }

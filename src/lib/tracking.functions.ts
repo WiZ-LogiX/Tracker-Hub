@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { getDownloadUrl, getR2PublicUrl } from "@/lib/r2.server";
+import { getDownloadUrl, getPublicUrl } from "@/lib/r2.server";
 
 const SIGNED_URL_TTL = 60 * 30; // 30 minutes
 
