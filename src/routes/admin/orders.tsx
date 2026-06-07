@@ -104,8 +104,13 @@ function OrdersPage() {
           
           if (error) throw error;
           ok++;
-        } catch (err) {
-          console.error('R2 upload error:', err);
+        } catch (err: any) {
+          // Handle CORS errors specifically
+          if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+            toast.error('CORS error: R2 bucket needs CORS configuration. See Cloudflare R2 dashboard → Bucket → Settings → CORS. Allow your origin with PUT method and headers: Content-Type, x-amz-*');
+          } else {
+            console.error('R2 upload error:', err);
+          }
           fail++;
         }
       }
