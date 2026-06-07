@@ -18,7 +18,8 @@ function getR2Config(): R2Config {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  const bucketName = process.env.R2_BUCKET_NAME || "pelecanon-assets";
+  // Support both R2_BUCKET and R2_BUCKET_NAME for compatibility
+  const bucketName = process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
   const publicUrl = process.env.R2_PUBLIC_URL; // Optional: custom domain for public access
 
   if (!accountId || !accessKeyId || !secretAccessKey) {

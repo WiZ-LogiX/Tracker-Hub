@@ -50,8 +50,7 @@
       "notifications": "Notifications",
       "workers": "Ouvriers",
       "remakes": "Reprises",
-      "r2Migration": "Migration Stockage (R2)",
-      "dbCheck": "Vérification Base de Données"
+      "r2Migration": "Migration Stockage (R2)"
     }
   }
 }

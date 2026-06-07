@@ -50,8 +50,7 @@
       "notifications": "Notifications",
       "workers": "Workers",
       "remakes": "Remakes",
-      "r2Migration": "Storage Migration (R2)",
-      "dbCheck": "Database Check"
+      "r2Migration": "Storage Migration (R2)"
     }
   }
 }

@@ -125,15 +125,22 @@ src/
 - **Legacy**: Supabase Storage (being migrated) — read-only fallback during transition
 - **Access Pattern**: Client → Server Fn (presigned URL) → Direct R2 Upload → DB stores R2 key + public URL
 
-### R2 Client Library (`src/lib/r2.server.ts`)
+### R2 Client Library (`src/lib/r2.server.ts`) — Server-only
 | Function | Purpose |
 |----------|---------|
 | `getUploadUrl(key, contentType, expiresIn?)` | Presigned PUT URL for direct browser→R2 upload |
 | `getDownloadUrl(key, expiresIn?)` | Presigned GET URL for private object access |
 | `deleteObject(key)` | Delete object from R2 |
 | `generateObjectKey(tenantId, entityType, entityId, filename)` | Consistent key structure: `tenantId/entityType/entityId/hash.ext` |
-| `getR2PublicUrl(key)` | Public URL for display (requires public bucket or custom domain) |
+| `getPublicUrl(key)` | Public URL for display (requires public bucket or custom domain) |
 | `objectExists(key)` | Check if object exists |
+
+### R2 Client Utilities (`src/lib/r2.utils.ts`) — Client-safe
+| Function | Purpose |
+|----------|---------|
+| `getR2PublicUrl(key)` | Public URL for display (safe in browser) |
+| `extractR2Key(url)` | Extract R2 key from public URL |
+| `generateObjectKeyClient(...)` | Generate key without crypto (browser-safe) |
 
 ### Server Functions (`src/lib/r2.functions.ts`)
 - `getR2UploadUrl` — Single file upload URL (authenticated, tenant-scoped)
@@ -167,7 +174,7 @@ for (const { uploadUrl, key } of uploads) {
 R2_ACCOUNT_ID=your-cloudflare-account-id
 R2_ACCESS_KEY_ID=your-r2-access-key
 R2_SECRET_ACCESS_KEY=your-r2-secret-key
-R2_BUCKET_NAME=pelecanon-assets
+R2_BUCKET=pelecanon-assets  # or R2_BUCKET_NAME
 R2_PUBLIC_URL=https://your-custom-domain.com  # optional, for custom domain
 ```
 
@@ -179,7 +186,10 @@ R2_PUBLIC_URL=https://your-custom-domain.com  # optional, for custom domain
 ### Quick Reference: R2 Imports
 ```ts
 // Server-only R2 client
-import { getUploadUrl, getDownloadUrl, deleteObject, generateObjectKey, getR2PublicUrl } from "@/lib/r2.server";
+import { getUploadUrl, getDownloadUrl, deleteObject, generateObjectKey, getPublicUrl } from "@/lib/r2.server";
+
+// Client-safe utilities (no Node.js deps)
+import { getR2PublicUrl, extractR2Key, generateObjectKeyClient } from "@/lib/r2.utils";
 
 // Server functions (use in components via useServerFn)
 import { getR2UploadUrl, getR2BatchUploadUrls, getR2DownloadUrl, deleteR2Object } from "@/lib/r2.functions";

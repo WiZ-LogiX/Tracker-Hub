@@ -50,8 +50,7 @@
       "notifications": "الإشعارات",
       "workers": "العمال",
       "remakes": "إعادة التصنيع",
-      "r2Migration": "نقل التخزين (R2)",
-      "dbCheck": "فحص قاعدة البيانات"
+      "r2Migration": "نقل التخزين (R2)"
     }
   }
 }

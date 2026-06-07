@@ -31,7 +31,6 @@ import { Route as AdminMaterialsRouteImport } from './routes/admin/materials'
 import { Route as AdminInvoicesRouteImport } from './routes/admin/invoices'
 import { Route as AdminFinishesRouteImport } from './routes/admin/finishes'
 import { Route as AdminDiscountsRouteImport } from './routes/admin/discounts'
-import { Route as AdminDbCheckRouteImport } from './routes/admin/db-check'
 import { Route as AdminCostAnalysisRouteImport } from './routes/admin/cost-analysis'
 import { Route as AdminAccessoriesRouteImport } from './routes/admin/accessories'
 import { Route as AdminQuotesIndexRouteImport } from './routes/admin/quotes/index'
@@ -150,11 +149,6 @@ const AdminDiscountsRoute = AdminDiscountsRouteImport.update({
   path: '/discounts',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminDbCheckRoute = AdminDbCheckRouteImport.update({
-  id: '/db-check',
-  path: '/db-check',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminCostAnalysisRoute = AdminCostAnalysisRouteImport.update({
   id: '/cost-analysis',
   path: '/cost-analysis',
@@ -199,7 +193,6 @@ export interface FileRoutesByFullPath {
   '/track': typeof TrackRoute
   '/admin/accessories': typeof AdminAccessoriesRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
-  '/admin/db-check': typeof AdminDbCheckRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
   '/admin/invoices': typeof AdminInvoicesRouteWithChildren
@@ -230,7 +223,6 @@ export interface FileRoutesByTo {
   '/track': typeof TrackRoute
   '/admin/accessories': typeof AdminAccessoriesRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
-  '/admin/db-check': typeof AdminDbCheckRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
   '/admin/invoices': typeof AdminInvoicesRouteWithChildren
@@ -263,7 +255,6 @@ export interface FileRoutesById {
   '/track': typeof TrackRoute
   '/admin/accessories': typeof AdminAccessoriesRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
-  '/admin/db-check': typeof AdminDbCheckRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
   '/admin/invoices': typeof AdminInvoicesRouteWithChildren
@@ -297,7 +288,6 @@ export interface FileRouteTypes {
     | '/track'
     | '/admin/accessories'
     | '/admin/cost-analysis'
-    | '/admin/db-check'
     | '/admin/discounts'
     | '/admin/finishes'
     | '/admin/invoices'
@@ -328,7 +318,6 @@ export interface FileRouteTypes {
     | '/track'
     | '/admin/accessories'
     | '/admin/cost-analysis'
-    | '/admin/db-check'
     | '/admin/discounts'
     | '/admin/finishes'
     | '/admin/invoices'
@@ -360,7 +349,6 @@ export interface FileRouteTypes {
     | '/track'
     | '/admin/accessories'
     | '/admin/cost-analysis'
-    | '/admin/db-check'
     | '/admin/discounts'
     | '/admin/finishes'
     | '/admin/invoices'
@@ -549,13 +537,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDiscountsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/db-check': {
-      id: '/admin/db-check'
-      path: '/db-check'
-      fullPath: '/admin/db-check'
-      preLoaderRoute: typeof AdminDbCheckRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/cost-analysis': {
       id: '/admin/cost-analysis'
       path: '/cost-analysis'
@@ -623,7 +604,6 @@ const AdminInvoicesRouteWithChildren = AdminInvoicesRoute._addFileChildren(
 interface AdminRouteChildren {
   AdminAccessoriesRoute: typeof AdminAccessoriesRoute
   AdminCostAnalysisRoute: typeof AdminCostAnalysisRoute
-  AdminDbCheckRoute: typeof AdminDbCheckRoute
   AdminDiscountsRoute: typeof AdminDiscountsRoute
   AdminFinishesRoute: typeof AdminFinishesRoute
   AdminInvoicesRoute: typeof AdminInvoicesRouteWithChildren
@@ -650,7 +630,6 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAccessoriesRoute: AdminAccessoriesRoute,
   AdminCostAnalysisRoute: AdminCostAnalysisRoute,
-  AdminDbCheckRoute: AdminDbCheckRoute,
   AdminDiscountsRoute: AdminDiscountsRoute,
   AdminFinishesRoute: AdminFinishesRoute,
   AdminInvoicesRoute: AdminInvoicesRouteWithChildren,

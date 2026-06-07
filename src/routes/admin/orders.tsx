@@ -67,50 +67,56 @@ function OrdersPage() {
   async function uploadPhotos(files: File[], caption: string) {
     if (!selected || files.length === 0) return;
     
-    // Get presigned upload URLs from R2
-    const fileInfos = files.map(f => ({ filename: f.name, contentType: f.type || 'image/jpeg' }));
-    const { uploads } = await getBatchUploadUrls({
-      data: { files: fileInfos, entityType: 'production-photos', entityId: selected.id },
-    });
+    try {
+      // Get presigned upload URLs from R2
+      const fileInfos = files.map(f => ({ filename: f.name, contentType: f.type || 'image/jpeg' }));
+      const { uploads } = await getBatchUploadUrls({
+        data: { files: fileInfos, entityType: 'production-photos', entityId: selected.id },
+      });
 
-    let ok = 0, fail = 0;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const { key, uploadUrl } = uploads[i];
-      
-      try {
-        // Upload directly to R2 using presigned URL
-        const uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          body: file,
-          headers: { 'Content-Type': file.type || 'image/jpeg' },
-        });
+      let ok = 0, fail = 0;
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const { key, uploadUrl } = uploads[i];
         
-        if (!uploadRes.ok) {
-          throw new Error(`Upload failed: ${uploadRes.status}`);
+        try {
+          // Upload directly to R2 using presigned URL
+          const uploadRes = await fetch(uploadUrl, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type || 'image/jpeg' },
+          });
+          
+          if (!uploadRes.ok) {
+            const errText = await uploadRes.text();
+            throw new Error(`Upload failed: ${uploadRes.status} - ${errText}`);
+          }
+
+          // Store the R2 key and generate a public URL for display
+          const photoUrl = getR2PublicUrl(key);
+          const { error } = await supabase.from('production_photos').insert({
+            order_id: selected.id,
+            stage: selected.current_stage,
+            photo_url: photoUrl,
+            caption: caption || null,
+            uploaded_by: user?.id,
+          });
+          
+          if (error) throw error;
+          ok++;
+        } catch (err) {
+          console.error('R2 upload error:', err);
+          fail++;
         }
-
-        // Store the R2 key and generate a public URL for display
-        const photoUrl = getR2PublicUrl(key);
-        const { error } = await supabase.from('production_photos').insert({
-          order_id: selected.id,
-          stage: selected.current_stage,
-          photo_url: photoUrl,
-          caption: caption || null,
-          uploaded_by: user?.id,
-        });
-        
-        if (error) throw error;
-        ok++;
-      } catch (err) {
-        console.error('R2 upload error:', err);
-        fail++;
       }
+      
+      if (ok) toast.success(`تم رفع ${ok} صورة`);
+      if (fail) toast.error(`فشل رفع ${fail} صورة`);
+      await reloadOrderData(selected.id);
+    } catch (err: any) {
+      console.error('getBatchUploadUrls error:', err);
+      toast.error(`فشل الحصول على روابط الرفع: ${err.message}`);
     }
-    
-    if (ok) toast.success(`تم رفع ${ok} صورة`);
-    if (fail) toast.error(`فشل رفع ${fail} صورة`);
-    await reloadOrderData(selected.id);
   }
   async function deletePhoto(p: any) {
     // Extract R2 key from photo_url if it's an R2 URL

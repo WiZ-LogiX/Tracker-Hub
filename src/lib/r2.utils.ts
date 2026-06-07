@@ -4,7 +4,9 @@ import type { R2Config } from "./r2.config";
 // Re-export config getter for client use (uses only process.env)
 export function getR2ConfigClient(): Pick<R2Config, "bucketName" | "publicUrl" | "accountId"> {
   const accountId = import.meta.env.R2_ACCOUNT_ID || process.env.R2_ACCOUNT_ID;
-  const bucketName = import.meta.env.R2_BUCKET_NAME || process.env.R2_BUCKET_NAME || "pelecanon-assets";
+  // Support both R2_BUCKET and R2_BUCKET_NAME for compatibility
+  const bucketName = import.meta.env.R2_BUCKET_NAME || import.meta.env.R2_BUCKET ||
+                     process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
   const publicUrl = import.meta.env.R2_PUBLIC_URL || process.env.R2_PUBLIC_URL;
 
   return { accountId, bucketName, publicUrl };
