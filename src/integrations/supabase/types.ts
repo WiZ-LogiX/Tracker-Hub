@@ -1216,7 +1216,7 @@ export type Database = {
           notes?: string | null
           order_id: string
           passed?: boolean
-          stage: Database["public"]["Enums"]["order_stage"]
+          stage?: Database["public"]["Enums"]["order_stage"]
           tenant_id?: string
         }
         Update: {
@@ -1449,7 +1449,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["quote_status"]
           subtotal?: number
           tenant_id?: string
-          total?: number
+          total: number
           valid_until?: string
           vat_amount?: number
           vat_pct?: number
@@ -1794,6 +1794,7 @@ export type Database = {
           company_id: string
           created_at: string
           id: string
+          material_id: string | null
           material_type: string
           max_dimension: number | null
           min_dimension: number
@@ -1805,6 +1806,7 @@ export type Database = {
           company_id?: string
           created_at?: string
           id?: string
+          material_id?: string | null
           material_type: string
           max_dimension?: number | null
           min_dimension?: number
@@ -1816,6 +1818,7 @@ export type Database = {
           company_id?: string
           created_at?: string
           id?: string
+          material_id?: string | null
           material_type?: string
           max_dimension?: number | null
           min_dimension?: number
@@ -1823,6 +1826,13 @@ export type Database = {
           wastage_pct?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "wastage_rules_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "wastage_rules_tenant_id_fkey"
             columns: ["tenant_id"]

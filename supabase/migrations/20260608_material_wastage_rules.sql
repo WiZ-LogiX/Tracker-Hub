@@ -1,7 +1,7 @@
 -- Material-based wastage rules migration
 -- Replaces dimension-based wastage_rules with simple material_id -> wastage_pct mapping
 
--- 1. Add material_id to wastage_rules with proper foreign key
+-- 1. Add material_id column to wastage_rules
 ALTER TABLE public.wastage_rules
   ADD COLUMN IF NOT EXISTS material_id uuid;
 
