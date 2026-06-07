@@ -33,7 +33,18 @@ export const applyWastageRulesMigration = createServerFn({ method: "POST" })
       if (colError) results.push(`Column add: ${colError.message}`);
       else results.push("✓ Added material_id column");
 
-      // 2. Add foreign key constraint
+      // 2. Add min_dimension and max_dimension columns
+      const { error: dimError } = await supabaseAdmin.rpc('exec', {
+        query: `
+          ALTER TABLE public.wastage_rules
+          ADD COLUMN IF NOT EXISTS min_dimension numeric,
+          ADD COLUMN IF NOT EXISTS max_dimension numeric;
+        `
+      });
+      if (dimError) results.push(`Dimensions: ${dimError.message}`);
+      else results.push("✓ Added min/max dimension columns");
+
+      // 3. Add foreign key constraint
       const { error: fkError } = await supabaseAdmin.rpc('exec', {
         query: `
           DO $$
@@ -55,28 +66,28 @@ export const applyWastageRulesMigration = createServerFn({ method: "POST" })
         results.push("✓ Added foreign key constraint");
       }
 
-      // 3. Create unique index
+      // 4. Create unique index (one active rule per material per dimension range)
       const { error: idxError } = await supabaseAdmin.rpc('exec', {
         query: `
-          CREATE UNIQUE INDEX IF NOT EXISTS wastage_rules_material_id_unique
-          ON public.wastage_rules (material_id)
-          WHERE material_id IS NOT NULL;
+          CREATE UNIQUE INDEX IF NOT EXISTS wastage_rules_material_dim_unique
+          ON public.wastage_rules (material_id, min_dimension, max_dimension)
+          WHERE active = true;
         `
       });
       if (idxError) results.push(`Index: ${idxError.message}`);
       else results.push("✓ Created unique index");
 
-      // 4. Migrate existing data
+      // 5. Migrate existing data
       const { error: migrateError } = await supabaseAdmin.rpc('exec', {
         query: `
-          INSERT INTO public.wastage_rules (material_id, wastage_pct, active, created_at)
-          SELECT m.id, m.wastage_pct, true, now()
+          INSERT INTO public.wastage_rules (material_id, wastage_pct, min_dimension, max_dimension, active, created_at)
+          SELECT m.id, m.wastage_pct, NULL, NULL, true, now()
           FROM public.materials m
           LEFT JOIN public.wastage_rules wr ON wr.material_id = m.id
           WHERE m.wastage_pct IS NOT NULL
             AND m.wastage_pct > 0
             AND wr.material_id IS NULL
-          ON CONFLICT (material_id) DO NOTHING;
+          ON CONFLICT (material_id, min_dimension, max_dimension) DO NOTHING;
         `
       });
       if (migrateError) results.push(`Migration: ${migrateError.message}`);
