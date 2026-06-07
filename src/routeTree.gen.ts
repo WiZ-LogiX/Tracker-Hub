@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrackRouteImport } from './routes/track'
-import { Route as RequestQuoteRouteImport } from './routes/request-quote'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -19,7 +18,6 @@ import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 import { Route as AdminWastageRulesRouteImport } from './routes/admin/wastage-rules'
 import { Route as AdminVeneersRouteImport } from './routes/admin/veneers'
 import { Route as AdminSuppliersRouteImport } from './routes/admin/suppliers'
-import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
 import { Route as AdminRemakesRouteImport } from './routes/admin/remakes'
 import { Route as AdminProductsRouteImport } from './routes/admin/products'
 import { Route as AdminPricingRulesRouteImport } from './routes/admin/pricing-rules'
@@ -42,11 +40,6 @@ import { Route as AdminInvoicesIdRouteImport } from './routes/admin/invoices.$id
 const TrackRoute = TrackRouteImport.update({
   id: '/track',
   path: '/track',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RequestQuoteRoute = RequestQuoteRouteImport.update({
-  id: '/request-quote',
-  path: '/request-quote',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -87,11 +80,6 @@ const AdminVeneersRoute = AdminVeneersRouteImport.update({
 const AdminSuppliersRoute = AdminSuppliersRouteImport.update({
   id: '/suppliers',
   path: '/suppliers',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminRequestsRoute = AdminRequestsRouteImport.update({
-  id: '/requests',
-  path: '/requests',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRemakesRoute = AdminRemakesRouteImport.update({
@@ -189,7 +177,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
-  '/request-quote': typeof RequestQuoteRoute
   '/track': typeof TrackRoute
   '/admin/accessories': typeof AdminAccessoriesRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
@@ -204,7 +191,6 @@ export interface FileRoutesByFullPath {
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/remakes': typeof AdminRemakesRoute
-  '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -219,7 +205,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/request-quote': typeof RequestQuoteRoute
   '/track': typeof TrackRoute
   '/admin/accessories': typeof AdminAccessoriesRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
@@ -234,7 +219,6 @@ export interface FileRoutesByTo {
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/remakes': typeof AdminRemakesRoute
-  '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -251,7 +235,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
-  '/request-quote': typeof RequestQuoteRoute
   '/track': typeof TrackRoute
   '/admin/accessories': typeof AdminAccessoriesRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
@@ -266,7 +249,6 @@ export interface FileRoutesById {
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/remakes': typeof AdminRemakesRoute
-  '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -284,7 +266,6 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
-    | '/request-quote'
     | '/track'
     | '/admin/accessories'
     | '/admin/cost-analysis'
@@ -299,7 +280,6 @@ export interface FileRouteTypes {
     | '/admin/pricing-rules'
     | '/admin/products'
     | '/admin/remakes'
-    | '/admin/requests'
     | '/admin/suppliers'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -314,7 +294,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
-    | '/request-quote'
     | '/track'
     | '/admin/accessories'
     | '/admin/cost-analysis'
@@ -329,7 +308,6 @@ export interface FileRouteTypes {
     | '/admin/pricing-rules'
     | '/admin/products'
     | '/admin/remakes'
-    | '/admin/requests'
     | '/admin/suppliers'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -345,7 +323,6 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
-    | '/request-quote'
     | '/track'
     | '/admin/accessories'
     | '/admin/cost-analysis'
@@ -360,7 +337,6 @@ export interface FileRouteTypes {
     | '/admin/pricing-rules'
     | '/admin/products'
     | '/admin/remakes'
-    | '/admin/requests'
     | '/admin/suppliers'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -377,7 +353,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRoute
-  RequestQuoteRoute: typeof RequestQuoteRoute
   TrackRoute: typeof TrackRoute
 }
 
@@ -388,13 +363,6 @@ declare module '@tanstack/react-router' {
       path: '/track'
       fullPath: '/track'
       preLoaderRoute: typeof TrackRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/request-quote': {
-      id: '/request-quote'
-      path: '/request-quote'
-      fullPath: '/request-quote'
-      preLoaderRoute: typeof RequestQuoteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -451,13 +419,6 @@ declare module '@tanstack/react-router' {
       path: '/suppliers'
       fullPath: '/admin/suppliers'
       preLoaderRoute: typeof AdminSuppliersRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/requests': {
-      id: '/admin/requests'
-      path: '/requests'
-      fullPath: '/admin/requests'
-      preLoaderRoute: typeof AdminRequestsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/remakes': {
@@ -615,7 +576,6 @@ interface AdminRouteChildren {
   AdminPricingRulesRoute: typeof AdminPricingRulesRoute
   AdminProductsRoute: typeof AdminProductsRoute
   AdminRemakesRoute: typeof AdminRemakesRoute
-  AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSuppliersRoute: typeof AdminSuppliersRoute
   AdminVeneersRoute: typeof AdminVeneersRoute
   AdminWastageRulesRoute: typeof AdminWastageRulesRoute
@@ -641,7 +601,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPricingRulesRoute: AdminPricingRulesRoute,
   AdminProductsRoute: AdminProductsRoute,
   AdminRemakesRoute: AdminRemakesRoute,
-  AdminRequestsRoute: AdminRequestsRoute,
   AdminSuppliersRoute: AdminSuppliersRoute,
   AdminVeneersRoute: AdminVeneersRoute,
   AdminWastageRulesRoute: AdminWastageRulesRoute,
@@ -659,7 +618,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRoute,
-  RequestQuoteRoute: RequestQuoteRoute,
   TrackRoute: TrackRoute,
 }
 export const routeTree = rootRouteImport

@@ -30,7 +30,6 @@
     "noAccess": "Votre compte n'a pas accès à l'administration.",
     "nav": {
       "home": "Tableau de bord",
-      "requests": "Demandes clients",
       "quotes": "Devis",
       "configurator": "Créateur de devis",
       "invoices": "Factures",

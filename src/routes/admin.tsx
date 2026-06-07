@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard, Inbox, FileText, Receipt, ClipboardList,
+  LayoutDashboard, FileText, Receipt, ClipboardList,
   Package, Layers3, Palette, Wrench, Ticket, LogOut, Menu,
   Truck, Trees, SlidersHorizontal, GitBranch, Sparkles, Bell,
   Users, RefreshCcw, BarChart3, UserCircle
@@ -17,7 +17,6 @@ export const Route = createFileRoute("/admin")({ component: AdminLayout });
 
 const NAV = [
   { to: "/admin", labelKey: "admin.nav.home", icon: LayoutDashboard, exact: true },
-  { to: "/admin/requests", labelKey: "admin.nav.requests", icon: Inbox },
   { to: "/admin/quotes", labelKey: "admin.nav.quotes", icon: FileText },
   { to: "/admin/quotes/configurator", labelKey: "admin.nav.configurator", icon: Sparkles },
   { to: "/admin/invoices", labelKey: "admin.nav.invoices", icon: Receipt },
@@ -25,7 +24,6 @@ const NAV = [
   { to: "/admin/customers", labelKey: "admin.nav.customers", icon: UserCircle },
   { to: "/admin/products", labelKey: "admin.nav.products", icon: Package },
   { to: "/admin/materials", labelKey: "admin.nav.materials", icon: Layers3 },
-  
   { to: "/admin/suppliers", labelKey: "admin.nav.suppliers", icon: Truck },
   { to: "/admin/finishes", labelKey: "admin.nav.finishes", icon: Palette },
   { to: "/admin/veneers", labelKey: "admin.nav.veneers", icon: Trees },
@@ -59,9 +57,6 @@ function SidebarContent() {
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {(() => {
-          // Pick the single best (longest) matching nav entry so sibling
-          // routes like /admin/quotes and /admin/quotes/configurator
-          // don't both highlight at the same time.
           const path = loc.pathname;
           let bestTo: string | null = null;
           for (const item of NAV) {
@@ -108,8 +103,6 @@ function AdminLayout() {
   }, [loading, user, nav]);
 
   if (loading || !user) {
-    // Locale-independent spinner to avoid SSR/client hydration mismatch
-    // (server renders fallback lang while client may read a different lang from localStorage).
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-6 w-6 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin" aria-label="loading" />

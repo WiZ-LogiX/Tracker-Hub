@@ -30,7 +30,6 @@
     "noAccess": "Your account does not have admin access.",
     "nav": {
       "home": "Dashboard",
-      "requests": "Customer Requests",
       "quotes": "Quotes",
       "configurator": "Quotation Builder",
       "invoices": "Invoices",

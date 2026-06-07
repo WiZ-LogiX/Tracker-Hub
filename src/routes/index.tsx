@@ -13,18 +13,15 @@ function Landing() {
       <header className="border-b bg-card/80 backdrop-blur sticky top-0 z-10">
         <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-md gradient-emerald flex items-center justify-center text-gold font-serif font-bold">P</div>
+            <div className="h-10 w-10 rounded-md gradient-emerald flex items-center justify-center text-gold font-serif font-bold">P</div>
             <div>
-              <div className="font-serif font-bold text-lg leading-none">PeleCanon</div>
+              <div className="font-serif text-2xl font-bold">PeleCanon</div>
               <div className="text-[10px] text-muted-foreground">Pricing & Production System</div>
             </div>
           </div>
           <nav className="flex items-center gap-2">
             <Link to="/track"><Button variant="ghost" size="sm">تتبع طلبك</Button></Link>
             <Link to="/admin"><Button variant="ghost" size="sm">لوحة الإدارة</Button></Link>
-            <Link to="/request-quote"><Button size="sm" className="gap-2">
-              اطلب عرض سعر <ArrowLeft className="h-4 w-4 rtl-flip" />
-            </Button></Link>
             <LanguageSwitcher />
             <ThemeToggle />
           </nav>
@@ -50,9 +47,9 @@ function Landing() {
             مطابخ، دواليب، غرف نوم، وقطع أثاث مفصلة بمقاييسك. احصل على عرض سعر مفصل خلال 24-48 ساعة.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Link to="/request-quote">
+            <Link to="/admin/quotes/configurator">
               <Button size="lg" className="bg-gold text-gold-foreground hover:bg-gold/90 gap-2 px-8">
-                اطلب عرض سعر مجاناً <ArrowLeft className="h-4 w-4 rtl-flip" />
+                ابدأ عرض سعر <ArrowLeft className="h-4 w-4 rtl-flip" />
               </Button>
             </Link>
           </div>
@@ -85,9 +82,9 @@ function Landing() {
             ابدأ مشروعك معانا اليوم
           </h2>
           <p className="text-background/80 mb-8 max-w-xl mx-auto">
-            املأ نموذج طلب عرض السعر وفريقنا هيتواصل معاك خلال 24-48 ساعة
+            فريقنا هيتواصل معاك خلال 24-48 ساعة
           </p>
-          <Link to="/request-quote">
+          <Link to="/admin/quotes/configurator">
             <Button size="lg" className="bg-gold text-gold-foreground hover:bg-gold/90 gap-2 px-8">
               ابدأ الآن <ArrowLeft className="h-4 w-4 rtl-flip" />
             </Button>
