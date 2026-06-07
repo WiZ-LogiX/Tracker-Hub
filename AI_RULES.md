@@ -6,7 +6,7 @@
 - **UI Library**: **shadcn/ui** components (Radix UI primitives) — never build raw Radix components; import from `@/components/ui/*`
 - **Styling**: **Tailwind CSS v4** (CSS-first config in `src/styles.css`); use `cn()` utility from `@/lib/utils.ts` for class merging
 - **State & Data Fetching**: **TanStack Query v5** (`@tanstack/react-query`) for server state; server functions via `createServerFn` (TanStack Start)
-- **Database**: **Drizzle ORM** with **Neon** (PostgreSQL) via `@neondatabase/serverless` HTTP driver; schema in `src/db/schema.ts`
+- **Database**: **Drizzle ORM** with **Supabase PostgreSQL** (via `@neondatabase/serverless` HTTP driver for pooled connections); schema in `src/db/schema.ts`
 - **Auth**: **Supabase Auth** (email/password + Google OAuth); client in `@/integrations/supabase/client.ts`, server admin client in `client.server.ts`
 - **Forms & Validation**: **React Hook Form** + **Zod** schemas; resolvers via `@hookform/resolvers/zod`
 - **Internationalization**: **i18next** + `react-i18next`; locales in `src/i18n/locales/*.json`; `useTranslation()` hook
@@ -15,6 +15,7 @@
 - **Notifications**: **Sonner** (`sonner`) for toasts; `toast.success/error/info`
 - **Date/Time**: **date-fns** for formatting; `date-fns/locale/ar` for Arabic
 - **Deployment**: Cloudflare Workers via `@cloudflare/vite-plugin` + Wrangler (`wrangler.jsonc`)
+- **File Storage**: **Cloudflare R2** (S3-compatible) for images, attachments, logos, production photos; accessed via `@aws-sdk/client-s3` + presigned URLs; `src/lib/r2.server.ts`
 
 ---
 
@@ -112,6 +113,78 @@ src/
 - ❌ `drizzle-kit push` against production — migrations only via Supabase
 - ❌ Hardcoding "PeleCanon" strings — use `useTenant()` (Phase 2) or i18n keys
 - ❌ Storing secrets in code — use environment variables (Cloudflare Workers secrets)
+- ❌ Direct Supabase Storage uploads in components — use R2 presigned URLs via server fns
+- ❌ Hardcoded bucket names — use `R2_BUCKET_NAME` env var
+
+---
+
+## Cloudflare R2 Integration Rules
+
+### Storage Architecture
+- **Primary**: Cloudflare R2 (S3-compatible) for all file assets
+- **Legacy**: Supabase Storage (being migrated) — read-only fallback during transition
+- **Access Pattern**: Client → Server Fn (presigned URL) → Direct R2 Upload → DB stores R2 key + public URL
+
+### R2 Client Library (`src/lib/r2.server.ts`)
+| Function | Purpose |
+|----------|---------|
+| `getUploadUrl(key, contentType, expiresIn?)` | Presigned PUT URL for direct browser→R2 upload |
+| `getDownloadUrl(key, expiresIn?)` | Presigned GET URL for private object access |
+| `deleteObject(key)` | Delete object from R2 |
+| `generateObjectKey(tenantId, entityType, entityId, filename)` | Consistent key structure: `tenantId/entityType/entityId/hash.ext` |
+| `getR2PublicUrl(key)` | Public URL for display (requires public bucket or custom domain) |
+| `objectExists(key)` | Check if object exists |
+
+### Server Functions (`src/lib/r2.functions.ts`)
+- `getR2UploadUrl` — Single file upload URL (authenticated, tenant-scoped)
+- `getR2BatchUploadUrls` — Multiple files at once (max 20)
+- `getR2DownloadUrl` — Signed download URL for private access
+- `deleteR2Object` — Delete from R2 (authenticated)
+
+### Client Upload Flow
+```tsx
+// 1. Get presigned URLs from server fn
+const { uploads } = await getR2BatchUploadUrls({
+  data: { files, entityType: 'production-photos', entityId: orderId }
+});
+
+// 2. Upload directly to R2 from browser
+for (const { uploadUrl, key } of uploads) {
+  await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+  // 3. Save R2 public URL to DB
+  await supabase.from('production_photos').insert({ photo_url: getR2PublicUrl(key), ... });
+}
+```
+
+### Migration (Supabase → R2)
+- Admin page: `/admin/r2-migration`
+- Server fns: `migratePhotosToR2`, `getMigrationStatus` in `src/lib/r2-migration.functions.ts`
+- Run in batches with dry-run option first
+- Updates `production_photos.photo_url` from Supabase URL → R2 public URL
+
+### Environment Variables Required
+```
+R2_ACCOUNT_ID=your-cloudflare-account-id
+R2_ACCESS_KEY_ID=your-r2-access-key
+R2_SECRET_ACCESS_KEY=your-r2-secret-key
+R2_BUCKET_NAME=pelecanon-assets
+R2_PUBLIC_URL=https://your-custom-domain.com  # optional, for custom domain
+```
+
+### Database Schema Notes
+- `production_photos.photo_url` stores R2 public URL (format: `https://<account>.r2.cloudflarestorage.com/<bucket>/<key>`)
+- No new columns needed — URL format change is backward compatible
+- Extraction helper: `extractR2Key(url)` in `tracking.functions.ts` for signed URL generation
+
+### Quick Reference: R2 Imports
+```ts
+// Server-only R2 client
+import { getUploadUrl, getDownloadUrl, deleteObject, generateObjectKey, getR2PublicUrl } from "@/lib/r2.server";
+
+// Server functions (use in components via useServerFn)
+import { getR2UploadUrl, getR2BatchUploadUrls, getR2DownloadUrl, deleteR2Object } from "@/lib/r2.functions";
+import { migratePhotosToR2, getMigrationStatus } from "@/lib/r2-migration.functions";
+```
 
 ---
 

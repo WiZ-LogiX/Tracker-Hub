@@ -15,6 +15,8 @@ import { useAuth } from "@/lib/useAuth";
 import { useServerFn } from "@tanstack/react-start";
 import { sendNotification } from "@/lib/notifications.functions";
 import { InternalNotes } from "@/components/admin/InternalNotes";
+import { getR2BatchUploadUrls, deleteR2Object } from "@/lib/r2.functions";
+import { getR2PublicUrl } from "@/lib/r2.server";
 
 export const Route = createFileRoute("/admin/orders")({ component: OrdersPage });
 
@@ -29,6 +31,8 @@ function OrdersPage() {
   const [note, setNote] = useState("");
   const { user } = useAuth();
   const notify = useServerFn(sendNotification);
+  const getBatchUploadUrls = useServerFn(getR2BatchUploadUrls);
+  const deleteR2 = useServerFn(deleteR2Object);
 
   useEffect(() => { load(); loadWorkers(); }, []);
   async function load() {
@@ -62,26 +66,77 @@ function OrdersPage() {
   }
   async function uploadPhotos(files: File[], caption: string) {
     if (!selected || files.length === 0) return;
+    
+    // Get presigned upload URLs from R2
+    const fileInfos = files.map(f => ({ filename: f.name, contentType: f.type || 'image/jpeg' }));
+    const { uploads } = await getBatchUploadUrls({
+      data: { files: fileInfos, entityType: 'production-photos', entityId: selected.id },
+    });
+
     let ok = 0, fail = 0;
-    for (const file of files) {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const path = `${selected.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('production-photos').upload(path, file, { upsert: false });
-      if (upErr) { fail++; continue; }
-      const { data: pub } = supabase.storage.from('production-photos').getPublicUrl(path);
-      const { error } = await supabase.from('production_photos').insert({
-        order_id: selected.id, stage: selected.current_stage, photo_url: pub.publicUrl,
-        caption: caption || null, uploaded_by: user?.id,
-      });
-      if (error) fail++; else ok++;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const { key, uploadUrl } = uploads[i];
+      
+      try {
+        // Upload directly to R2 using presigned URL
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'image/jpeg' },
+        });
+        
+        if (!uploadRes.ok) {
+          throw new Error(`Upload failed: ${uploadRes.status}`);
+        }
+
+        // Store the R2 key and generate a public URL for display
+        const photoUrl = getR2PublicUrl(key);
+        const { error } = await supabase.from('production_photos').insert({
+          order_id: selected.id,
+          stage: selected.current_stage,
+          photo_url: photoUrl,
+          caption: caption || null,
+          uploaded_by: user?.id,
+        });
+        
+        if (error) throw error;
+        ok++;
+      } catch (err) {
+        console.error('R2 upload error:', err);
+        fail++;
+      }
     }
+    
     if (ok) toast.success(`تم رفع ${ok} صورة`);
     if (fail) toast.error(`فشل رفع ${fail} صورة`);
     await reloadOrderData(selected.id);
   }
   async function deletePhoto(p: any) {
+    // Extract R2 key from photo_url if it's an R2 URL
+    let r2Key: string | null = null;
+    if (p.photo_url) {
+      const { R2_ACCOUNT_ID, R2_BUCKET_NAME = 'pelecanon-assets' } = process.env;
+      const publicUrlBase = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET_NAME}/`;
+      if (p.photo_url.startsWith(publicUrlBase)) {
+        r2Key = p.photo_url.slice(publicUrlBase.length);
+      }
+    }
+
+    // Delete from database first
     const { error } = await supabase.from('production_photos').delete().eq('id', p.id);
     if (error) return toast.error(error.message);
+
+    // Delete from R2 if we have the key
+    if (r2Key) {
+      try {
+        await deleteR2({ data: { key: r2Key } });
+      } catch (err) {
+        console.error('R2 delete error:', err);
+        // Don't show error to user since DB delete succeeded
+      }
+    }
+
     await reloadOrderData(selected.id);
   }
 

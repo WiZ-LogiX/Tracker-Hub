@@ -49,7 +49,9 @@
       "discounts": "Discounts",
       "notifications": "Notifications",
       "workers": "Workers",
-      "remakes": "Remakes"
+      "remakes": "Remakes",
+      "r2Migration": "Storage Migration (R2)",
+      "dbCheck": "Database Check"
     }
   }
 }

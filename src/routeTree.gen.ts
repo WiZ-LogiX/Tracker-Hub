@@ -21,6 +21,7 @@ import { Route as AdminVeneersRouteImport } from './routes/admin/veneers'
 import { Route as AdminSuppliersRouteImport } from './routes/admin/suppliers'
 import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
 import { Route as AdminRemakesRouteImport } from './routes/admin/remakes'
+import { Route as AdminR2MigrationRouteImport } from './routes/admin/r2-migration'
 import { Route as AdminProductsRouteImport } from './routes/admin/products'
 import { Route as AdminPricingRulesRouteImport } from './routes/admin/pricing-rules'
 import { Route as AdminPricingFactorsRouteImport } from './routes/admin/pricing-factors'
@@ -97,6 +98,11 @@ const AdminRequestsRoute = AdminRequestsRouteImport.update({
 const AdminRemakesRoute = AdminRemakesRouteImport.update({
   id: '/remakes',
   path: '/remakes',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminR2MigrationRoute = AdminR2MigrationRouteImport.update({
+  id: '/r2-migration',
+  path: '/r2-migration',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminProductsRoute = AdminProductsRouteImport.update({
@@ -203,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/r2-migration': typeof AdminR2MigrationRoute
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
@@ -233,6 +240,7 @@ export interface FileRoutesByTo {
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/r2-migration': typeof AdminR2MigrationRoute
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
@@ -265,6 +273,7 @@ export interface FileRoutesById {
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/r2-migration': typeof AdminR2MigrationRoute
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
@@ -298,6 +307,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-factors'
     | '/admin/pricing-rules'
     | '/admin/products'
+    | '/admin/r2-migration'
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/suppliers'
@@ -328,6 +338,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-factors'
     | '/admin/pricing-rules'
     | '/admin/products'
+    | '/admin/r2-migration'
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/suppliers'
@@ -359,6 +370,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-factors'
     | '/admin/pricing-rules'
     | '/admin/products'
+    | '/admin/r2-migration'
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/suppliers'
@@ -465,6 +477,13 @@ declare module '@tanstack/react-router' {
       path: '/remakes'
       fullPath: '/admin/remakes'
       preLoaderRoute: typeof AdminRemakesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/r2-migration': {
+      id: '/admin/r2-migration'
+      path: '/r2-migration'
+      fullPath: '/admin/r2-migration'
+      preLoaderRoute: typeof AdminR2MigrationRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/products': {
@@ -614,6 +633,7 @@ interface AdminRouteChildren {
   AdminPricingFactorsRoute: typeof AdminPricingFactorsRoute
   AdminPricingRulesRoute: typeof AdminPricingRulesRoute
   AdminProductsRoute: typeof AdminProductsRoute
+  AdminR2MigrationRoute: typeof AdminR2MigrationRoute
   AdminRemakesRoute: typeof AdminRemakesRoute
   AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSuppliersRoute: typeof AdminSuppliersRoute
@@ -640,6 +660,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPricingFactorsRoute: AdminPricingFactorsRoute,
   AdminPricingRulesRoute: AdminPricingRulesRoute,
   AdminProductsRoute: AdminProductsRoute,
+  AdminR2MigrationRoute: AdminR2MigrationRoute,
   AdminRemakesRoute: AdminRemakesRoute,
   AdminRequestsRoute: AdminRequestsRoute,
   AdminSuppliersRoute: AdminSuppliersRoute,

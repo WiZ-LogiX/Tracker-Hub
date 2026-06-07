@@ -1,36 +1,51 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { getDownloadUrl, getR2PublicUrl } from "@/lib/r2.server";
 
-const PHOTO_BUCKET = "production-photos";
 const SIGNED_URL_TTL = 60 * 30; // 30 minutes
 
 function normalizePhone(p: string) {
   return (p || "").replace(/\D/g, "").slice(-9);
 }
 
-function extractObjectPath(url: string): string | null {
+function extractR2Key(url: string): string | null {
   if (!url) return null;
-  // Match both public and signed URL shapes
-  const m = url.match(/\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/);
+  // Match R2 public URL format: https://<account>.r2.cloudflarestorage.com/<bucket>/<key>
+  const m = url.match(/https?:\/\/[^/]+\.r2\.cloudflarestorage\.com\/[^/]+\/(.+)/);
   if (m) return decodeURIComponent(m[1]);
-  // If it's already a bare object path
+  // Match custom domain public URL if configured
+  const { R2_PUBLIC_URL } = process.env;
+  if (R2_PUBLIC_URL) {
+    const publicBase = R2_PUBLIC_URL.replace(/\/$/, "") + "/";
+    if (url.startsWith(publicBase)) {
+      return url.slice(publicBase.length);
+    }
+  }
+  // If it's already a bare object path (not a full URL)
   if (!url.startsWith("http")) return url.replace(/^\/+/, "");
   return null;
 }
 
 async function signPhotos<T extends { photo_url: string }>(photos: T[]): Promise<T[]> {
   if (!photos.length) return photos;
-  const paths = photos.map(p => extractObjectPath(p.photo_url)).filter((x): x is string => !!x);
-  if (!paths.length) return photos;
-  const { data } = await supabaseAdmin.storage.from(PHOTO_BUCKET).createSignedUrls(paths, SIGNED_URL_TTL);
-  const byPath = new Map<string, string>();
-  (data ?? []).forEach((d: any) => { if (d?.path && d?.signedUrl) byPath.set(d.path, d.signedUrl); });
-  return photos.map(p => {
-    const path = extractObjectPath(p.photo_url);
-    const signed = path ? byPath.get(path) : null;
-    return signed ? { ...p, photo_url: signed } : p;
-  });
+  
+  const results = await Promise.all(
+    photos.map(async (p) => {
+      const key = extractR2Key(p.photo_url);
+      if (!key) return p;
+      
+      try {
+        const signedUrl = await getDownloadUrl(key, SIGNED_URL_TTL);
+        return { ...p, photo_url: signedUrl };
+      } catch {
+        // If signing fails, fall back to public URL
+        return p;
+      }
+    })
+  );
+  
+  return results;
 }
 
 export const getPublicOrdersByPhone = createServerFn({ method: "POST" })
