@@ -25,15 +25,32 @@ export const listMaterials = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase } = context;
-    const { data, error } = await supabase
+    // First get materials
+    const { data: materials, error: matError } = await supabase
       .from("materials")
-      .select("*, wastage_rules!left(wastage_pct)")
+      .select("*")
       .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return { items: (data ?? []).map((r: any) => ({
-      ...serialize(r),
-      wastage_rule: r.wastage_rules?.[0] ? { wastage_pct: Number(r.wastage_rules[0].wastage_pct) } : null,
-    })) };
+    if (matError) throw new Error(matError.message);
+
+    // Then get wastage rules separately
+    const { data: wastageRules, error: wrError } = await supabase
+      .from("wastage_rules")
+      .select("material_id, wastage_pct")
+      .eq("active", true);
+    if (wrError) throw new Error(wrError.message);
+
+    // Build lookup map
+    const wastageMap = new Map<string, number>();
+    for (const wr of wastageRules ?? []) {
+      if (wr.material_id) wastageMap.set(wr.material_id, Number(wr.wastage_pct));
+    }
+
+    return { 
+      items: (materials ?? []).map((r: any) => ({
+        ...serialize(r),
+        wastage_rule: wastageMap.has(r.id) ? { wastage_pct: wastageMap.get(r.id)! } : null,
+      })) 
+    };
   });
 
 const upsertSchema = z.object({
