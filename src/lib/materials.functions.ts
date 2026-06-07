@@ -33,29 +33,29 @@ export const listMaterials = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false });
     if (matError) throw new Error(matError.message);
 
-    // Get wastage rules with dimension ranges
-    let wastageRules: any[] = [];
-    const { data: wrData, error: wrError } = await supabase
+    // Get wastage rules - handle case where material_id column doesn't exist yet
+    let wastageMap = new Map<string, number>();
+    const { data: wastageRules, error: wrError } = await supabase
       .from("wastage_rules")
-      .select("material_id, min_dimension, max_dimension, wastage_pct")
-      .eq("active", true)
-      .order("material_id")
-      .order("min_dimension");
+      .select("material_id, wastage_pct")
+      .eq("active", true);
     
-    if (!wrError && wrData) {
-      wastageRules = wrData;
+    if (!wrError && wastageRules) {
+      for (const wr of wastageRules) {
+        if (wr.material_id) wastageMap.set(wr.material_id, Number(wr.wastage_pct));
+      }
     }
+    // If material_id column doesn't exist, wrError will be set but we continue with empty map
+    // Fallback to materials.wastage_pct happens in the map below
 
     return { 
-      items: (materials ?? []).map((r: any) => {
-        const materialRules = wastageRules.filter((wr: any) => wr.material_id === r.id);
-        // Priority: dimension-based rules > wastage_rules table (legacy) > materials.wastage_pct column
-        return {
-          ...serialize(r),
-          wastage_rules: materialRules.length > 0 ? materialRules : 
-            (r.wastage_pct != null && r.wastage_pct > 0 ? [{ min_dimension: 0, max_dimension: null, wastage_pct: Number(r.wastage_pct) }] : []),
-        };
-      }) 
+      items: (materials ?? []).map((r: any) => ({
+        ...serialize(r),
+        // Priority: wastage_rules table > materials.wastage_pct column
+        wastage_rule: wastageMap.has(r.id) 
+          ? { wastage_pct: wastageMap.get(r.id)! } 
+          : (r.wastage_pct != null && r.wastage_pct > 0 ? { wastage_pct: Number(r.wastage_pct) } : null),
+      })) 
     };
   });
 
@@ -117,13 +117,11 @@ export const upsertMaterial = createServerFn({ method: "POST" })
         .from("wastage_rules")
         .upsert({
           material_id: materialId,
-          min_dimension: 0,
-          max_dimension: null,
           wastage_pct: wastagePct,
           active: true,
-        }, { onConflict: "material_id,min_dimension" });
+        }, { onConflict: "material_id" });
       // Ignore error if material_id column doesn't exist yet
-      if (wrError && !wrError.message.includes("material_id") && !wrError.message.includes("min_dimension")) {
+      if (wrError && !wrError.message.includes("material_id")) {
         console.error("[upsertMaterial] wastage rule upsert error:", wrError);
       }
     }
@@ -141,35 +139,27 @@ export const deleteMaterial = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// Get wastage percentage for a specific material at a given dimension
+// Get wastage rule for a specific material
 export const getMaterialWastage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ materialId: z.string().uuid(), dimension: z.number().nonnegative() }).parse(input))
+  .inputValidator((input: unknown) => z.object({ materialId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    
-    // Try dimension-based rules first
     const { data: rule, error } = await supabase
       .from("wastage_rules")
       .select("wastage_pct")
       .eq("material_id", data.materialId)
       .eq("active", true)
-      .lte("min_dimension", data.dimension)
-      .or(`max_dimension.is.null,max_dimension.gt.${data.dimension}`)
-      .order("min_dimension", { ascending: false })
-      .limit(1)
       .maybeSingle();
-    
-    if (!error && rule) {
-      return { wastagePct: Number(rule.wastage_pct), source: "dimension_rule" };
+    // If material_id column doesn't exist, fall back to materials table
+    if (error && error.message.includes("material_id")) {
+      const { data: mat } = await supabase
+        .from("materials")
+        .select("wastage_pct")
+        .eq("id", data.materialId)
+        .single();
+      return { wastagePct: mat?.wastage_pct ? Number(mat.wastage_pct) : 0 };
     }
-    
-    // Fallback: material's own wastage_pct column
-    const { data: mat } = await supabase
-      .from("materials")
-      .select("wastage_pct")
-      .eq("id", data.materialId)
-      .single();
-    
-    return { wastagePct: mat?.wastage_pct ? Number(mat.wastage_pct) : 0, source: "material_column" };
+    if (error) throw new Error(error.message);
+    return { wastagePct: rule ? Number(rule.wastage_pct) : 0 };
   });

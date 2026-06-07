@@ -9,43 +9,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Sparkles, RefreshCw, Database, Copy, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Sparkles, RefreshCw, Database, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { formatEGP } from "@/lib/pricing";
 
 export const Route = createFileRoute("/admin/wastage-rules")({ component: WastageRulesPage });
 
-interface WastageRule {
-  id: string;
-  material_id: string | null;
-  min_dimension: number;
-  max_dimension: number | null;
-  wastage_pct: number;
-  active: boolean;
-}
-
 function WastageRulesPage() {
   const [materials, setMaterials] = useState<any[]>([]);
-  const [rules, setRules] = useState<WastageRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [migrationNeeded, setMigrationNeeded] = useState(false);
-  const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
   const listFn = useServerFn(listMaterials);
   const upsertFn = useServerFn(upsertMaterial);
 
   async function load() {
     setLoading(true);
     try {
-      const [{ items }, { data: rulesData }] = await Promise.all([
-        listFn(),
-        supabase.from("wastage_rules").select("*").eq("active", true).order("material_id").order("min_dimension"),
-      ]);
+      const { items } = await listFn();
       setMaterials(items ?? []);
-      setRules((rulesData ?? []) as WastageRule[]);
       setMigrationNeeded(false);
     } catch (e: any) {
-      if (e.message.includes("material_id") || e.message.includes("relationship") || e.message.includes("min_dimension") || e.message.includes("max_dimension")) {
+      if (e.message.includes("material_id") || e.message.includes("relationship")) {
         setMigrationNeeded(true);
       } else {
         toast.error(e?.message ?? "فشل التحميل");
@@ -55,10 +40,6 @@ function WastageRulesPage() {
     }
   }
   useEffect(() => { load(); }, []);
-
-  function getRulesForMaterial(materialId: string) {
-    return rules.filter(r => r.material_id === materialId);
-  }
 
   async function saveWastage(material: any, wastagePct: number) {
     setSaving(material.id);
@@ -86,40 +67,6 @@ function WastageRulesPage() {
     }
   }
 
-  async function addDimensionRule(materialId: string, materialName: string) {
-    const newMin = 0;
-    const { error } = await supabase.from("wastage_rules").insert({
-      material_id: materialId,
-      min_dimension: 0,
-      max_dimension: null,
-      wastage_pct: 5,
-      active: true,
-    });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(`تم إضافة قاعدة جديدة لـ ${materialName}`);
-    load();
-  }
-
-  async function updateDimensionRule(rule: WastageRule, field: "min_dimension" | "max_dimension" | "wastage_pct", value: number | null) {
-    const { error } = await supabase.from("wastage_rules").update({
-      [field]: value,
-    }).eq("id", rule.id);
-    if (error) return toast.error(error.message);
-    toast.success("تم التحديث");
-    load();
-  }
-
-  async function deleteDimensionRule(rule: WastageRule) {
-    if (!confirm("حذف هذه القاعدة؟")) return;
-    const { error } = await supabase.from("wastage_rules").delete().eq("id", rule.id);
-    if (error) return toast.error(error.message);
-    toast.success("تم الحذف");
-    load();
-  }
-
   async function syncAllMaterials() {
     setLoading(true);
     try {
@@ -129,11 +76,9 @@ function WastageRulesPage() {
         if (m.wastage_pct && m.wastage_pct > 0) {
           const { error } = await supabase.from("wastage_rules").upsert({
             material_id: m.id,
-            min_dimension: 0,
-            max_dimension: null,
             wastage_pct: m.wastage_pct,
             active: true,
-          }, { onConflict: "material_id,min_dimension" });
+          }, { onConflict: "material_id" });
           if (!error) count++;
         }
       }
@@ -141,7 +86,7 @@ function WastageRulesPage() {
       else toast.info("لا توجد خامات بها نسبة هدر للمزامنة");
       load();
     } catch (e: any) {
-      if (e.message.includes("material_id") || e.message.includes("min_dimension") || e.message.includes("max_dimension")) {
+      if (e.message.includes("material_id")) {
         setMigrationNeeded(true);
         toast.error("يجب تشغيل سكريبت الترقية في Supabase أولاً (انظر الزر أدناه)");
       } else {
@@ -157,11 +102,10 @@ function WastageRulesPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-primary" /> قواعد الهدر حسب الأبعاد
+            <Sparkles className="h-6 w-6 text-primary" /> قواعد الهدر حسب الخامة
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            كل خامة يمكن أن يكون لها عدة قواعد هدر حسب نطاق القياس (م² أو متر).<br />
-            القاعدة المطابقة: <code>min ≤ القياس < max</code> (الحد الأعلى غير مشمول).
+            كل خامة لها نسبة هدر واحدة. يتم تطبيقها تلقائياً في منشئ عروض الأسعار.
           </p>
         </div>
         <div className="flex gap-2">
@@ -180,7 +124,7 @@ function WastageRulesPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="text-sm text-muted-foreground">
-              جدول <code>wastage_rules</code> لا يحتوي على أعمدة <code>min_dimension</code> و <code>max_dimension</code> بعد.
+              جدول <code>wastage_rules</code> لا يحتوي على عمود <code>material_id</code> بعد.
               يجب تشغيل السكريبت التالي في <strong>Supabase Dashboard → SQL Editor</strong>:
             </div>
             <div className="bg-gray-900 text-gray-100 p-4 rounded-md text-xs font-mono overflow-x-auto relative">
@@ -209,7 +153,7 @@ function WastageRulesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">قواعد الهدر للخامات النشطة</CardTitle>
+          <CardTitle className="text-lg">نسب الهدر للخامات النشطة</CardTitle>
         </CardHeader>
         <CardContent>
           {loading && <div className="py-8 text-center text-muted-foreground">جارٍ التحميل...</div>}
@@ -222,124 +166,53 @@ function WastageRulesPage() {
             <div className="py-8 text-center text-muted-foreground">لا توجد خامات.</div>
           )}
           {!loading && !migrationNeeded && materials.length > 0 && (
-            <div className="space-y-3">
-              {materials.map(m => {
-                const materialRules = getRulesForMaterial(m.id);
-                return (
-                  <div key={m.id} className="border rounded-lg overflow-hidden">
-                    <div 
-                      className="bg-muted/30 px-4 py-3 flex items-center justify-between cursor-pointer"
-                      onClick={() => setExpandedMaterial(expandedMaterial === m.id ? null : m.id)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="font-medium">{m.name_ar}</div>
-                        <Badge variant="outline">{m.type}</Badge>
-                        <span className="text-sm text-muted-foreground">{formatEGP(m.price_per_unit)} / {m.unit}</span>
-                        {m.wastage_pct && m.wastage_pct > 0 && (
-                          <Badge variant="secondary" className="gap-1">
-                            <span className="h-2 w-2 rounded-full bg-yellow-500" /> هدر افتراضي: {m.wastage_pct}%
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">
-                          {materialRules.length} قاعدة أبعاد
-                        </span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6"
-                          onClick={(e) => { e.stopPropagation(); addDimensionRule(m.id, m.name_ar); }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                        {expandedMaterial === m.id ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </div>
-                    </div>
-                    
-                    {expandedMaterial === m.id && (
-                      <div className="p-4 space-y-3 bg-card border-t">
-                        {materialRules.length === 0 ? (
-                          <div className="text-sm text-muted-foreground text-center py-4">
-                            لا توجد قواعد أبعاد بعد. اضغط <kbd className="bg-muted px-1.5 rounded">+</kbd> لإضافة أول قاعدة.
-                          </div>
-                        ) : (
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-24">من (شامل)</TableHead>
-                                <TableHead className="w-24">إلى (غير شامل)</TableHead>
-                                <TableHead className="w-24">نسبة الهدر %</TableHead>
-                                <TableHead></TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {materialRules.map((rule, idx) => (
-                                <TableRow key={rule.id}>
-                                  <TableCell>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      value={rule.min_dimension}
-                                      onChange={e => updateDimensionRule(rule, "min_dimension", Number(e.target.value) || 0)}
-                                      className="w-full text-center text-sm"
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      value={rule.max_dimension ?? ''}
-                                      onChange={e => {
-                                        const v = e.target.value;
-                                        updateDimensionRule(rule, "max_dimension", v === '' ? null : Number(v));
-                                      }}
-                                      placeholder="لا حد"
-                                      className="w-full text-center text-sm"
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Input
-                                      type="number"
-                                      step="0.1"
-                                      min="0"
-                                      max="100"
-                                      value={rule.wastage_pct}
-                                      onChange={e => updateDimensionRule(rule, "wastage_pct", Number(e.target.value) || 0)}
-                                      className="w-24 text-center text-sm"
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      className="h-6 w-6 text-destructive"
-                                      onClick={() => deleteDimensionRule(rule)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        )}
-                        <div className="text-xs text-muted-foreground pt-2 border-t">
-                          <strong>مثال:</strong> قاعدة 0–2 بـ 5%، قاعدة 2–5 بـ 7%، قاعدة 5–(فارغ) بـ 10%.
-                          القياس 2.5 سيطابق القاعدة الثانية (2 ≤ 2.5 < 5).
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الخامة</TableHead>
+                  <TableHead>النوع</TableHead>
+                  <TableHead>الوحدة</TableHead>
+                  <TableHead>السعر / الوحدة</TableHead>
+                  <TableHead className="w-32">نسبة الهدر %</TableHead>
+                  <TableHead>حالة القاعدة</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {materials.map(m => (
+                  <TableRow key={m.id}>
+                    <TableCell className="font-medium">{m.name_ar}</TableCell>
+                    <TableCell>{m.type}</TableCell>
+                    <TableCell>{m.unit}</TableCell>
+                    <TableCell>{formatEGP(m.price_per_unit)} / {m.unit}</TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        value={m.wastage_rule?.wastage_pct ?? m.wastage_pct ?? 0}
+                        onChange={e => saveWastage(m, Number(e.target.value) || 0)}
+                        disabled={saving === m.id}
+                        className="w-24 text-center"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {m.wastage_rule ? (
+                        <Badge variant="default" className="gap-1">
+                          <span className="h-2 w-2 rounded-full bg-green-500" /> نشطة
+                        </Badge>
+                      ) : (m.wastage_pct && m.wastage_pct > 0 ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <span className="h-2 w-2 rounded-full bg-yellow-500" /> تنتظر المزامنة
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">لا توجد قاعدة</Badge>
+                      ))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
@@ -356,21 +229,24 @@ function WastageRulesPage() {
 
 const migrationSQL = `-- COPY AND RUN IN SUPABASE DASHBOARD → SQL EDITOR
 ALTER TABLE public.wastage_rules
-  ADD COLUMN IF NOT EXISTS min_dimension numeric NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS max_dimension numeric;
+  ADD COLUMN IF NOT EXISTS material_id uuid;
 
-CREATE INDEX IF NOT EXISTS wastage_rules_material_dim_idx
-  ON public.wastage_rules (material_id, min_dimension, max_dimension);
+ALTER TABLE public.wastage_rules
+  ADD CONSTRAINT wastage_rules_material_id_fkey
+  FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
 
-UPDATE public.wastage_rules
-SET min_dimension = 0, max_dimension = NULL
-WHERE material_id IS NOT NULL
-  AND (min_dimension IS NULL OR min_dimension = 0)
-  AND max_dimension IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS wastage_rules_material_id_unique
+  ON public.wastage_rules (material_id)
+  WHERE material_id IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS wastage_rules_material_min_unique
-  ON public.wastage_rules (material_id, min_dimension)
-  WHERE material_id IS NOT NULL;`;
+INSERT INTO public.wastage_rules (material_id, wastage_pct, active, created_at)
+SELECT m.id, m.wastage_pct, true, now()
+FROM public.materials m
+LEFT JOIN public.wastage_rules wr ON wr.material_id = m.id
+WHERE m.wastage_pct IS NOT NULL
+  AND m.wastage_pct > 0
+  AND wr.material_id IS NULL
+ON CONFLICT (material_id) DO NOTHING;`;
 
 function AddMaterialForm({ onSuccess }: { onSuccess: () => void }) {
   const [form, setForm] = useState({
