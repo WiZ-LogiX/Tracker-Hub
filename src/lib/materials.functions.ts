@@ -9,12 +9,15 @@ import { materials } from "@/db/schema";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 async function resolveTenantId(supabase: any, userId: string): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("tenant_members")
     .select("tenant_id")
     .eq("user_id", userId)
     .limit(1)
     .maybeSingle();
+  if (error) {
+    console.error("[resolveTenantId] error:", error);
+  }
   return data?.tenant_id ?? null;
 }
 
@@ -39,13 +42,20 @@ export const listMaterials = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const tenantId = await resolveTenantId(supabase, userId);
+    console.log("[listMaterials] userId:", userId, "tenantId:", tenantId);
     if (!tenantId) return { items: [] };
-    const rows = await db
-      .select()
-      .from(materials)
-      .where(eq(materials.tenantId, tenantId))
-      .orderBy(desc(materials.createdAt));
-    return { items: rows.map(serialize) };
+    try {
+      const rows = await db
+        .select()
+        .from(materials)
+        .where(eq(materials.tenantId, tenantId))
+        .orderBy(desc(materials.createdAt));
+      console.log("[listMaterials] rows:", rows.length);
+      return { items: rows.map(serialize) };
+    } catch (e: any) {
+      console.error("[listMaterials] DB error:", e);
+      throw new Error(`DB query failed: ${e?.message ?? String(e)}`);
+    }
   });
 
 const upsertSchema = z.object({
@@ -83,28 +93,33 @@ export const upsertMaterial = createServerFn({ method: "POST" })
       active: data.active ?? true,
     };
 
-    if (data.id) {
-      const [row] = await db
-        .update(materials)
-        .set({
-          nameAr: values.nameAr,
-          nameEn: values.nameEn,
-          type: values.type,
-          unit: values.unit,
-          pricePerUnit: values.pricePerUnit,
-          wastagePct: values.wastagePct,
-          supplierId: values.supplierId,
-          countryOfOrigin: values.countryOfOrigin,
-          active: values.active,
-        })
-        .where(and(eq(materials.id, data.id), eq(materials.tenantId, tenantId)))
-        .returning();
-      if (!row) throw new Error("Material not found");
-      return { item: serialize(row) };
-    }
+    try {
+      if (data.id) {
+        const [row] = await db
+          .update(materials)
+          .set({
+            nameAr: values.nameAr,
+            nameEn: values.nameEn,
+            type: values.type,
+            unit: values.unit,
+            pricePerUnit: values.pricePerUnit,
+            wastagePct: values.wastagePct,
+            supplierId: values.supplierId,
+            countryOfOrigin: values.countryOfOrigin,
+            active: values.active,
+          })
+          .where(and(eq(materials.id, data.id), eq(materials.tenantId, tenantId)))
+          .returning();
+        if (!row) throw new Error("Material not found");
+        return { item: serialize(row) };
+      }
 
-    const [row] = await db.insert(materials).values(values).returning();
-    return { item: serialize(row) };
+      const [row] = await db.insert(materials).values(values).returning();
+      return { item: serialize(row) };
+    } catch (e: any) {
+      console.error("[upsertMaterial] DB error:", e);
+      throw new Error(`DB query failed: ${e?.message ?? String(e)}`);
+    }
   });
 
 export const deleteMaterial = createServerFn({ method: "POST" })
@@ -114,8 +129,13 @@ export const deleteMaterial = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const tenantId = await resolveTenantId(supabase, userId);
     if (!tenantId) throw new Error("No tenant for user");
-    await db
-      .delete(materials)
-      .where(and(eq(materials.id, data.id), eq(materials.tenantId, tenantId)));
-    return { ok: true };
+    try {
+      await db
+        .delete(materials)
+        .where(and(eq(materials.id, data.id), eq(materials.tenantId, tenantId)));
+      return { ok: true };
+    } catch (e: any) {
+      console.error("[deleteMaterial] DB error:", e);
+      throw new Error(`DB query failed: ${e?.message ?? String(e)}`);
+    }
   });
