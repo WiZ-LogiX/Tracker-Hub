@@ -47,9 +47,9 @@ function Landing() {
             مطابخ، دواليب، غرف نوم، وقطع أثاث مفصلة بمقاييسك. احصل على عرض سعر مفصل خلال 24-48 ساعة.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
-            <Link to="/admin/quotes/configurator">
+            <Link to="/admin">
               <Button size="lg" className="bg-gold text-gold-foreground hover:bg-gold/90 gap-2 px-8">
-                ابدأ عرض سعر <ArrowLeft className="h-4 w-4 rtl-flip" />
+                لوحة الإدارة <ArrowLeft className="h-4 w-4 rtl-flip" />
               </Button>
             </Link>
           </div>
@@ -79,14 +79,14 @@ function Landing() {
       <section className="container mx-auto px-4 pb-20">
         <div className="rounded-3xl gradient-emerald p-12 text-center">
           <h2 className="font-serif text-3xl md:text-4xl font-bold text-background mb-4">
-            ابدأ مشروعك معانا اليوم
+            إدارة أعمالك من مكان واحد
           </h2>
           <p className="text-background/80 mb-8 max-w-xl mx-auto">
-            فريقنا هيتواصل معاك خلال 24-48 ساعة
+            نظام متكامل للتسعير وعروض الأسعار وتتبع الإنتاج
           </p>
-          <Link to="/admin/quotes/configurator">
+          <Link to="/admin">
             <Button size="lg" className="bg-gold text-gold-foreground hover:bg-gold/90 gap-2 px-8">
-              ابدأ الآن <ArrowLeft className="h-4 w-4 rtl-flip" />
+              دخول لوحة الإدارة <ArrowLeft className="h-4 w-4 rtl-flip" />
             </Button>
           </Link>
         </div>

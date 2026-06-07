@@ -18,6 +18,7 @@ import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 import { Route as AdminWastageRulesRouteImport } from './routes/admin/wastage-rules'
 import { Route as AdminVeneersRouteImport } from './routes/admin/veneers'
 import { Route as AdminSuppliersRouteImport } from './routes/admin/suppliers'
+import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
 import { Route as AdminRemakesRouteImport } from './routes/admin/remakes'
 import { Route as AdminProductsRouteImport } from './routes/admin/products'
 import { Route as AdminPricingRulesRouteImport } from './routes/admin/pricing-rules'
@@ -80,6 +81,11 @@ const AdminVeneersRoute = AdminVeneersRouteImport.update({
 const AdminSuppliersRoute = AdminSuppliersRouteImport.update({
   id: '/suppliers',
   path: '/suppliers',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRequestsRoute = AdminRequestsRouteImport.update({
+  id: '/requests',
+  path: '/requests',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRemakesRoute = AdminRemakesRouteImport.update({
@@ -191,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/remakes': typeof AdminRemakesRoute
+  '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -219,6 +226,7 @@ export interface FileRoutesByTo {
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/remakes': typeof AdminRemakesRoute
+  '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -249,6 +257,7 @@ export interface FileRoutesById {
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/remakes': typeof AdminRemakesRoute
+  '/admin/requests': typeof AdminRequestsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -280,6 +289,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-rules'
     | '/admin/products'
     | '/admin/remakes'
+    | '/admin/requests'
     | '/admin/suppliers'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -308,6 +318,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-rules'
     | '/admin/products'
     | '/admin/remakes'
+    | '/admin/requests'
     | '/admin/suppliers'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -337,6 +348,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-rules'
     | '/admin/products'
     | '/admin/remakes'
+    | '/admin/requests'
     | '/admin/suppliers'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -419,6 +431,13 @@ declare module '@tanstack/react-router' {
       path: '/suppliers'
       fullPath: '/admin/suppliers'
       preLoaderRoute: typeof AdminSuppliersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/requests': {
+      id: '/admin/requests'
+      path: '/requests'
+      fullPath: '/admin/requests'
+      preLoaderRoute: typeof AdminRequestsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/remakes': {
@@ -576,6 +595,7 @@ interface AdminRouteChildren {
   AdminPricingRulesRoute: typeof AdminPricingRulesRoute
   AdminProductsRoute: typeof AdminProductsRoute
   AdminRemakesRoute: typeof AdminRemakesRoute
+  AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSuppliersRoute: typeof AdminSuppliersRoute
   AdminVeneersRoute: typeof AdminVeneersRoute
   AdminWastageRulesRoute: typeof AdminWastageRulesRoute
@@ -601,6 +621,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPricingRulesRoute: AdminPricingRulesRoute,
   AdminProductsRoute: AdminProductsRoute,
   AdminRemakesRoute: AdminRemakesRoute,
+  AdminRequestsRoute: AdminRequestsRoute,
   AdminSuppliersRoute: AdminSuppliersRoute,
   AdminVeneersRoute: AdminVeneersRoute,
   AdminWastageRulesRoute: AdminWastageRulesRoute,
