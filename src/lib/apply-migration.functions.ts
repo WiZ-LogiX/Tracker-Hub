@@ -21,7 +21,7 @@ export const applyWastageRulesMigration = createServerFn({ method: "POST" })
     const results: string[] = [];
 
     try {
-      // Use the	pgextension to execute raw SQL
+      // Use the pg extension to execute raw SQL
       
       // 1. Add material_id column if not exists
       const { error: colError } = await supabaseAdmin.rpc('exec', {
