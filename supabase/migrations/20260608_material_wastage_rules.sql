@@ -1,35 +1,44 @@
--- Material-based wastage rules migration
--- Replaces dimension-based wastage_rules with simple material_id -> wastage_pct mapping
+-- Migration: Add material_id to wastage_rules for dimension-based wastage rules
+-- Run this migration from the Supabase CLI or SQL Editor
 
--- 1. Add material_id column to wastage_rules
+-- Step 1: Add the column (nullable first to avoid issues with existing rows)
 ALTER TABLE public.wastage_rules
-  ADD COLUMN IF NOT EXISTS material_id uuid;
+ADD COLUMN IF NOT EXISTS material_id uuid REFERENCES public.materials(id) ON DELETE CASCADE;
 
--- 2. Add foreign key constraint
-ALTER TABLE public.wastage_rules
-  ADD CONSTRAINT wastage_rules_material_id_fkey
-  FOREIGN KEY (material_id) REFERENCES public.materials(id) ON DELETE CASCADE;
+-- Step 2: Create a unique index for material-level fallback rules
+-- (rules where min/max dimensions are null, or single-rule materials)
+CREATE UNIQUE INDEX IF NOT EXISTS wastage_rules_material_single_idx
+ON public.wastage_rules (material_id)
+WHERE min_dimension IS NULL AND max_dimension IS NULL;
 
--- 3. Create unique index to prevent duplicate wastage rules per material
-CREATE UNIQUE INDEX IF NOT EXISTS wastage_rules_material_id_unique
-  ON public.wastage_rules (material_id)
-  WHERE material_id IS NOT NULL;
+-- Step 3: Create an index for efficient dimension-range lookups
+CREATE INDEX IF NOT EXISTS wastage_rules_dimension_lookup_idx
+ON public.wastage_rules (material_id, min_dimension, max_dimension);
 
--- 4. Migrate existing data: for each material, create a wastage_rule using its wastage_pct
-INSERT INTO public.wastage_rules (material_id, wastage_pct, active, created_at)
-SELECT m.id, m.wastage_pct, true, now()
+-- Step 4: Migrate existing wastage_pct data from materials to wastage_rules
+INSERT INTO public.wastage_rules (
+  material_id,
+  material_type,
+  wastage_pct,
+  active,
+  min_dimension,
+  max_dimension,
+  created_at
+)
+SELECT 
+  m.id,
+  COALESCE(m.type, 'wood'),
+  m.wastage_pct,
+  true,
+  0,
+  NULL, -- Applies to all dimensions
+  NOW()
 FROM public.materials m
 LEFT JOIN public.wastage_rules wr ON wr.material_id = m.id
-WHERE m.wastage_pct IS NOT NULL
+WHERE m.wastage_pct IS NOT NULL 
   AND m.wastage_pct > 0
-  AND wr.material_id IS NULL
-ON CONFLICT (material_id) DO NOTHING;
+  AND wr.id IS NULL;
 
--- 5. Add comment for clarity
-COMMENT ON TABLE public.wastage_rules IS 'Material-specific wastage percentages. One rule per material.';
-COMMENT ON COLUMN public.wastage_rules.material_id IS 'References materials.id. Unique per material.';
-COMMENT ON COLUMN public.wastage_rules.wastage_pct IS 'Wastage percentage to apply for this material.';
-
--- 6. Grant permissions
-GRANT SELECT ON public.wastage_rules TO authenticated;
-GRANT ALL ON public.wastage_rules TO service_role;
+-- Step 5: Add NOT NULL constraint after migration (if wanted)
+-- ALTER TABLE public.wastage_rules ALTER COLUMN material_id SET NOT NULL;
+-- Note: Only uncomment after ALL rules have material_id populated
