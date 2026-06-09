@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Pencil, Sparkles, Save, X } from "lucide-react";
+import { Plus, Trash2, Pencil, Save, X } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/wastage-rules")({ component: WastageRulesPage });
@@ -44,17 +44,6 @@ function WastageRulesPage() {
     }
   }
 
-  // Group and sort rules by material
-  const rulesByMaterial = new Map<string, any[]>();
-  for (const r of rules) {
-    const list = rulesByMaterial.get(r.material_id) || [];
-    list.push(r);
-    rulesByMaterial.set(r.material_id, list);
-  }
-  for (const [_, list] of rulesByMaterial) {
-    list.sort((a, b) => a.min_dimension - b.min_dimension);
-  }
-
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!editingRule.material_id) return toast.error("اختر الخامة");
@@ -81,9 +70,9 @@ function WastageRulesPage() {
     }
   }
 
-  function openNew(materialId: string = "") {
+  function openNew() {
     setEditingRule({
-      material_id: materialId,
+      material_id: "",
       material_type: "wood",
       min_dimension: 0,
       max_dimension: null,
@@ -104,14 +93,12 @@ function WastageRulesPage() {
     <div className="space-y-6" dir="rtl">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-primary" /> قواعد الهدر حسب الأبعاد
-          </h1>
+          <h1 className="font-serif text-3xl font-bold">قواعد الهدر</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            كل خامة يمكن أن تحتوي على قواعد هدر متعددة — كل قاعدة تنطبق على نطاق أبعاد محدد.
+            تحديد نسبة الهدر حسب الخامة ونطاق الأبعاد
           </p>
         </div>
-        <Button onClick={() => openNew()} className="gap-2">
+        <Button onClick={openNew} className="gap-2">
           <Plus className="h-4 w-4" /> قاعدة جديدة
         </Button>
       </div>
@@ -133,7 +120,7 @@ function WastageRulesPage() {
                   onValueChange={v => setEditingRule({ ...editingRule, material_id: v })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="选择材料" />
+                    <SelectValue placeholder="اختر الخامة" />
                   </SelectTrigger>
                   <SelectContent>
                     {materials.map(m => (
@@ -150,7 +137,7 @@ function WastageRulesPage() {
                 />
               </div>
               <div>
-                <Label>بداية النطاق (≥) *</Label>
+                <Label>الحد الأدنى (م²) *</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -160,14 +147,14 @@ function WastageRulesPage() {
                 />
               </div>
               <div>
-                <Label>نهاية النطاق (≤)</Label>
+                <Label>الحد الأقصى (م²)</Label>
                 <Input
                   type="number"
                   step="0.01"
                   min={0}
                   value={editingRule?.max_dimension || ""}
                   onChange={e => setEditingRule({ ...editingRule, max_dimension: e.target.value ? Number(e.target.value) : null })}
-                  placeholder="∞"
+                  placeholder="غير محدود"
                 />
               </div>
               <div>
@@ -204,35 +191,31 @@ function WastageRulesPage() {
         </Card>
       )}
 
-      {/* Rules grouped by material */}
-      {Array.from(rulesByMaterial.entries()).map(([materialId, materialRules]) => (
-        <Card key={materialId}>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center justify-between">
-              <span>{getMaterialName(materialId)}</span>
-              <Button size="sm" variant="outline" onClick={() => openNew(materialId)} className="gap-1">
-                <Plus className="h-4 w-4" /> إضافة قاعدة
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+      {/* Rules table */}
+      {!loading && rules.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>النطاق (م²)</TableHead>
+                  <TableHead>الخامة</TableHead>
                   <TableHead>نوع الخامة</TableHead>
-                  <TableHead>نسبة الهدر</TableHead>
+                  <TableHead>الحد الأدنى (م²)</TableHead>
+                  <TableHead>الحد الأقصى (م²)</TableHead>
+                  <TableHead>نسبة الهدر %</TableHead>
                   <TableHead>الحالة</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {materialRules.map(rule => (
+                {rules.map(rule => (
                   <TableRow key={rule.id}>
-                    <TableCell>
-                      {rule.min_dimension} — {rule.max_dimension ?? "∞"}
+                    <TableCell className="font-medium">
+                      {getMaterialName(rule.material_id)}
                     </TableCell>
                     <TableCell>{rule.material_type}</TableCell>
+                    <TableCell>{rule.min_dimension}</TableCell>
+                    <TableCell>{rule.max_dimension ?? "∞"}</TableCell>
                     <TableCell className="font-bold">{rule.wastage_pct}%</TableCell>
                     <TableCell>
                       <Badge variant={rule.active ? "default" : "secondary"}>
@@ -253,7 +236,7 @@ function WastageRulesPage() {
             </Table>
           </CardContent>
         </Card>
-      ))}
+      )}
     </div>
   );
 }
