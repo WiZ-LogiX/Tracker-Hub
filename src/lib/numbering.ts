@@ -1,5 +1,5 @@
 // Unified numbering: PLC-XXXXXX (6-char random alphanumeric code)
-// Short enough for customer reference, unique via collision check
+// Used for: quotes, invoices, orders, quote_requests, etc.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -13,9 +13,7 @@ function generateCode(length = 6): string {
   return code;
 }
 
-async function codeExists(type: "quote" | "invoice" | "order", code: string): Promise<boolean> {
-  const table = type === "quote" ? "quotes" : type === "invoice" ? "invoices" : "orders";
-  const column = type === "quote" ? "quote_number" : type === "invoice" ? "invoice_number" : "order_number";
+async function codeExists(table: string, column: string, code: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from(table)
     .select("id")
@@ -26,19 +24,31 @@ async function codeExists(type: "quote" | "invoice" | "order", code: string): Pr
 
 /**
  * Get next unique reference number formatted as PLC-XXXXXX
- * @param type - 'quote' | 'invoice' | 'order'
+ * @param type - Entity type: 'quote' | 'invoice' | 'order' | 'request'
  * @returns Formatted reference like "PLC-1s2w5c"
  */
-export async function getNextPLCNumber(type: "quote" | "invoice" | "order"): Promise<string> {
+export async function getNextPLCNumber(
+  type: "quote" | "invoice" | "order" | "request"
+): Promise<string> {
+  const tableMap: Record<string, { table: string; column: string }> = {
+    quote: { table: "quotes", column: "quote_number" },
+    invoice: { table: "invoices", column: "invoice_number" },
+    order: { table: "orders", column: "order_number" },
+    request: { table: "quote_requests", column: "reference_number" },
+  };
+
+  const { table, column } = tableMap[type];
+
   // Try up to 20 times to generate a unique code
   for (let attempt = 0; attempt < 20; attempt++) {
     const code = generateCode(6);
-    const exists = await codeExists(type, code);
+    const exists = await codeExists(table, column, code);
     if (!exists) {
       return `PLC-${code}`;
     }
   }
-  // Fallback: use longer code with timestamp to guarantee uniqueness
+
+  // Fallback: use timestamp-based code to guarantee uniqueness
   const ts = Date.now().toString(36);
   const code = generateCode(3) + ts.slice(-3);
   return `PLC-${code}`;
