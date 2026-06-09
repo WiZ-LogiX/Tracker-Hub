@@ -1,4 +1,4 @@
-// Materials & Wastage Rules CRUD — using Supabase client (RLS-enforced) for now.
+// Materials CRUD — using Supabase client (RLS-enforced) for now.
 // Will switch to Drizzle after multi-tenant migration is applied.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -26,17 +26,20 @@ export const listMaterials = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { supabase } = context;
     
+    // Get materials
     const { data: materials, error: matError } = await supabase
       .from("materials")
       .select("*")
       .order("created_at", { ascending: false });
     if (matError) throw new Error(matError.message);
 
+    // Try to get wastage rules - handle case where material_id column doesn't exist gracefully
     let wastageMap = new Map<string, number>();
     try {
       const { data: wastageRules, error: wrError } = await supabase
         .from("wastage_rules")
-        .select("material_id, wastage_pct");
+        .select("material_id, wastage_pct")
+        .eq("active", true);
       
       if (!wrError && wastageRules) {
         for (const wr of wastageRules) {
@@ -50,6 +53,7 @@ export const listMaterials = createServerFn({ method: "GET" })
     return { 
       items: (materials ?? []).map((r: any) => ({
         ...serialize(r),
+        // Priority: wastage_rules table > materials.wastage_pct column
         wastage_rule: wastageMap.has(r.id) 
           ? { wastage_pct: wastageMap.get(r.id)! } 
           : (r.wastage_pct != null && r.wastage_pct > 0 ? { wastage_pct: Number(r.wastage_pct) } : null),
@@ -170,74 +174,4 @@ export const getMaterialWastage = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     return { wastagePct: mat?.wastage_pct ? Number(mat.wastage_pct) : 0 };
-  });
-
-// ========== Wastage Rules CRUD ==========
-
-export const listWastageRules = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase } = context;
-    const { data, error } = await supabase
-      .from("wastage_rules")
-      .select("*")
-      .order("material_id", { ascending: true })
-      .order("min_dimension", { ascending: true });
-    
-    if (error) throw new Error(error.message);
-    return { items: data ?? [] };
-  });
-
-const wastageRuleSchema = z.object({
-  id: z.string().uuid().optional(),
-  material_id: z.string().uuid(),
-  material_type: z.string().min(1).max(64).default("wood"),
-  min_dimension: z.number().nonnegative(),
-  max_dimension: z.number().nullable().optional(),
-  wastage_pct: z.number().min(0).max(100),
-  active: z.boolean().default(true),
-});
-
-export const upsertWastageRule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => wastageRuleSchema.parse(input))
-  .handler(async ({ data, context }) => {
-    const { supabase } = context;
-    
-    const values = {
-      material_id: data.material_id,
-      material_type: data.material_type,
-      min_dimension: data.min_dimension,
-      max_dimension: data.max_dimension ?? null,
-      wastage_pct: data.wastage_pct,
-      active: data.active,
-    };
-
-    if (data.id) {
-      const { error } = await supabase
-        .from("wastage_rules")
-        .update(values)
-        .eq("id", data.id);
-      if (error) throw new Error(error.message);
-    } else {
-      const { error } = await supabase
-        .from("wastage_rules")
-        .insert(values);
-      if (error) throw new Error(error.message);
-    }
-
-    return { ok: true };
-  });
-
-export const deleteWastageRule = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
-  .handler(async ({ data, context }) => {
-    const { supabase } = context;
-    const { error } = await supabase
-      .from("wastage_rules")
-      .delete()
-      .eq("id", data.id);
-    if (error) throw new Error(error.message);
-    return { ok: true };
   });

@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,8 +49,8 @@ function ConfiguratorBuilder() {
   const [accessories, setAccessories] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [factors, setFactors] = useState<any[]>([]);
-  const [activeRule, setActiveRule] = useState<any>(null);
   const [wastageRules, setWastageRules] = useState<any[]>([]);
+  const [activeRule, setActiveRule] = useState<any>(null);
   const [dbError, setDbError] = useState<string | null>(null);
 
   const [customerId, setCustomerId] = useState('');
@@ -77,13 +76,11 @@ function ConfiguratorBuilder() {
       setVariants([]); setSuppliers(sp.data ?? []);
       setFinishes(f.data ?? []); setVeneers(v.data ?? []);
       setAccessories(a.data ?? []); setCustomers(cu.data ?? []); setFactors(pf.data ?? []);
-      setActiveRule(pr.data ?? null);
-
-      // Check for material_id column
+      setActiveRule(pr.data ?? null); setWastageRules(wr.data ?? []);
+      
+      // Check if wastage_rules has material_id column
       if (wr.error && wr.error.message.includes("material_id")) {
         setDbError("wastage_rules_missing_material_id");
-      } else {
-        setWastageRules(wr.data ?? []);
       }
     });
   }, []);
@@ -94,39 +91,39 @@ function ConfiguratorBuilder() {
     return m;
   }, [suppliers]);
 
-  // Build wastage rules lookup by material_id
-  const wastageByMaterial = useMemo(() => {
-    const map = new Map<string, any[]>();
+  // Build wastage lookup map: material_id -> wastage_pct (from wastage_rules table)
+  const wastageMap = useMemo(() => {
+    const map: Record<string, number> = {};
     for (const wr of wastageRules) {
-      if (wr.material_id) {
-        const list = map.get(wr.material_id) || [];
-        list.push(wr);
-        map.set(wr.material_id, list);
-      }
-    }
-    // Sort each material's rules by min_dimension
-    for (const [_, list] of map) {
-      list.sort((a, b) => a.min_dimension - b.min_dimension);
+      if (wr.material_id) map[wr.material_id] = Number(wr.wastage_pct);
     }
     return map;
   }, [wastageRules]);
 
-  // Find matching wastage rule for a material and dimension
-  function findWastageRule(materialId: string | null, dimension: number): any | null {
+  function lookupWastage(materialId: string | null | undefined, materialType: string | undefined, dim: number): number | null {
     if (!materialId) return null;
-    const rules = wastageByMaterial.get(materialId);
-    if (!rules || rules.length === 0) return null;
-
-    for (const rule of rules) {
-      const min = Number(rule.min_dimension || 0);
-      const max = rule.max_dimension != null ? Number(rule.max_dimension) : Infinity;
-      if (dimension >= min && dimension <= max) {
-        return rule;
-      }
-    }
-    // Fallback: return the first rule if no exact match
-    return rules[0];
+    // First priority: material-specific wastage rule
+    if (wastageMap[materialId] != null) return wastageMap[materialId];
+    // Fallback: material's own wastage_pct column
+    const material = materials.find(m => m.id === materialId);
+    if (material?.wastage_pct != null) return Number(material.wastage_pct);
+    // Legacy fallback: dimension-based rules by material_type
+    if (!materialType) return null;
+    const matches = wastageRules.filter(r =>
+      r.material_type === materialType &&
+      Number(r.min_dimension) <= dim &&
+      (r.max_dimension == null || dim < Number(r.max_dimension))
+    );
+    if (!matches.length) return null;
+    return Number(matches[0].wastage_pct);
   }
+
+  // Build global factor map from DB
+  const globalFactors: FactorMap = useMemo(() => {
+    const map: FactorMap = {};
+    for (const f of factors) map[f.key] = Number(f.value_pct);
+    return map;
+  }, [factors]);
 
   function updateItem(idx: number, patch: Partial<Item>) {
     setItems(arr => arr.map((it, i) => i === idx ? { ...it, ...patch } : it));
@@ -152,20 +149,14 @@ function ConfiguratorBuilder() {
     const accessoriesCost = accSelected.reduce((s, a) => s + Number(a.unit_price), 0);
 
     const selections: EngineSelections = { basePrice, materialCost, finishCost, veneerCost, accessoriesCost, qty: it.qty };
-
-    // Use dimension-based wastage rule
-    const matchedRule = findWastageRule(it.material_id, it.dimension_value);
-    const autoWastage = matchedRule?.wastage_pct;
-
+    const autoWastage = lookupWastage(it.material_id, material?.type, it.dimension_value);
     const merged: FactorMap = { ...globalFactors, ...it.overrides };
-    if (autoWastage != null && it.overrides.wastage == null) {
-      merged.wastage = autoWastage;
-    }
+    if (autoWastage != null && (it.overrides.wastage == null)) merged.wastage = autoWastage;
 
     const formula = (activeRule?.formula as any) ?? DEFAULT_FORMULA;
     const breakdown = runFormula(formula, selections, merged, activeRule?.version ?? 1);
-    return { it, template, material, variant, supplier, finish, veneer, accSelected, breakdown, selections, matchedRule };
-  }), [items, templates, materials, suppliers, finishes, veneers, accessories, globalFactors, activeRule, wastageByMaterial]);
+    return { it, template, material, variant, supplier, finish, veneer, accSelected, breakdown, selections, autoWastage };
+  }), [items, templates, materials, suppliers, finishes, veneers, accessories, globalFactors, activeRule, wastageMap, wastageRules, supplierById]);
 
   const totals = useMemo(() => calculateQuoteTotals({
     itemsLineTotalSum: computed.reduce((s, c) => s + c.breakdown.lineTotal, 0),
@@ -244,8 +235,8 @@ function ConfiguratorBuilder() {
               <div>
                 <h3 className="font-semibold">قاعدة البيانات تحتاج لترقية</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  جدول <code>wastage_rules</code> لا يحتوي على عمود <code>material_id</code> بعد.
-                  اذهب إلى <a href="/admin/wastage-rules" className="underline">قواعد الهدر</a> للترقية.
+                  جدول <code>wastage_rules</code> لا يحتوي على عمود <code>material_id</code>.
+                  اذهب إلى تبويب <strong>قواعد الهدر</strong> واضغط <strong>"ترقية قاعدة البيانات"</strong>.
                 </p>
               </div>
             </div>
@@ -317,6 +308,7 @@ function ConfiguratorBuilder() {
                         {materials.map(m => (
                           <SelectItem key={m.id} value={m.id}>
                             {m.name_ar} • {formatEGP(Number(m.price_per_unit))}/{m.unit}
+                            {(wastageMap[m.id] != null || m.wastage_pct) && ` • هدر: ${wastageMap[m.id] ?? m.wastage_pct}%`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -324,6 +316,9 @@ function ConfiguratorBuilder() {
                     {ci.material && (
                       <div className="mt-1 text-[11px] text-muted-foreground">
                         {ci.supplier?.name ?? '—'} • {ci.material.country_of_origin ?? '—'}
+                        {(wastageMap[ci.material.id] != null || ci.material.wastage_pct) && (
+                          <span className="text-gold ml-2">هدر: {wastageMap[ci.material.id] ?? ci.material.wastage_pct}%</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -342,13 +337,8 @@ function ConfiguratorBuilder() {
                     </Select>
                   </div>
                   <div>
-                    <Label>القياس (م² / متر) *</Label>
+                    <Label>القياس (م² / متر)</Label>
                     <Input type="number" step="0.01" value={it.dimension_value} onChange={e => updateItem(idx, { dimension_value: Number(e.target.value) })} />
-                    {ci.matchedRule && (
-                      <div className="mt-1 text-[11px] text-gold">
-                        هدر: {ci.matchedRule.wastage_pct}% (نطاق: {ci.matchedRule.min_dimension}–{ci.matchedRule.max_dimension ?? '∞'})
-                      </div>
-                    )}
                   </div>
                   <div>
                     <Label>العدد</Label>
@@ -378,9 +368,9 @@ function ConfiguratorBuilder() {
                   <div className="grid grid-cols-4 gap-2 mt-2">
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">
-                        هدر % {ci.matchedRule && it.overrides.wastage == null && <span className="text-gold">(تلقائي: {ci.matchedRule.wastage_pct}%)</span>}
+                        هدر % {ci.autoWastage != null && it.overrides.wastage == null && <span className="text-gold">(تلقائي: {ci.autoWastage}%)</span>}
                       </div>
-                      <Input type="number" placeholder={ci.matchedRule ? String(ci.matchedRule.wastage_pct) : '0'}
+                      <Input type="number" placeholder={ci.autoWastage != null ? String(ci.autoWastage) : '0'}
                         value={it.overrides.wastage ?? ''}
                         onChange={e => updateItem(idx, { overrides: { ...it.overrides, wastage: e.target.value === '' ? undefined as any : Number(e.target.value) } })} />
                     </div>
