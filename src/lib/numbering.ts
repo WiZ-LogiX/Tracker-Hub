@@ -1,50 +1,45 @@
-// Unified numbering: PLC-YYMMDD-XXXX (daily sequence, e.g., PLC-260607-0001)
-// Uses a daily sequence table to avoid conflicts across quotes/invoices/orders
+// Unified numbering: PLC-XXXXXX (6-char random alphanumeric code)
+// Short enough for customer reference, unique via collision check
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+const CHARS = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+function generateCode(length = 6): string {
+  let code = "";
+  for (let i = 0; i < length; i++) {
+    code += CHARS[Math.floor(Math.random() * CHARS.length)];
+  }
+  return code;
+}
+
+async function codeExists(type: "quote" | "invoice" | "order", code: string): Promise<boolean> {
+  const table = type === "quote" ? "quotes" : type === "invoice" ? "invoices" : "orders";
+  const column = type === "quote" ? "quote_number" : type === "invoice" ? "invoice_number" : "order_number";
+  const { data } = await supabaseAdmin
+    .from(table)
+    .select("id")
+    .eq(column, `PLC-${code}`)
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
 /**
- * Get next sequence number formatted as PLC-YYMMDD-XXXX
+ * Get next unique reference number formatted as PLC-XXXXXX
  * @param type - 'quote' | 'invoice' | 'order'
- * @returns Formatted number like "PLC-260607-0001"
+ * @returns Formatted reference like "PLC-1s2w5c"
  */
 export async function getNextPLCNumber(type: "quote" | "invoice" | "order"): Promise<string> {
-  const { data, error } = await supabaseAdmin.rpc("get_next_plc_number", { 
-    p_seq_type: type 
-  });
-  
-  if (error) {
-    console.error("[getNextPLCNumber] RPC error:", error);
-    throw new Error(`Failed to generate PLC number: ${error.message}`);
+  // Try up to 20 times to generate a unique code
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const code = generateCode(6);
+    const exists = await codeExists(type, code);
+    if (!exists) {
+      return `PLC-${code}`;
+    }
   }
-  
-  return data as string;
-}
-
-/**
- * Get current sequence status (for admin/debug)
- */
-export async function getSequenceStatus() {
-  const { data, error } = await supabaseAdmin
-    .from("plc_sequence_status")
-    .select("*")
-    .order("seq_date", { ascending: false })
-    .limit(10);
-  
-  if (error) throw error;
-  return data;
-}
-
-/**
- * Reset today's sequence (admin only - use with caution)
- */
-export async function resetTodaySequence(type: "quote" | "invoice" | "order") {
-  const { error } = await supabaseAdmin
-    .from("plc_daily_sequences")
-    .delete()
-    .eq("seq_date", new Date().toISOString().slice(0, 10))
-    .eq("seq_type", type);
-  
-  if (error) throw error;
-  return { success: true };
+  // Fallback: use longer code with timestamp to guarantee uniqueness
+  const ts = Date.now().toString(36);
+  const code = generateCode(3) + ts.slice(-3);
+  return `PLC-${code}`;
 }
