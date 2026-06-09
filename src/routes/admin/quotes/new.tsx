@@ -59,7 +59,7 @@ function QuoteBuilder() {
     });
     
     // Generate PLC number on load
-    getNextPLCNumber("quote").then(setQuoteNumber).catch(() => setQuoteNumber("PLC-00001"));
+    getNextPLCNumber("quote").then(setQuoteNumber).catch(() => setQuoteNumber("PLC-000000"));
   }, []);
 
   useEffect(() => {

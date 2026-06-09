@@ -2,8 +2,11 @@
 // Used for: quotes, invoices, orders, quote_requests, etc.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Database } from "@/integrations/supabase/types";
 
 const CHARS = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+type TableName = keyof Database["public"]["Tables"];
 
 function generateCode(length = 6): string {
   let code = "";
@@ -13,11 +16,11 @@ function generateCode(length = 6): string {
   return code;
 }
 
-async function codeExists(table: string, column: string, code: string): Promise<boolean> {
+async function codeExists(table: TableName, column: string, code: string): Promise<boolean> {
   const { data } = await supabaseAdmin
     .from(table)
-    .select("id")
-    .eq(column, `PLC-${code}`)
+    .select("id" as never)
+    .eq(column as never, `PLC-${code}`)
     .limit(1);
   return (data?.length ?? 0) > 0;
 }
@@ -30,12 +33,12 @@ async function codeExists(table: string, column: string, code: string): Promise<
 export async function getNextPLCNumber(
   type: "quote" | "invoice" | "order" | "request"
 ): Promise<string> {
-  const tableMap: Record<string, { table: string; column: string }> = {
-    quote: { table: "quotes", column: "quote_number" },
-    invoice: { table: "invoices", column: "invoice_number" },
-    order: { table: "orders", column: "order_number" },
-    request: { table: "quote_requests", column: "reference_number" },
-  };
+  const tableMap = {
+      quote: { table: "quotes" as const, column: "quote_number" },
+      invoice: { table: "invoices" as const, column: "invoice_number" },
+      order: { table: "orders" as const, column: "order_number" },
+      request: { table: "quote_requests" as const, column: "reference_number" },
+    };
 
   const { table, column } = tableMap[type];
 

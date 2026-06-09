@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Plus, Sparkles } from "lucide-react";
 import { runFormula, DEFAULT_FORMULA, type FactorMap, type EngineSelections } from "@/lib/pricing/engine";
 import { calculateQuoteTotals, formatEGP } from "@/lib/pricing";
+import { getNextPLCNumber } from "@/lib/numbering";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/quotes/configurator")({ component: ConfiguratorBuilder });
@@ -164,11 +165,13 @@ function ConfiguratorBuilder() {
   }), [computed]);
 
   async function saveQuote(status: 'draft' | 'sent') {
-    if (!customerId) return toast.error("اختر عميلاً");
-    setSaving(true);
-    const { data: quote, error } = await supabase.from('quotes').insert({
-      customer_id: customerId,
-      status,
+      if (!customerId) return toast.error("اختر عميلاً");
+      setSaving(true);
+      const quoteNumber = await getNextPLCNumber("quote");
+      const { data: quote, error } = await supabase.from('quotes').insert({
+        quote_number: quoteNumber,
+        customer_id: customerId,
+        status,
       subtotal: totals.subtotal,
       discount_amount: 0,
       vat_pct: 14, vat_amount: totals.vatAmount,
