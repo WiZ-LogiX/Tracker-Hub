@@ -45,10 +45,10 @@ function Dashboard() {
       const result = await cleanup();
       if (result.success) {
         let total = 0;
-        for (const [table, r] of Object.entries(result.results)) {
-          total += r.deleted;
-          if (r.error) console.error(`Cleanup ${table}:`, r.error);
-        }
+        for (const [table, r] of Object.entries(result.results) as [string, { deleted: number; error?: string }][]) {
+            total += r.deleted;
+            if (r.error) console.error(`Cleanup ${table}:`, r.error);
+          }
         toast.success(`تم التنظيف — حُذِف ${total} سجل من ${Object.keys(result.results).length} جدول`);
         load();
       }
