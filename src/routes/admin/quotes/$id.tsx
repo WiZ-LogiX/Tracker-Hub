@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { Trash2, Plus, Sparkles } from "lucide-react";
 import { formatEGP } from "@/lib/pricing";
 import { sendNotification } from "@/lib/notifications.functions";
 import { toast } from "sonner";
@@ -109,7 +111,7 @@ function QuoteDetail() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">البنود</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-lg">البنود</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           {items.map((it, i) => {
             const snap = (quote.snapshot?.items?.[i]) ?? {};
@@ -138,7 +140,7 @@ function QuoteDetail() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">الإجمالي</CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-lg">الإجمالي</CardTitle></CardHeader>
         <CardContent className="p-6 space-y-3">
           <div className="flex justify-between"><span className="text-muted-foreground">المجموع الفرعي</span><span>{formatEGP(Number(quote.subtotal))}</span></div>
           {Number(quote.discount_amount) > 0 && <div className="flex justify-between text-secondary"><span>خصم ({quote.discount_code})</span><span>− {formatEGP(Number(quote.discount_amount))}</span></div>}
@@ -152,14 +154,14 @@ function QuoteDetail() {
 
       <div className="flex gap-2 flex-wrap">
         {quote.status === 'draft' && <Button onClick={() => changeStatus('sent')} disabled={working} className="gap-2">حفظ كمسودة</Button>}
-        {quote.status === 'sent' && <Button onClick={() => changeStatus('accepted')} disabled={working} className="gap-2"><FileCheck2 className="h-4 w-4" /> العميل وافق</Button>}
-        {quote.status === 'sent' && <Button variant="outline" onClick={() => changeStatus('rejected')} disabled={working}> refusé</Button>}
-        {(quote.status === 'accepted' || quote.status === 'sent') && <Button variant="secondary" onClick={convertToInvoice} disabled={working} className="gap-2"><Factory className="h-4 w-4" /> تحويل لفاتورة وأمر إنتاج</Button>}
+        {quote.status === 'sent' && <Button onClick={() => changeStatus('accepted')} disabled={working}>العميل وافق</Button>}
+        {quote.status === 'sent' && <Button variant="outline" onClick={() => changeStatus('rejected')}>رفض</Button>}
+        {(quote.status === 'accepted' || quote.status === 'sent') && <Button variant="secondary" onClick={convertToInvoice} disabled={working}>تحويل لفاتورة وأمر إنتاج</Button>}
         <Button variant="outline" onClick={() => window.print()}>طباعة / PDF</Button>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">ملاحظات داخلية</CardTitle></CardContent>
+        <CardHeader className="pb-2"><CardTitle className="text-lg">ملاحظات داخلية</CardTitle></CardHeader>
         <CardContent><InternalNotes entityType="quote" entityId={id} /></CardContent>
       </Card>
     </div>
