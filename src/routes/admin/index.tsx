@@ -1,18 +1,19 @@
 import { useTranslation } from "react-i18next";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/useAuth";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatEGP } from "@/lib/pricing";
-import { FileText, Receipt, ClipboardList, Users, TrendingUp, Package } from "lucide-react";
+import { FileText, Receipt, ClipboardList, Users, TrendingUp, Package, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/")({ component: AdminDashboard });
 
 function AdminDashboard() {
   const { t } = useTranslation();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     customers: 0,
     quotes: 0,
@@ -20,6 +21,7 @@ function AdminDashboard() {
     revenue: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -38,11 +40,55 @@ function AdminDashboard() {
     });
   }, []);
 
+  async function deleteAllData() {
+    if (!confirm("هل أنت متأكد من حذف جميع البيانات؟ هذا الإجراء لا يمكن التراجع عنه.")) return;
+    setDeleting(true);
+    try {
+      const tables = [
+        'accessories', 'tenants', 'audit_log', 'categories', 'configurations',
+        'quote_items', 'product_templates', 'customers', 'discounts', 'finishes',
+        'internal_notes', 'wastage_rules', 'materials', 'suppliers', 'veneers',
+        'pricing_factors', 'pricing_rules', 'products', 'quotes', 'invoices',
+        'orders', 'production_assignments', 'production_logs', 'production_photos',
+        'qc_inspections', 'remakes', 'workers', 'notification_log', 'notification_templates',
+      ];
+      
+      let deleted = 0;
+      for (const table of tables) {
+        const { error, count } = await supabase
+          .from(table as any)
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000');
+        if (!error) deleted += count ?? 0;
+      }
+      
+      toast.success(`تم حذف ${deleted} سجل`);
+      // Reload stats
+      setStats({ customers: 0, quotes: 0, orders: 0, revenue: 0 });
+    } catch (err: any) {
+      toast.error(err?.message ?? "فشل الحذف");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-serif text-3xl font-bold">{t("admin.panel")}</h1>
-        <p className="text-sm text-muted-foreground mt-1">مرحباً {user?.email}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-serif text-3xl font-bold">{t("admin.panel")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">مرحباً {user?.email}</p>
+        </div>
+        <Button 
+          variant="destructive" 
+          size="sm" 
+          onClick={deleteAllData} 
+          disabled={deleting}
+          className="gap-2"
+        >
+          <Trash2 className="h-4 w-4" />
+          {deleting ? "جارٍ الحذف..." : "حذف جميع البيانات"}
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
