@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { ArrowRight, FileCheck2, Factory } from "lucide-react";
 import { InternalNotes } from "@/components/admin/InternalNotes";
 import { createOrder } from "@/lib/order.functions";
-import { generatePLCNumber } from "@/lib/plc.functions";
+import { POST as GeneratePLC } from "@/lib/plc.functions";
 
 export const Route = createFileRoute("/admin/quotes/$id")({ component: QuoteDetail });
 
@@ -53,39 +53,48 @@ function QuoteDetail() {
   async function convertToInvoice() {
     if (!quote) return;
     setWorking(true);
-    const deposit = Number(quote.total) * Number(quote.deposit_pct) / 100;
-    // 1️⃣ Generate a PLC number for the new invoice
-    const response = await fetch('/api/plc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'invoice' })
+
+    // ---- NEW: Call the PLC generator directly (no fetch) ----
+    const { plc } = await (await import('@/lib/plc.functions')).POST({
+      data: { type: "invoice" }
     });
-    const json = await response.json();
-    const plcNumber = json.plc; // e.g. "PLC-1s2w5c"
-    
+    const plcNumber = plc ?? "PLC-INV-0001";
+
+    // ---- Continue with invoice creation ----
+    const deposit = Number(quote.total) * Number(quote.deposit_pct) / 100;
     const { data: inv, error } = await supabase.from('invoices').insert({
-      quote_id: quote.id, customer_id: quote.customer_id,
+      quote_id: quote.id,
+      customer_id: quote.customer_id,
       invoice_number: plcNumber,               // <-- PLC number stored on invoice
-      total: quote.total, deposit_amount: deposit,
+      total: quote.total,
+      deposit_amount: deposit,
       snapshot: quote.snapshot,
     }).select('id').single();
-    if (error) { setWorking(false); return toast.error(error.message); }
+
+    if (error) {
+      setWorking(false);
+      return toast.error(error.message);
+    }
+
     await supabase.from('quotes').update({ status: 'converted' as any }).eq('id', quote.id);
 
-    // Create order using server function (handles PLC numbering)
+    // Create order (uses existing server fn)
     try {
-      const { orderId, orderNumber } = await createOrderFn({ data: { invoiceId: inv!.id, customerId: quote.customer_id } });
+      const { orderId, orderNumber } = await createOrderFn({
+        data: { invoiceId: inv!.id, customerId: quote.customer_id }
+      });
       if (orderId) {
         try { await notify({ data: { event: 'order_opened', entityType: 'order', entityId: orderId } }); } catch {}
-        toast.success(`تم تحويل العرض لفاتورة + إنشاء أمر إنتاج: ${orderNumber}`);
+        toast.success(`تم تحويل عرض الأسعار لفاتورة وأمر إنتاج: ${orderNumber}`);
       } else {
-        toast.success("تم تحويل العرض لفاتورة");
+        toast.success("تم تحويل العرض إلى فاتورة");
       }
     } catch (e: any) {
       toast.error(`فشل إنشاء أمر الإنتاج: ${e.message}`);
     }
+
     setWorking(false);
-    nav({ to: '/admin/invoices' });
+    nav({ to: "/admin/invoices" });
   }
 
   if (!quote) return <div className="text-muted-foreground">جارٍ التحميل...</div>;
@@ -131,10 +140,11 @@ function QuoteDetail() {
       </Card>
 
       <Card>
-        <CardContent className="p-6 space-y-2 text-sm">
+        <CardHeader><CardTitle className="text-lg">الإجمالي</CardTitle></CardHeader>
+        <CardContent className="p-6 space-y-3">
           <div className="flex justify-between"><span className="text-muted-foreground">المجموع الفرعي</span><span>{formatEGP(Number(quote.subtotal))}</span></div>
           {Number(quote.discount_amount) > 0 && <div className="flex justify-between text-secondary"><span>خصم ({quote.discount_code})</span><span>− {formatEGP(Number(quote.discount_amount))}</span></div>}
-          <div className="flex justify-between"><span className="text-muted-foreground">VAT ({quote.vat_pct}%)</span><span>{formatEGP(Number(quote.vat_amount))}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">ضريبة القيمة المضافة (14%)</span><span>{formatEGP(Number(quote.vat_amount))}</span></div>
           <Separator />
           <div className="flex justify-between font-serif text-2xl font-bold text-primary"><span>الإجمالي</span><span>{formatEGP(Number(quote.total))}</span></div>
           <div className="text-xs text-muted-foreground">عربون مقترح ({quote.deposit_pct}%): {formatEGP(Number(quote.total) * Number(quote.deposit_pct) / 100)}</div>
@@ -143,9 +153,9 @@ function QuoteDetail() {
       </Card>
 
       <div className="flex gap-2 flex-wrap">
-        {quote.status === 'draft' && <Button onClick={() => changeStatus('sent')} disabled={working}>إرسال للعميل</Button>}
+        {quote.status === 'draft' && <Button onClick={() => changeStatus('sent')} disabled={working} className="gap-2">إرسال للعميل</Button>}
         {quote.status === 'sent' && <Button onClick={() => changeStatus('accepted')} disabled={working} className="gap-2"><FileCheck2 className="h-4 w-4" /> العميل وافق</Button>}
-        {quote.status === 'sent' && <Button variant="outline" onClick={() => changeStatus('rejected')} disabled={working}>رفض</Button>}
+        {quote.status === 'sent' && <Button variant="outline" onClick={() => changeStatus('rejected')} disabled={working} disabled={working}> refusé</Button>}
         {(quote.status === 'accepted' || quote.status === 'sent') && <Button variant="secondary" onClick={convertToInvoice} disabled={working} className="gap-2"><Factory className="h-4 w-4" /> تحويل لفاتورة وأمر إنتاج</Button>}
         <Button variant="outline" onClick={() => window.print()}>طباعة / PDF</Button>
       </div>
