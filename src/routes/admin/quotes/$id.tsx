@@ -55,12 +55,13 @@ function QuoteDetail() {
     setWorking(true);
     const deposit = Number(quote.total) * Number(quote.deposit_pct) / 100;
     // 1️⃣ Generate a PLC number for the new invoice
-    const { data: plcResponse } = await fetch('/api/plc', {
+    const response = await fetch('/api/plc', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'invoice' })
     });
-    const plcNumber = data.plc; // e.g. "PLC-1s2w5c"
+    const json = await response.json();
+    const plcNumber = json.plc; // e.g. "PLC-1s2w5c"
     
     const { data: inv, error } = await supabase.from('invoices').insert({
       quote_id: quote.id, customer_id: quote.customer_id,
