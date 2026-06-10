@@ -64,7 +64,7 @@ function SeedPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <RefreshCcw className="h-5 w-5 text-primary" /> عوامل وقواعد التسعير
+              <RefreshCcw className="h-5 w-5 text-primary" /> استعادة عوامل وقواعد التسعير
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">

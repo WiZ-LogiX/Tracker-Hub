@@ -1,12 +1,14 @@
 import { useTranslation } from "react-i18next";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/useAuth";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { formatEGP } from "@/lib/pricing";
 import { FileText, Receipt, ClipboardList, Users, TrendingUp, Package, Trash2 } from "lucide-react";
+import { ensurePricingSetup } from "@/lib/seed.functions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/")({ component: AdminDashboard });
@@ -22,28 +24,33 @@ function AdminDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const restorePricing = useServerFn(ensurePricingSetup);
 
   useEffect(() => {
-    Promise.all([
+    loadStats();
+  }, []);
+
+  async function loadStats() {
+    const [c, q, o] = await Promise.all([
       supabase.from("customers").select("id", { count: "exact", head: true }),
       supabase.from("quotes").select("total"),
       supabase.from("orders").select("id", { count: "exact", head: true }),
-    ]).then(([c, q, o]) => {
-      const revenue = (q.data ?? []).reduce((s: number, r: any) => s + Number(r.total || 0), 0);
-      setStats({
-        customers: c.count ?? 0,
-        quotes: q.data?.length ?? 0,
-        orders: o.count ?? 0,
-        revenue,
-      });
-      setLoading(false);
+    ]);
+    const revenue = (q.data ?? []).reduce((s: number, r: any) => s + Number(r.total || 0), 0);
+    setStats({
+      customers: c.count ?? 0,
+      quotes: q.data?.length ?? 0,
+      orders: o.count ?? 0,
+      revenue,
     });
-  }, []);
+    setLoading(false);
+  }
 
   async function deleteTransientData() {
     if (!confirm("هل أنت متأكد من حذف عروض الأسعار والفواتير وأوامر الإنتاج فقط؟\nسيتم الاحتفاظ بقوالب المنتجات والخامات والموردين والتشطيبات والقشرة والإكسسوارات وعوامل التسعير وقواعد الهدر والخصومات والعمال.")) return;
     setDeleting(true);
     try {
+      // Delete in reverse dependency order
       const tables = [
         'production_photos',
         'production_logs',
@@ -67,7 +74,7 @@ function AdminDashboard() {
       }
       
       toast.success(`تم حذف ${deleted} سجل (عروض أسعار، فواتير، أوامر إنتاج فقط)`);
-      setStats({ customers: stats.customers, quotes: 0, orders: 0, revenue: 0 });
+      setStats({ ...stats, quotes: 0, orders: 0, revenue: 0 });
     } catch (err: any) {
       toast.error(err?.message ?? "فشل الحذف");
     } finally {
@@ -75,24 +82,43 @@ function AdminDashboard() {
     }
   }
 
+  async function restorePricingData() {
+    try {
+      const r = await restorePricing();
+      toast.success("تم استعادة عوامل وقواعد التسعير");
+      loadStats();
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل الاستعادة");
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="font-serif text-3xl font-bold">{t("admin.panel")}</h1>
           <p className="text-sm text-muted-foreground mt-1">مرحباً {user?.email}</p>
         </div>
-        <Button 
-          variant="destructive" 
-          size="sm" 
-          onClick={deleteTransientData} 
-          disabled={deleting}
-          className="gap-2"
-          title="يحذف عروض الأسعار والفواتير وأوامر الإنتاج فقط"
-        >
-          <Trash2 className="h-4 w-4" />
-          {deleting ? "جارٍ الحذف..." : "حذف البيانات المؤقتة"}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            onClick={restorePricingData}
+            className="gap-2"
+          >
+            استعادة عوامل وقواعد التسعير
+          </Button>
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={deleteTransientData} 
+            disabled={deleting}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            {deleting ? "جارٍ الحذف..." : "حذف البيانات المؤقتة"}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
