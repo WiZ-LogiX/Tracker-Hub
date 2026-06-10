@@ -26,9 +26,10 @@ export const createOrder = createServerFn({ method: "POST" })
     }
 
     // Compute deposit amount (50% of total by default)
-    const deposit = quote
-      ? Number(quote.total) * Number(quote.deposit_pct) / 100
-      : 0;
+    let deposit = 0;
+    if (quote) {
+      deposit = Number(quote.total) * Number(quote.deposit_pct) / 100;
+    }
 
     // Generate PLC number directly without extra fetch
     const { plc } = await (await import("@/lib/plc.functions")).POST({

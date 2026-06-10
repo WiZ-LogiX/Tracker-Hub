@@ -1,81 +1,120 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icon";
+import { useAuth } from "@/lib/useAuth";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { formatEGP } from "@/lib/pricing";
+import { FileText, Receipt, ClipboardList, Users, TrendingUp, Package } from "lucide-react";
 
-export default function AdminDashboard() {
+export const Route = createFileRoute("/admin/")({ component: AdminDashboard });
+
+function AdminDashboard() {
   const { t } = useTranslation();
+  const { user, signOut } = useAuth();
+  const [stats, setStats] = useState({
+    customers: 0,
+    quotes: 0,
+    orders: 0,
+    revenue: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("customers").select("id", { count: "exact", head: true }),
+      supabase.from("quotes").select("total"),
+      supabase.from("orders").select("id", { count: "exact", head: true }),
+    ]).then(([c, q, o]) => {
+      const revenue = (q.data ?? []).reduce((s: number, r: any) => s + Number(r.total || 0), 0);
+      setStats({
+        customers: c.count ?? 0,
+        quotes: q.data?.length ?? 0,
+        orders: o.count ?? 0,
+        revenue,
+      });
+      setLoading(false);
+    });
+  }, []);
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Main content area */}
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 bg-sidebar rounded-r-lg border-r p-4">
-          <div className="flex items-center gap-2">
-            <div className="h-10 w-10 rounded-md bg-gold flex items-center justify-center text-gold-foreground font-serif font-bold">P</div>
-            <div>
-              <div className="font-serif text-xl font-bold">{t("admin.panel")}</div>
-              <div className="text-sm text-sidebar-foreground">{t("admin.dashboard")}</div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-serif text-3xl font-bold">{t("admin.panel")}</h1>
+        <p className="text-sm text-muted-foreground mt-1">مرحباً {user?.email}</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-5 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <Users className="h-5 w-5" />
             </div>
-          </div>
-
-          {/* Navigation links */}
-          <nav className="space-y-2 mt-6">
-            <Link
-              to="/admin"
-              className="flex items-center gap-2 rounded-md bg-gold text-gold-foreground hover:bg-gold/90 px-3 py-2 text-sm"
-            >
-              <Icon name="home" className="h-4 w-4 rtl-flip" />
-              {t("admin.nav.dashboard")}
-            </Link>
-            <Link
-              to="/admin/quotes"
-              className="flex items-center gap-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-foreground px-3 py-2 text-sm"
-            >
-              <Icon name="file-text" className="h-4 w-4" />
-              {t("admin.nav.quotes")}
-            </Link>
-            <Link
-              to="/admin/invoices"
-              className="flex items-center gap-2 rounded-md hover:bg-sidebar-accent hover:text-sidebar-foreground px-3 py-2 text-sm"
-            >
-              <Icon name="receipt" className="h-4 w-4" />
-              {t("admin.nav.invoices")}
-            </Link>
-            {/* add more nav links as needed */}
-          </nav>
-        </aside>
-
-        {/* Main content */}
-        <main className="flex-1 px-6 py-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg font-serif">
-                {t("admin.dashboardTitle")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-4">
-                <div className="rounded-lg bg-card p-4">
-                  <Icon name="speedometer" className="h-6 w-6 text-primary" />
-                  <div className="ml-3 text-lg text-primary">{t("admin.dashboardSubtitle")}</div>
-                </div>
-                <div className="rounded-lg bg-card p-4">
-                  <Icon name="users" className="h-6 w-6 text-secondary" />
-                  <div className="ml-3 text-lg text-secondary">{t("admin.dashboardSubtitle2")}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </main>
+            <div>
+              <div className="text-2xl font-bold">{loading ? "..." : stats.customers}</div>
+              <div className="text-xs text-muted-foreground">العملاء</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold">{loading ? "..." : stats.quotes}</div>
+              <div className="text-xs text-muted-foreground">عروض الأسعار</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold">{loading ? "..." : stats.orders}</div>
+              <div className="text-xs text-muted-foreground">أوامر الإنتاج</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold">{loading ? "..." : formatEGP(stats.revenue)}</div>
+              <div className="text-xs text-muted-foreground">إجمالي عروض الأسعار</div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Language & Theme controls */}
-      <div className="fixed top-4 top-8 md:top-8 right-4 flex gap-2">
-        <Link to="/admin/langSwitcher"><Button variant="ghost" size="sm">العربي</Button></Link>
-        <Link to="/admin/themeToggle"><Button variant="ghost" size="sm">{t("common.theme")}</Button></Link>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">روابط سريعة</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Link to="/admin/quotes/configurator" className="p-4 border rounded-lg hover:bg-accent transition text-center">
+            <Package className="h-6 w-6 mx-auto mb-2 text-primary" />
+            <div className="text-sm font-medium">منشئ عروض الأسعار</div>
+          </Link>
+          <Link to="/admin/quotes" className="p-4 border rounded-lg hover:bg-accent transition text-center">
+            <FileText className="h-6 w-6 mx-auto mb-2 text-primary" />
+            <div className="text-sm font-medium">جميع عروض الأسعار</div>
+          </Link>
+          <Link to="/admin/orders" className="p-4 border rounded-lg hover:bg-accent transition text-center">
+            <ClipboardList className="h-6 w-6 mx-auto mb-2 text-primary" />
+            <div className="text-sm font-medium">تتبع الإنتاج</div>
+          </Link>
+          <Link to="/admin/customers" className="p-4 border rounded-lg hover:bg-accent transition text-center">
+            <Users className="h-6 w-6 mx-auto mb-2 text-primary" />
+            <div className="text-sm font-medium">العملاء</div>
+          </Link>
+        </CardContent>
+      </Card>
     </div>
   );
 }
