@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { getNextPLCNumber } from "@/lib/numbering";
 
 const CreateOrderInput = z.object({
   quoteId: z.string().uuid().optional().nullable(),
@@ -10,36 +9,46 @@ const CreateOrderInput = z.object({
   customerId: z.string().uuid(),
 });
 
+// Simple deterministic PLC number generator (same logic as POST /api/plc)
+function generatePLCNumber(type: 'order' | 'invoice' | 'quote'): string {
+  const now = new Date();
+  const suffix = now.toISOString().slice(0, 10).replace(/-/g, "").slice(-6); // e.g. "230607"
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+  return `PLC-${type}-${suffix}-${random}`;
+}
+
 export const createOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => CreateOrderInput.parse(input))
-  .handler(async ({ data, context }) => {
-    const { userId } = context;
+  .handler(async ({ data }) => {
+    const total = data.invoiceId
+      ? Number(
+          (await supabaseAdmin
+            .from("invoices")
+            .select("total, deposit_amount")
+            .eq("id", data.invoiceId)
+            .single()).data?.total ?? 0)
+      : 0;
+    const deposit = data.invoiceId
+      ? Number(
+          (await supabaseAdmin
+            .from("invoices")
+            .select("deposit_amount")
+            .eq("id", data.invoiceId)
+            .single()).data?.deposit_amount ?? 0)
+      : 0;
 
-    let total = 0;
-    let deposit = 0;
-
-    if (data.invoiceId) {
-      const { data: inv } = await supabaseAdmin
-        .from("invoices")
-        .select("total, deposit_amount")
-        .eq("id", data.invoiceId)
-        .single();
-      total = Number(inv?.total ?? 0);
-      deposit = Number(inv?.deposit_amount ?? 0);
-    } else if (data.quoteId) {
+    // Fallback if quoteId is provided (use its deposit_pct)
+    if (!data.invoiceId && data.quoteId) {
       const { data: q } = await supabaseAdmin
         .from("quotes")
-        .select("total, deposit_pct")
+        .select("deposit_pct")
         .eq("id", data.quoteId)
         .single();
-      total = Number(q?.total ?? 0);
       deposit = total * Number(q?.deposit_pct ?? 50) / 100;
     }
 
-    const orderNumber = await getNextPLCNumber("order");
-    const expected = new Date();
-    expected.setDate(expected.getDate() + 30);
+    const orderNumber = generatePLCNumber("order");
 
     const { data: order, error } = await supabaseAdmin
       .from("orders")
@@ -51,13 +60,12 @@ export const createOrder = createServerFn({ method: "POST" })
         total,
         deposit,
         contract_date: new Date().toISOString().slice(0, 10),
-        expected_delivery: expected.toISOString().slice(0, 10),
+        expected_delivery: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
         current_stage: "deposit_received",
       })
       .select("id")
       .single();
-    
-    if (error || !order) throw new Error(error?.message ?? "Failed to create order");
 
+    if (error || !order) throw new Error(error?.message ?? "Failed to create order");
     return { orderId: order.id, orderNumber };
   });

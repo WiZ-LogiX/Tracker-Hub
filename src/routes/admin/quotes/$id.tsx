@@ -54,18 +54,17 @@ function QuoteDetail() {
     if (!quote) return;
     setWorking(true);
 
-    // ---- NEW: Call the PLC generator directly (no fetch) ----
+    // NEW: Call PLC generator directly (no fetch)
     const { plc } = await (await import('@/lib/plc.functions')).POST({
       data: { type: "invoice" }
     });
     const plcNumber = plc ?? "PLC-INV-0001";
 
-    // ---- Continue with invoice creation ----
     const deposit = Number(quote.total) * Number(quote.deposit_pct) / 100;
     const { data: inv, error } = await supabase.from('invoices').insert({
       quote_id: quote.id,
       customer_id: quote.customer_id,
-      invoice_number: plcNumber,               // <-- PLC number stored on invoice
+      invoice_number: plcNumber,
       total: quote.total,
       deposit_amount: deposit,
       snapshot: quote.snapshot,
@@ -78,7 +77,6 @@ function QuoteDetail() {
 
     await supabase.from('quotes').update({ status: 'converted' as any }).eq('id', quote.id);
 
-    // Create order (uses existing server fn)
     try {
       const { orderId, orderNumber } = await createOrderFn({
         data: { invoiceId: inv!.id, customerId: quote.customer_id }
@@ -140,7 +138,7 @@ function QuoteDetail() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">الإجمالي</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-lg">الإجمالي</CardHeader>
         <CardContent className="p-6 space-y-3">
           <div className="flex justify-between"><span className="text-muted-foreground">المجموع الفرعي</span><span>{formatEGP(Number(quote.subtotal))}</span></div>
           {Number(quote.discount_amount) > 0 && <div className="flex justify-between text-secondary"><span>خصم ({quote.discount_code})</span><span>− {formatEGP(Number(quote.discount_amount))}</span></div>}
@@ -153,15 +151,15 @@ function QuoteDetail() {
       </Card>
 
       <div className="flex gap-2 flex-wrap">
-        {quote.status === 'draft' && <Button onClick={() => changeStatus('sent')} disabled={working} className="gap-2">إرسال للعميل</Button>}
+        {quote.status === 'draft' && <Button onClick={() => changeStatus('sent')} disabled={working} className="gap-2">حفظ كمسودة</Button>}
         {quote.status === 'sent' && <Button onClick={() => changeStatus('accepted')} disabled={working} className="gap-2"><FileCheck2 className="h-4 w-4" /> العميل وافق</Button>}
-        {quote.status === 'sent' && <Button variant="outline" onClick={() => changeStatus('rejected')} disabled={working} disabled={working}> refusé</Button>}
+        {quote.status === 'sent' && <Button variant="outline" onClick={() => changeStatus('rejected')} disabled={working}> refusé</Button>}
         {(quote.status === 'accepted' || quote.status === 'sent') && <Button variant="secondary" onClick={convertToInvoice} disabled={working} className="gap-2"><Factory className="h-4 w-4" /> تحويل لفاتورة وأمر إنتاج</Button>}
         <Button variant="outline" onClick={() => window.print()}>طباعة / PDF</Button>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">ملاحظات داخلية</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-lg">ملاحظات داخلية</CardTitle></CardContent>
         <CardContent><InternalNotes entityType="quote" entityId={id} /></CardContent>
       </Card>
     </div>
