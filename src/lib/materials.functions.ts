@@ -117,7 +117,7 @@ export const upsertMaterial = createServerFn({ method: "POST" })
       const wastagePct = data.wastage_pct ?? 0;
       if (wastagePct > 0) {
         const { error: wrError } = await supabase
-          .from("wastage_rules")
+          .from("wastage_rules" as any)
           .upsert({
             material_id: materialId,
             wastage_pct: wastagePct,

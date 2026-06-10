@@ -74,11 +74,11 @@ function WastageRulesPage() {
       let count = 0;
       for (const m of data ?? []) {
         if (m.wastage_pct && m.wastage_pct > 0) {
-          const { error } = await supabase.from("wastage_rules").upsert({
-            material_id: m.id,
-            wastage_pct: m.wastage_pct,
-            active: true,
-          }, { onConflict: "material_id" });
+            const { error } = await supabase.from("wastage_rules" as any).upsert({
+              material_id: m.id,
+              wastage_pct: m.wastage_pct,
+              active: true,
+            }, { onConflict: "material_id" });
           if (!error) count++;
         }
       }
