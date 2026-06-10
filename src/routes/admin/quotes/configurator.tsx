@@ -1,6 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useNavigate, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useServerFn } from "@tanstack/react-start";
+import { generatePLCNumber } from "@/lib/plc.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Plus, Sparkles } from "lucide-react";
 import { runFormula, DEFAULT_FORMULA, type FactorMap, type EngineSelections } from "@/lib/pricing/engine";
 import { calculateQuoteTotals, formatEGP } from "@/lib/pricing";
-import { getNextPLCNumber } from "@/lib/numbering";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/quotes/configurator")({ component: ConfiguratorBuilder });
@@ -40,6 +41,7 @@ const blankItem = (): Item => ({
 function ConfiguratorBuilder() {
   const { t } = useTranslation();
   const nav = useNavigate();
+  const getPLCNumber = useServerFn(generatePLCNumber);
   const [templates, setTemplates] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
@@ -167,7 +169,7 @@ function ConfiguratorBuilder() {
   async function saveQuote(status: 'draft' | 'sent') {
       if (!customerId) return toast.error("اختر عميلاً");
       setSaving(true);
-      const quoteNumber = await getNextPLCNumber("quote");
+      const quoteNumber = await getPLCNumber({ data: { type: "quote" } });
       const { data: quote, error } = await supabase.from('quotes').insert({
         quote_number: quoteNumber,
         customer_id: customerId,
