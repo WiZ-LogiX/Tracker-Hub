@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/useAuth";
@@ -40,17 +40,21 @@ function AdminDashboard() {
     });
   }, []);
 
-  async function deleteAllData() {
-    if (!confirm("هل أنت متأكد من حذف جميع البيانات؟ هذا الإجراء لا يمكن التراجع عنه.")) return;
+  async function deleteTransientData() {
+    if (!confirm("هل أنت متأكد من حذف عروض الأسعار والفواتير وأوامر الإنتاج فقط؟\nسيتم الاحتفاظ بقوالب المنتجات والخامات والموردين والتشطيبات والقشرة والإكسسوارات وعوامل التسعير وقواعد الهدر والخصومات والعمال.")) return;
     setDeleting(true);
     try {
       const tables = [
-        'accessories', 'tenants', 'audit_log', 'categories', 'configurations',
-        'quote_items', 'product_templates', 'customers', 'discounts', 'finishes',
-        'internal_notes', 'wastage_rules', 'materials', 'suppliers', 'veneers',
-        'pricing_factors', 'pricing_rules', 'products', 'quotes', 'invoices',
-        'orders', 'production_assignments', 'production_logs', 'production_photos',
-        'qc_inspections', 'remakes', 'workers', 'notification_log', 'notification_templates',
+        'production_photos',
+        'production_logs',
+        'production_assignments',
+        'qc_inspections',
+        'remakes',
+        'orders',
+        'invoices',
+        'quote_items',
+        'configurations',
+        'quotes',
       ];
       
       let deleted = 0;
@@ -62,9 +66,8 @@ function AdminDashboard() {
         if (!error) deleted += count ?? 0;
       }
       
-      toast.success(`تم حذف ${deleted} سجل`);
-      // Reload stats
-      setStats({ customers: 0, quotes: 0, orders: 0, revenue: 0 });
+      toast.success(`تم حذف ${deleted} سجل (عروض أسعار، فواتير، أوامر إنتاج فقط)`);
+      setStats({ customers: stats.customers, quotes: 0, orders: 0, revenue: 0 });
     } catch (err: any) {
       toast.error(err?.message ?? "فشل الحذف");
     } finally {
@@ -82,12 +85,13 @@ function AdminDashboard() {
         <Button 
           variant="destructive" 
           size="sm" 
-          onClick={deleteAllData} 
+          onClick={deleteTransientData} 
           disabled={deleting}
           className="gap-2"
+          title="يحذف عروض الأسعار والفواتير وأوامر الإنتاج فقط"
         >
           <Trash2 className="h-4 w-4" />
-          {deleting ? "جارٍ الحذف..." : "حذف جميع البيانات"}
+          {deleting ? "جارٍ الحذف..." : "حذف البيانات المؤقتة"}
         </Button>
       </div>
 
