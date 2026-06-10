@@ -1,9 +1,9 @@
-"import { supabaseAdmin } from '@/integrations/supabase/client.server';
+import { supabaseAdmin } from '@/integrations/supabase/client.server';
 
 /**
  * Get next sequence number formatted as PLC-YYMMDD-XXXX
  * @param type - 'quote' | 'invoice' | 'order'
- * @returns Formatted number like \"PLC-260607-0001\"
+ * @returns Formatted number like "PLC-260607-0001"
  */
 export async function getNextPLCNumber({ type }: { type: 'quote' | 'invoice' | 'order' }): Promise<string> {
   const { data, error } = await (supabaseAdmin.rpc as any)(
@@ -41,6 +41,6 @@ export async function resetTodaySequence(type: 'quote' | 'invoice' | 'order') {
     .delete()
     .eq('seq_date', new Date().toISOString().slice(0, 10))
     .eq('seq_type', type);
-    if (error) throw error;
+  if (error) throw error;
   return { success: true };
 }
