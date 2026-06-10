@@ -73,7 +73,7 @@ export default function AdminDashboard() {
 
       {/* Language & Theme controls */}
       <div className="fixed top-4 top-8 md:top-8 right-4 flex gap-2">
-        <Link to="/admin/langSwitcher"><Button variant="ghost" size="sm"><|\>العربي</Button></Link>
+        <Link to="/admin/langSwitcher"><Button variant="ghost" size="sm">العربي</Button></Link>
         <Link to="/admin/themeToggle"><Button variant="ghost" size="sm">{t("common.theme")}</Button></Link>
       </div>
     </div>
