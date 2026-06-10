@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+"import { supabaseAdmin } from '@/integrations/supabase/client.server';
 
 /**
  * Delete all rows from a table (except the soft‑delete marker).
@@ -6,11 +6,9 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
  */
 export async function cleanTable(table: string): Promise<{ deleted: number; error?: string }> {
   const { error, count } = await supabaseAdmin
-    .from(table as any)                // <-- cast to any to bypass TS overload error
+    .from(table as any)                // cast to any to bypass TS overload
     .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000"); // delete all rows except the soft‑delete marker
-
-  if (error) {
+    .neq('id', '00000000-0000-0000-0000-000000000000'); // delete all rows except the soft‑delete marker  if (error) {
     return { deleted: 0, error: error.message };
   }
   return { deleted: count ?? 0 };
@@ -20,20 +18,23 @@ export async function cleanTable(table: string): Promise<{ deleted: number; erro
  * Drop data from all tables that ship with the starter template.
  * Used for development / cleanup scripts.
  */
-export async function cleanupAllData(): Promise<Record<string, { deleted: number; error?: string }>> {
+export async function cleanupAllData(): Promise<{
+  success: boolean;
+  results: Record<string, { deleted: number; error?: string }>;
+}> {
   const tables = [
-    "accessories",
-    "tenants",
-    "audit_log",
-    "categories",
-    "configurations",
-    "quote_items",
-    "product_templates",
-    "customers",
-    "discounts",
-    "finishes",
-    "internal_notes",
-    "wastage_rules",
+    'accessories',
+    'tenants',
+    'audit_log',
+    'categories',
+    'configurations',
+    'quote_items',
+    'product_templates',
+    'customers',
+    'discounts',
+    'finishes',
+    'internal_notes',
+    'wastage_rules',
   ] as const;
 
   const results: Record<string, { deleted: number; error?: string }> = {};
@@ -43,5 +44,5 @@ export async function cleanupAllData(): Promise<Record<string, { deleted: number
     results[table] = { deleted, error };
   }
 
-  return results;
+  return { success: true, results };
 }
