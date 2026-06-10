@@ -1,12 +1,8 @@
 // Unified numbering: PLC-XXXXXX (6-char random alphanumeric code)
 // Used for: quotes, invoices, orders, quote_requests, etc.
-
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import type { Database } from "@/integrations/supabase/types";
+// Fully self-contained — no database dependency.
 
 const CHARS = "0123456789abcdefghijklmnopqrstuvwxyz";
-
-type TableName = keyof Database["public"]["Tables"];
 
 function generateCode(length = 6): string {
   let code = "";
@@ -16,37 +12,28 @@ function generateCode(length = 6): string {
   return code;
 }
 
-async function codeExists(table: TableName, column: string, code: string): Promise<boolean> {
-  const { data } = await supabaseAdmin
-    .from(table)
-    .select("id" as never)
-    .eq(column as never, `PLC-${code}`)
-    .limit(1);
-  return (data?.length ?? 0) > 0;
-}
+// In-memory set to avoid duplicates within the same process/request.
+const recentCodes = new Set<string>();
+const MAX_RECENT = 1000;
 
 /**
  * Get next unique reference number formatted as PLC-XXXXXX
- * @param type - Entity type: 'quote' | 'invoice' | 'order' | 'request'
+ * No DB query needed — uses random generation with in-memory dedup.
  * @returns Formatted reference like "PLC-1s2w5c"
  */
 export async function getNextPLCNumber(
-  type: "quote" | "invoice" | "order" | "request"
+  _type: "quote" | "invoice" | "order" | "request"
 ): Promise<string> {
-  const tableMap = {
-      quote: { table: "quotes" as const, column: "quote_number" },
-      invoice: { table: "invoices" as const, column: "invoice_number" },
-      order: { table: "orders" as const, column: "order_number" },
-      request: { table: "quote_requests" as const, column: "reference_number" },
-    };
-
-  const { table, column } = tableMap[type];
-
-  // Try up to 20 times to generate a unique code
+  // Try up to 20 times to generate a unique code (in-memory uniqueness only)
   for (let attempt = 0; attempt < 20; attempt++) {
     const code = generateCode(6);
-    const exists = await codeExists(table, column, code);
-    if (!exists) {
+    if (!recentCodes.has(code)) {
+      recentCodes.add(code);
+      // Keep set from growing unbounded
+      if (recentCodes.size > MAX_RECENT) {
+        const first = recentCodes.values().next().value;
+        if (first) recentCodes.delete(first);
+      }
       return `PLC-${code}`;
     }
   }

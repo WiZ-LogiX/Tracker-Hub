@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { ArrowRight, FileCheck2, Factory } from "lucide-react";
 import { InternalNotes } from "@/components/admin/InternalNotes";
 import { createOrder } from "@/lib/order.functions";
+import { createInvoiceFromQuote } from "@/lib/invoice.functions";
 
 export const Route = createFileRoute("/admin/quotes/$id")({ component: QuoteDetail });
 
