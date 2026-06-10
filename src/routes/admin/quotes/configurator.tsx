@@ -1,8 +1,6 @@
-import { useNavigate, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useServerFn } from "@tanstack/react-start";
-import { generatePLCNumber } from "@/lib/plc.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,7 +39,6 @@ const blankItem = (): Item => ({
 function ConfiguratorBuilder() {
   const { t } = useTranslation();
   const nav = useNavigate();
-  const getPLCNumber = useServerFn(generatePLCNumber);
   const [templates, setTemplates] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
@@ -167,13 +164,11 @@ function ConfiguratorBuilder() {
   }), [computed]);
 
   async function saveQuote(status: 'draft' | 'sent') {
-      if (!customerId) return toast.error("اختر عميلاً");
-      setSaving(true);
-      const quoteNumber = await getPLCNumber({ data: { type: "quote" } });
-      const { data: quote, error } = await supabase.from('quotes').insert({
-        quote_number: quoteNumber,
-        customer_id: customerId,
-        status,
+    if (!customerId) return toast.error("اختر عميلاً");
+    setSaving(true);
+    const { data: quote, error } = await supabase.from('quotes').insert({
+      customer_id: customerId,
+      status,
       subtotal: totals.subtotal,
       discount_amount: 0,
       vat_pct: 14, vat_amount: totals.vatAmount,

@@ -41,14 +41,14 @@ export const cleanupAllData = createServerFn({ method: "POST" })
     for (const table of tables) {
       try {
         const { error, count } = await supabaseAdmin
-            .from(table as any)
-            .delete()
-            .neq("id", "00000000-0000-0000-0000-000000000000"); // delete all
-          
-          if (error) {
-            results[table] = { deleted: 0, error: error.message };
-          } else {
-            results[table] = { deleted: count ?? 0 };
+          .from(table)
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000"); // delete all
+        
+        if (error) {
+          results[table] = { deleted: 0, error: error.message };
+        } else {
+          results[table] = { deleted: count ?? 0 };
         }
       } catch (e: any) {
         results[table] = { deleted: 0, error: e?.message ?? String(e) };

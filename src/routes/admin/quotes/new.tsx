@@ -1,7 +1,5 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { generatePLCNumber as generatePLCNumberFn } from "@/lib/plc.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +12,7 @@ import { Trash2, Plus } from "lucide-react";
 import { calculateLine, calculateQuoteTotals, formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
 import { z } from "zod";
+import { getNextPLCNumber } from "@/lib/numbering";
 
 const searchSchema = z.object({ rfq: z.string().optional() });
 
@@ -34,7 +33,6 @@ interface Item {
 function QuoteBuilder() {
   const nav = useNavigate();
   const { rfq } = useSearch({ from: "/admin/quotes/new" });
-  const getPLCNumber = useServerFn(generatePLCNumberFn);
   const [products, setProducts] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
   const [finishes, setFinishes] = useState<any[]>([]);
@@ -61,7 +59,7 @@ function QuoteBuilder() {
     });
     
     // Generate PLC number on load
-    getPLCNumber({ data: { type: "quote" } }).then(setQuoteNumber).catch(() => setQuoteNumber("PLC-000000"));
+    getNextPLCNumber("quote").then(setQuoteNumber).catch(() => setQuoteNumber("PLC-00001"));
   }, []);
 
   useEffect(() => {
