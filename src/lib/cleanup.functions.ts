@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 /**
- * Drop all data from the given table.
+ * Delete all rows from a table (except the soft‑delete marker).
  * Used for development / cleanup scripts.
  */
 export async function cleanTable(table: string): Promise<{ deleted: number; error?: string }> {
@@ -14,4 +14,34 @@ export async function cleanTable(table: string): Promise<{ deleted: number; erro
     return { deleted: 0, error: error.message };
   }
   return { deleted: count ?? 0 };
+}
+
+/**
+ * Drop data from all tables that ship with the starter template.
+ * Used for development / cleanup scripts.
+ */
+export async function cleanupAllData(): Promise<Record<string, { deleted: number; error?: string }>> {
+  const tables = [
+    "accessories",
+    "tenants",
+    "audit_log",
+    "categories",
+    "configurations",
+    "quote_items",
+    "product_templates",
+    "customers",
+    "discounts",
+    "finishes",
+    "internal_notes",
+    "wastage_rules",
+  ] as const;
+
+  const results: Record<string, { deleted: number; error?: string }> = {};
+
+  for (const table of tables) {
+    const { deleted, error } = await cleanTable(table);
+    results[table] = { deleted, error };
+  }
+
+  return results;
 }
