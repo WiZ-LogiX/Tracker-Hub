@@ -2,11 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { getNextPLCNumber } from "@/lib/numbering";
 
 const CreateInvoiceInput = z.object({
   quoteId: z.string().uuid(),
   customerId: z.string().uuid(),
+  plcId: z.string().optional().nullable(), // The unified PLC ID from the quote
 });
 
 export const createInvoiceFromQuote = createServerFn({ method: "POST" })
@@ -24,7 +24,9 @@ export const createInvoiceFromQuote = createServerFn({ method: "POST" })
     
     if (qErr || !quote) throw new Error("Quote not found");
 
-    const invoiceNumber = await getNextPLCNumber("invoice");
+    // Use the unified PLC ID from the quote's quote_number
+    const plcId = data.plcId ?? quote.quote_number;
+
     const depositAmount = Number(quote.total) * Number(quote.deposit_pct) / 100;
 
     const { data: invoice, error: iErr } = await supabaseAdmin
@@ -32,7 +34,7 @@ export const createInvoiceFromQuote = createServerFn({ method: "POST" })
       .insert({
         quote_id: quote.id,
         customer_id: data.customerId,
-        invoice_number: invoiceNumber,
+        invoice_number: plcId,
         total: quote.total,
         deposit_amount: depositAmount,
         paid_amount: 0,
@@ -49,5 +51,5 @@ export const createInvoiceFromQuote = createServerFn({ method: "POST" })
       .update({ status: "converted" as any })
       .eq("id", quote.id);
 
-    return { invoiceId: invoice.id, invoiceNumber };
+    return { invoiceId: invoice.id, invoiceNumber: plcId, plcId };
   });

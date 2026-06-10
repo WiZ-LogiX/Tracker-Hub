@@ -13,6 +13,7 @@ import { Trash2, Plus, Sparkles } from "lucide-react";
 import { runFormula, DEFAULT_FORMULA, type FactorMap, type EngineSelections } from "@/lib/pricing/engine";
 import { calculateQuoteTotals, formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
+import { generatePLCId } from "@/lib/numbering";
 
 export const Route = createFileRoute("/admin/quotes/configurator")({ component: ConfiguratorBuilder });
 
@@ -58,6 +59,9 @@ function ConfiguratorBuilder() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Generate a unified PLC ID once when the component mounts
+  const [plcId] = useState(() => generatePLCId());
+
   useEffect(() => {
     Promise.all([
       supabase.from('product_templates').select('*').eq('active', true),
@@ -102,12 +106,9 @@ function ConfiguratorBuilder() {
 
   function lookupWastage(materialId: string | null | undefined, materialType: string | undefined, dim: number): number | null {
     if (!materialId) return null;
-    // First priority: material-specific wastage rule
     if (wastageMap[materialId] != null) return wastageMap[materialId];
-    // Fallback: material's own wastage_pct column
     const material = materials.find(m => m.id === materialId);
     if (material?.wastage_pct != null) return Number(material.wastage_pct);
-    // Legacy fallback: dimension-based rules by material_type
     if (!materialType) return null;
     const matches = wastageRules.filter(r =>
       r.material_type === materialType &&
@@ -118,7 +119,6 @@ function ConfiguratorBuilder() {
     return Number(matches[0].wastage_pct);
   }
 
-  // Build global factor map from DB
   const globalFactors: FactorMap = useMemo(() => {
     const map: FactorMap = {};
     for (const f of factors) map[f.key] = Number(f.value_pct);
@@ -168,6 +168,7 @@ function ConfiguratorBuilder() {
     setSaving(true);
     const { data: quote, error } = await supabase.from('quotes').insert({
       customer_id: customerId,
+      quote_number: plcId,
       status,
       subtotal: totals.subtotal,
       discount_amount: 0,
@@ -252,7 +253,7 @@ function ConfiguratorBuilder() {
         <div>
           <h1 className="font-serif text-3xl font-bold flex items-center gap-2"><Sparkles className="h-6 w-6 text-primary" /> {t("admin.nav.configurator")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            ابني العرض من الصفر — قاعدة التسعير الفعّالة: <span className="font-bold">{activeRule ? `v${activeRule.version} — ${activeRule.name}` : 'الافتراضية'}</span>
+            ابني العرض من الصفر — المعرف الموحد: <span className="font-mono font-bold text-primary">{plcId}</span>
           </p>
         </div>
       </div>

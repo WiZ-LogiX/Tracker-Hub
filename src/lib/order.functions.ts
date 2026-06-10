@@ -2,11 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { generatePLCId } from "@/lib/numbering";
 
 const CreateOrderInput = z.object({
   quoteId: z.string().uuid().optional().nullable(),
   invoiceId: z.string().uuid().optional().nullable(),
   customerId: z.string().uuid(),
+  plcId: z.string().optional().nullable(), // The unified PLC ID from the quote
 });
 
 export const createOrder = createServerFn({ method: "POST" })
@@ -25,24 +27,18 @@ export const createOrder = createServerFn({ method: "POST" })
       quote = q;
     }
 
-    // Compute deposit amount (50% of total by default)
-    let deposit = 0;
-    if (quote) {
-      deposit = Number(quote.total) * Number(quote.deposit_pct) / 100;
-    }
+    // Use the unified PLC ID passed from the quote, or generate a new one
+    const plcId = data.plcId ?? (quote?.quote_number ?? generatePLCId());
 
-    // Generate PLC number directly without extra fetch
-    const { plc } = await (await import("@/lib/plc.functions")).POST({
-      data: { type: "order" }
-    });
-    const orderNumber = plc ?? "PLC-ORDER-0001";
+    // Compute deposit amount (50% of total by default)
+    const deposit = quote ? Number(quote.total) * Number(quote.deposit_pct) / 100 : 0;
 
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .insert({
         quote_id: data.quoteId,
         customer_id: data.customerId,
-        order_number: orderNumber,
+        order_number: plcId,
         total: quote?.total ?? 0,
         deposit,
         contract_date: new Date().toISOString().slice(0, 10),
@@ -53,5 +49,5 @@ export const createOrder = createServerFn({ method: "POST" })
       .single();
 
     if (error || !order) throw new Error(error?.message ?? "Failed to create order");
-    return { orderId: order.id, orderNumber };
+    return { orderId: order.id, orderNumber: plcId };
   });
