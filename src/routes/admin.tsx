@@ -44,7 +44,7 @@ function SidebarContent() {
   const loc = useLocation();
   const { signOut, user } = useAuth();
   const nav = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   
   // Determine active nav item
   const path = loc.pathname;
