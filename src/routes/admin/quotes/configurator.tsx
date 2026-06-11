@@ -1,3 +1,5 @@
+"use client";
+
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,6 +32,8 @@ interface Item {
   qty: number;
   overrides: FactorMap;
 }
+
+const PLACEHOLDER = { id: "_placeholder", name_ar: "—", name_en: "—" };
 
 const blankItem = (): Item => ({
   template_id: null, custom_name: '', category_id: null, material_id: null, variant_id: null,
@@ -247,10 +251,10 @@ function ConfiguratorBuilder() {
         <CardHeader><CardTitle className="text-lg">العميل</CardTitle></CardHeader>
         <CardContent>
           <Label>اختر العميل</Label>
-          <Select value={customerId} onValueChange={setCustomerId}>
+          <Select value={customerId || (customers.length ? "" : "none")} onValueChange={v => v !== "none" && setCustomerId(v)}>
             <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>
-              {customers.length === 0 && <SelectItem value="_none">لا يوجد عملاء بعد</SelectItem>}
+              {customers.length === 0 && <SelectItem value="none" disabled>لا يوجد عملاء بعد</SelectItem>}
               {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name} • {c.phone}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -275,10 +279,10 @@ function ConfiguratorBuilder() {
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
                     <Label>قالب جاهز (اختياري)</Label>
-                    <Select value={it.template_id ?? ''} onValueChange={v => updateItem(idx, { template_id: v || null })}>
+                    <Select value={it.template_id ?? (templates.length ? "" : "none")} onValueChange={v => v !== "none" && updateItem(idx, { template_id: v || null })}>
                       <SelectTrigger><SelectValue placeholder="منتج حر" /></SelectTrigger>
                       <SelectContent>
-                        {templates.length === 0 && <SelectItem value="_none">لا توجد قوالب بعد</SelectItem>}
+                        {templates.length === 0 && <SelectItem value="none" disabled>لا توجد قوالب بعد</SelectItem>}
                         {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name_ar}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -292,10 +296,10 @@ function ConfiguratorBuilder() {
                 <div className="grid md:grid-cols-3 gap-3">
                   <div>
                     <Label>الخامة</Label>
-                    <Select value={it.material_id ?? ''} onValueChange={v => updateItem(idx, { material_id: v, variant_id: null })}>
+                    <Select value={it.material_id ?? (materials.length ? "" : "none")} onValueChange={v => v !== "none" && updateItem(idx, { material_id: v, variant_id: null })}>
                       <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
                       <SelectContent>
-                        {materials.length === 0 && <SelectItem value="_none">لا توجد خامات بعد</SelectItem>}
+                        {materials.length === 0 && <SelectItem value="none" disabled>لا توجد خامات بعد</SelectItem>}
                         {materials.map(m => (
                           <SelectItem key={m.id} value={m.id}>
                             {m.name_ar} • {formatEGP(Number(m.price_per_unit))}/{m.unit}
@@ -315,20 +319,20 @@ function ConfiguratorBuilder() {
                   </div>
                   <div>
                     <Label>التشطيب</Label>
-                    <Select value={it.finish_id ?? ''} onValueChange={v => updateItem(idx, { finish_id: v })}>
+                    <Select value={it.finish_id ?? (finishes.length ? "" : "none")} onValueChange={v => v !== "none" && updateItem(idx, { finish_id: v })}>
                       <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
                       <SelectContent>
-                        {finishes.length === 0 && <SelectItem value="_none">لا توجد تشطيبات بعد</SelectItem>}
+                        {finishes.length === 0 && <SelectItem value="none" disabled>لا توجد تشطيبات بعد</SelectItem>}
                         {finishes.map(f => <SelectItem key={f.id} value={f.id}>{f.name_ar}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
                     <Label>القشرة (Veneer)</Label>
-                    <Select value={it.veneer_id ?? ''} onValueChange={v => updateItem(idx, { veneer_id: v })}>
+                    <Select value={it.veneer_id ?? (veneers.length ? "" : "none")} onValueChange={v => v !== "none" && updateItem(idx, { veneer_id: v })}>
                       <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent>
-                        {veneers.length === 0 && <SelectItem value="_none">لا توجد قشرة بعد</SelectItem>}
+                        {veneers.length === 0 && <SelectItem value="none" disabled>لا توجد قشرة بعد</SelectItem>}
                         {veneers.map(v => <SelectItem key={v.id} value={v.id}>{v.name_ar} • {formatEGP(Number(v.price_per_m2))}/م²</SelectItem>)}
                       </SelectContent>
                     </Select>
