@@ -33,6 +33,33 @@
     "somethingWrong": "حصل خطأ ما",
     "retry": "حاول مرة أخرى"
   },
+  "admin": {
+    "panel": "لوحة الإدارة",
+    "noAccess": "حسابك ليس لديه صلاحية الوصول للإدارة.",
+    "nav": {
+      "home": "الرئيسية",
+      "quotes": "عروض الأسعار",
+      "configurator": "منشئ العروض",
+      "invoices": "الفواتير",
+      "orders": "تتبع الإنتاج",
+      "customers": "العملاء",
+      "products": "قوالب المنتجات",
+      "materials": "الخامات",
+      "suppliers": "الموردون",
+      "finishes": "التشطيبات",
+      "veneers": "القشرة",
+      "accessories": "الإكسسوارات",
+      "pricingFactors": "عوامل التسعير",
+      "wastageRules": "قواعد الهدر",
+      "pricingRules": "قواعد التسعير",
+      "costAnalysis": "تحليل التكلفة",
+      "discounts": "الخصومات",
+      "notifications": "الإشعارات",
+      "workers": "العمال",
+      "remakes": "إعادة التصنيع",
+      "seedData": "إعداد قاعدة البيانات"
+    }
+  },
   "dashboard": {
     "title": "الرئيسية",
     "welcome": "مرحباً {email}",
@@ -211,13 +238,13 @@
     "new": "جديد",
     "edit": "تعديل خامة",
     "nameAr": "الاسم بالعربي",
-    "nameEn": "Name (EN)",
+    "nameEn": "الاسم بالإنجليزية",
     "type": "النوع",
     "unit": "الوحدة",
     "supplier": "المورد",
     "country": "بلد المنشأ",
     "pricePerUnit": "السعر / الوحدة",
-    "wastage": "نسبة الهدر % (اختياري)",
+    "wastage": "نسبة الهدر %",
     "active": "نشط",
     "noMaterials": "لا توجد بيانات.",
     "saved": "تم الحفظ",
@@ -244,7 +271,7 @@
   "wastageRules": {
     "title": "قواعد الهدر",
     "subtitle": "تحديد نسبة الهدر لكل خامة حسب المقاس",
-    "new": "جديد",
+    "new": "قاعدة جديدة",
     "edit": "تعديل قاعدة هدر",
     "material": "الخامة",
     "general": "عام (حسب النوع)",
@@ -262,20 +289,20 @@
   "finishes": {
     "title": "التشطيبات",
     "nameAr": "الاسم بالعربي",
-    "nameEn": "Name (EN)",
+    "nameEn": "الاسم بالإنجليزية",
     "pctModifier": "نسبة الزيادة %",
     "fixedModifier": "مبلغ ثابت"
   },
   "veneers": {
     "title": "القشرة",
     "nameAr": "الاسم بالعربي",
-    "nameEn": "Name (EN)",
+    "nameEn": "الاسم بالإنجليزية",
     "pricePerM2": "السعر / م²"
   },
   "accessories": {
     "title": "الإكسسوارات",
     "nameAr": "الاسم بالعربي",
-    "nameEn": "Name (EN)",
+    "nameEn": "الاسم بالإنجليزية",
     "unitPrice": "سعر الوحدة"
   },
   "suppliers": {
@@ -290,11 +317,11 @@
     "subtitle": "كتالوج PeleCanon",
     "code": "الكود",
     "nameAr": "الاسم بالعربي",
-    "nameEn": "Name (EN)",
+    "nameEn": "الاسم بالإنجليزية",
     "basePrice": "السعر الأساسي",
     "laborPct": "العمالة %",
     "wastagePct": "الفاقد %",
-    "overheadPct": "overhead %",
+    "overheadPct": "المصاريف الإدارية %",
     "marginPct": "هامش الربح %",
     "description": "الوصف"
   },

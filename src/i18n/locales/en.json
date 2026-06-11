@@ -58,9 +58,7 @@
       "workers": "Workers",
       "remakes": "Remakes",
       "seedData": "Database Setup"
-    },
-    "nav": "لوحة الإدارة",
-    "noAccess": "حسابك ليس لديه صلاحية الوصول للإدارة."
+    }
   },
   "dashboard": {
     "title": "Dashboard",
@@ -158,12 +156,12 @@
     "sent": "Quote sent"
   },
   "configurator": {
-    "title": "Quotation Builder (Advanced)",
+    "title": "Quotation Builder",
     "subtitle": "Build a quote from scratch — unified ID: {id}",
     "placeholderProduct": "Custom Product",
     "freeProduct": "Free product",
     "template": "Template (optional)",
-    "customName": "Item Name (for free product)",
+    "customName": "Item Name",
     "materialSelect": "Material",
     "supplierOrigin": "{supplier} • {origin}",
     "wastageAuto": "Auto wastage: {pct}%",
@@ -219,7 +217,7 @@
     "qcPass": "Pass",
     "qcFail": "Fail (opens remake)",
     "qcNotes": "QC Notes",
-    "notes": "Notes",
+    "notes": "Notes on transition",
     "advance": "Advance to: {stage}",
     "advanceGate": "Must record a passing QC inspection before advancing.",
     "sendTrackingLink": "Send Tracking Link via WhatsApp",
@@ -228,7 +226,7 @@
     "photoCaption": "Common caption (optional)",
     "upload": "Upload {n} Photo(s)",
     "uploading": "Uploading... ({n})",
-    "noOrders": "No orders yet. Convert an accepted quote to invoice to create an order automatically.",
+    "noOrders": "No orders yet. Convert an accepted quote to create an order automatically.",
     "completed": "Completed",
     "noAssignments": "No assignments yet.",
     "noPhotos": "No photos yet.",
@@ -246,7 +244,7 @@
     "supplier": "Supplier",
     "country": "Country of Origin",
     "pricePerUnit": "Price / Unit",
-    "wastage": "Wastage % (optional)",
+    "wastage": "Wastage %",
     "active": "Active",
     "noMaterials": "No materials yet.",
     "saved": "Saved",
