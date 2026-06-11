@@ -15,7 +15,7 @@ import { Users, FileText, ClipboardList, DollarSign, Trash2, Settings, Database,
 export const Route = createFileRoute("/admin/")({ component: Dashboard });
 
 function Dashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [stats, setStats] = useState({
     customers: 0,
@@ -43,22 +43,14 @@ function Dashboard() {
   }
 
   async function deleteTransientData() {
-    if (!confirm("هل أنت متأكد من حذف عروض الأسعار والفواتير وأوامر الإنتاج فقط؟\nسيتم الاحتفاظ بقوالب المنتجات والخامات والموردين والتشطيبات والقشرة والإكسسوارات وعوامل التسعير وقواعد الهدر والخصومات والعمال.")) return;
+    if (!confirm(t("dashboard.deleteConfirm"))) return;
     setDeleting(true);
     try {
       const tables = [
-        'production_photos',
-        'production_logs',
-        'production_assignments',
-        'qc_inspections',
-        'remakes',
-        'orders',
-        'invoices',
-        'quote_items',
-        'configurations',
-        'quotes',
+        'production_photos', 'production_logs', 'production_assignments',
+        'qc_inspections', 'remakes', 'orders', 'invoices',
+        'quote_items', 'configurations', 'quotes',
       ];
-      
       let deleted = 0;
       for (const table of tables) {
         const { error, count } = await supabase
@@ -67,8 +59,7 @@ function Dashboard() {
           .neq('id', '00000000-0000-0000-0000-000000000000');
         if (!error) deleted += count ?? 0;
       }
-      
-      toast.success(`تم حذف ${deleted} سجل (عروض أسعار، فواتير، أوامر إنتاج فقط)`);
+      toast.success(t("dashboard.deleted", { count }));
       setStats({ ...stats, quotes: 0, orders: 0, revenue: 0 });
     } catch (err: any) {
       toast.error(err?.message ?? "فشل الحذف");
@@ -94,19 +85,13 @@ function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="font-serif text-3xl font-bold">{t("admin.panel")}</h1>
-          <p className="text-sm text-muted-foreground mt-1">مرحباً {user?.email}</p>
+          <h1 className="font-serif text-3xl font-bold">{t("dashboard.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("dashboard.welcome", { email: user?.email })}</p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="destructive" 
-            size="sm" 
-            onClick={deleteTransientData} 
-            disabled={deleting}
-            className="gap-2"
-          >
+          <Button variant="destructive" size="sm" onClick={deleteTransientData} disabled={deleting} className="gap-2">
             <Trash2 className="h-4 w-4" />
-            {deleting ? "جارٍ الحذف..." : "حذف البيانات المؤقتة"}
+            {deleting ? t("dashboard.deleting") : t("dashboard.deleteTransient")}
           </Button>
         </div>
       </div>
@@ -114,7 +99,7 @@ function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">العملاء</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t("dashboard.customers")}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -123,7 +108,7 @@ function Dashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">عروض الأسعار</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t("dashboard.quotes")}</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -132,7 +117,7 @@ function Dashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">أوامر الإنتاج</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t("dashboard.orders")}</CardTitle>
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -141,7 +126,7 @@ function Dashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">إجمالي الإيرادات</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t("dashboard.revenue")}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -152,13 +137,11 @@ function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-serif">إعدادات النظام</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-lg font-serif">{t("dashboard.systemSettings")}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <Link to="/admin/seed" className="flex items-center gap-2 p-3 border rounded-md hover:bg-accent transition">
               <Database className="h-5 w-5 text-primary" />
-              <div className="text-sm font-medium flex-1">إعداد قاعدة البيانات</div>
+              <div className="text-sm font-medium flex-1">{t("dashboard.dbSetup")}</div>
               <ArrowLeft className="h-4 w-4 rtl-flip text-muted-foreground" />
             </Link>
           </CardContent>
