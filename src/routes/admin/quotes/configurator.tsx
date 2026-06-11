@@ -43,7 +43,6 @@ function ConfiguratorBuilder() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
-  const [variants, setVariants] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [finishes, setFinishes] = useState<any[]>([]);
   const [veneers, setVeneers] = useState<any[]>([]);
@@ -52,7 +51,7 @@ function ConfiguratorBuilder() {
   const [factors, setFactors] = useState<any[]>([]);
   const [wastageRules, setWastageRules] = useState<any[]>([]);
   const [activeRule, setActiveRule] = useState<any>(null);
-  const [dbError, setDbError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [customerId, setCustomerId] = useState('');
   const [items, setItems] = useState<Item[]>([blankItem()]);
@@ -77,15 +76,11 @@ function ConfiguratorBuilder() {
       supabase.from('wastage_rules').select('*').eq('active', true),
     ]).then(([t, c, m, sp, f, v, a, cu, pf, pr, wr]) => {
       setTemplates(t.data ?? []); setCategories(c.data ?? []); setMaterials(m.data ?? []);
-      setVariants([]); setSuppliers(sp.data ?? []);
+      setSuppliers(sp.data ?? []);
       setFinishes(f.data ?? []); setVeneers(v.data ?? []);
       setAccessories(a.data ?? []); setCustomers(cu.data ?? []); setFactors(pf.data ?? []);
       setActiveRule(pr.data ?? null); setWastageRules(wr.data ?? []);
-      
-      // Check if wastage_rules has material_id column
-      if (wr.error && wr.error.message.includes("material_id")) {
-        setDbError("wastage_rules_missing_material_id");
-      }
+      setLoading(false);
     });
   }, []);
 
@@ -224,25 +219,15 @@ function ConfiguratorBuilder() {
     nav({ to: '/admin/quotes/$id', params: { id: quote.id } });
   }
 
-  if (dbError === "wastage_rules_missing_material_id") {
+  if (loading) {
     return (
       <div className="space-y-6">
-        <Card className="border-yellow-500/50 bg-yellow-50/50">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-yellow-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">قاعدة البيانات تحتاج لترقية</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  جدول <code>wastage_rules</code> لا يحتوي على عمود <code>material_id</code>.
-                  اذهب إلى تبويب <strong>قواعد الهدر</strong> واضغط <strong>"ترقية قاعدة البيانات"</strong>.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="h-8 w-64 bg-muted rounded animate-pulse" />
+        <div className="h-4 w-96 bg-muted rounded animate-pulse" />
+        <div className="border rounded-lg p-8 space-y-4">
+          <div className="h-6 w-32 bg-muted rounded animate-pulse" />
+          <div className="h-10 bg-muted rounded animate-pulse" />
+        </div>
       </div>
     );
   }
@@ -265,6 +250,7 @@ function ConfiguratorBuilder() {
           <Select value={customerId} onValueChange={setCustomerId}>
             <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>
+              {customers.length === 0 && <SelectItem value="_none">لا يوجد عملاء بعد</SelectItem>}
               {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name} • {c.phone}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -291,7 +277,10 @@ function ConfiguratorBuilder() {
                     <Label>قالب جاهز (اختياري)</Label>
                     <Select value={it.template_id ?? ''} onValueChange={v => updateItem(idx, { template_id: v || null })}>
                       <SelectTrigger><SelectValue placeholder="منتج حر" /></SelectTrigger>
-                      <SelectContent>{templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name_ar}</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        {templates.length === 0 && <SelectItem value="_none">لا توجد قوالب بعد</SelectItem>}
+                        {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name_ar}</SelectItem>)}
+                      </SelectContent>
                     </Select>
                   </div>
                   <div>
@@ -306,6 +295,7 @@ function ConfiguratorBuilder() {
                     <Select value={it.material_id ?? ''} onValueChange={v => updateItem(idx, { material_id: v, variant_id: null })}>
                       <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
                       <SelectContent>
+                        {materials.length === 0 && <SelectItem value="_none">لا توجد خامات بعد</SelectItem>}
                         {materials.map(m => (
                           <SelectItem key={m.id} value={m.id}>
                             {m.name_ar} • {formatEGP(Number(m.price_per_unit))}/{m.unit}
@@ -318,7 +308,7 @@ function ConfiguratorBuilder() {
                       <div className="mt-1 text-[11px] text-muted-foreground">
                         {ci.supplier?.name ?? '—'} • {ci.material.country_of_origin ?? '—'}
                         {(wastageMap[ci.material.id] != null || ci.material.wastage_pct) && (
-                          <span className="text-gold ml-2">هدر: {wastageMap[ci.material.id] ?? ci.material.wastage_pct}%</span>
+                          <span className="text-gold mr-2">هدر: {wastageMap[ci.material.id] ?? ci.material.wastage_pct}%</span>
                         )}
                       </div>
                     )}
@@ -327,14 +317,20 @@ function ConfiguratorBuilder() {
                     <Label>التشطيب</Label>
                     <Select value={it.finish_id ?? ''} onValueChange={v => updateItem(idx, { finish_id: v })}>
                       <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
-                      <SelectContent>{finishes.map(f => <SelectItem key={f.id} value={f.id}>{f.name_ar}</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        {finishes.length === 0 && <SelectItem value="_none">لا توجد تشطيبات بعد</SelectItem>}
+                        {finishes.map(f => <SelectItem key={f.id} value={f.id}>{f.name_ar}</SelectItem>)}
+                      </SelectContent>
                     </Select>
                   </div>
                   <div>
                     <Label>القشرة (Veneer)</Label>
                     <Select value={it.veneer_id ?? ''} onValueChange={v => updateItem(idx, { veneer_id: v })}>
                       <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                      <SelectContent>{veneers.map(v => <SelectItem key={v.id} value={v.id}>{v.name_ar} • {formatEGP(Number(v.price_per_m2))}/م²</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        {veneers.length === 0 && <SelectItem value="_none">لا توجد قشرة بعد</SelectItem>}
+                        {veneers.map(v => <SelectItem key={v.id} value={v.id}>{v.name_ar} • {formatEGP(Number(v.price_per_m2))}/م²</SelectItem>)}
+                      </SelectContent>
                     </Select>
                   </div>
                   <div>
@@ -350,6 +346,7 @@ function ConfiguratorBuilder() {
                 <div>
                   <Label>الإكسسوارات</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
+                    {accessories.length === 0 && <span className="text-xs text-muted-foreground">لا توجد إكسسوارات بعد</span>}
                     {accessories.map(a => {
                       const checked = it.accessories.includes(a.id);
                       return (
