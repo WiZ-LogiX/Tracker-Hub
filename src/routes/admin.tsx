@@ -45,6 +45,19 @@ function SidebarContent() {
   const { signOut, user } = useAuth();
   const nav = useNavigate();
   const { t } = useTranslation();
+  
+  // Determine active nav item
+  const path = loc.pathname;
+  let bestTo: string | null = null;
+  for (const item of NAV) {
+    const matches = item.exact
+      ? path === item.to
+      : path === item.to || path.startsWith(item.to + '/');
+    if (matches && (!bestTo || item.to.length > bestTo.length)) {
+      bestTo = item.to;
+    }
+  }
+
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       <div className="px-6 py-6 border-b border-sidebar-border">
@@ -57,30 +70,18 @@ function SidebarContent() {
         </Link>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {(() => {
-          const path = loc.pathname;
-          let bestTo: string | null = null;
-          for (const item of NAV) {
-            const matches = item.exact
-              ? path === item.to
-              : path === item.to || path.startsWith(item.to + '/');
-            if (matches && (!bestTo || item.to.length > bestTo.length)) {
-              bestTo = item.to;
-            }
-          }
-          return NAV.map(item => {
-            const active = item.to === bestTo;
-            return (
-              <Link key={item.to} to={item.to}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition ${
-                  active ? 'bg-gold text-gold-foreground font-medium' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                }`}>
-                <item.icon className="h-4 w-4 shrink-0" />
-                <span>{t(item.labelKey)}</span>
-              </Link>
-            );
-          });
-        })()}
+        {NAV.map(item => {
+          const active = item.to === bestTo;
+          return (
+            <Link key={item.to} to={item.to}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition ${
+                active ? 'bg-gold text-gold-foreground font-medium' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+              }`}>
+              <item.icon className="h-4 w-4 shrink-0" />
+              <span>{t(item.labelKey)}</span>
+            </Link>
+          );
+        })}
       </nav>
       <div className="p-3 border-t border-sidebar-border">
         <div className="px-3 py-2 text-xs text-sidebar-foreground/60 truncate">{user?.email}</div>
