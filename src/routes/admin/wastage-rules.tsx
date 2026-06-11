@@ -30,7 +30,7 @@ function WastageRulesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({
-    material_id: '', material_type: 'wood', min_dimension: 0, max_dimension: '', wastage_pct: 8, active: true,
+    material_id: '_none', material_type: 'wood', min_dimension: 0, max_dimension: '', wastage_pct: 8, active: true,
   });
 
   useEffect(() => { load(); }, []);
@@ -46,13 +46,13 @@ function WastageRulesPage() {
 
   function openNew() {
     setEditing(null);
-    setForm({ material_id: '', material_type: 'wood', min_dimension: 0, max_dimension: '', wastage_pct: 8, active: true });
+    setForm({ material_id: '_none', material_type: 'wood', min_dimension: 0, max_dimension: '', wastage_pct: 8, active: true });
     setOpen(true);
   }
   function openEdit(r: any) {
     setEditing(r);
     setForm({
-      material_id: r.material_id ?? '',
+      material_id: r.material_id ?? '_none',
       material_type: r.material_type,
       min_dimension: r.min_dimension,
       max_dimension: r.max_dimension ?? '',
@@ -64,7 +64,7 @@ function WastageRulesPage() {
 
   async function save() {
     const payload = {
-      material_id: form.material_id || null,
+      material_id: form.material_id === '_none' ? null : form.material_id,
       material_type: form.material_type,
       min_dimension: Number(form.min_dimension),
       max_dimension: form.max_dimension ? Number(form.max_dimension) : null,
@@ -90,20 +90,17 @@ function WastageRulesPage() {
   }
 
   async function applyMaterialWastage() {
-    // For each material with wastage_pct, create/update a rule
     let count = 0;
     for (const m of materials) {
       if (!m.wastage_pct) continue;
       const existing = rows.find(r => r.material_id === m.id);
       if (existing) {
-        // Update existing
         const { error } = await supabase
           .from("wastage_rules")
           .update({ wastage_pct: Number(m.wastage_pct) })
           .eq("id", existing.id);
         if (!error) count++;
       } else {
-        // Create new
         const { error } = await supabase
           .from("wastage_rules")
           .insert({
@@ -185,7 +182,7 @@ function WastageRulesPage() {
               <Select value={form.material_id} onValueChange={v => setForm({ ...form, material_id: v })}>
                 <SelectTrigger><SelectValue placeholder="قاعدة عامة" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">عام (حسب النوع)</SelectItem>
+                  <SelectItem value="_none">عام (حسب النوع)</SelectItem>
                   {materials.map(m => <SelectItem key={m.id} value={m.id}>{m.name_ar}</SelectItem>)}
                 </SelectContent>
               </Select>
