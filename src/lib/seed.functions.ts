@@ -140,7 +140,6 @@ export const seedSampleData = createServerFn({ method: "POST" })
     // 3. MATERIALS — by category
     // ============================================================
     const materials = [
-      // كتشن الخامات
       { name_ar: "خشب MDF محلي 18مم", name_en: "Local MDF 18mm", type: "wood", unit: "م²", price_per_unit: 280, supplier_id: supplierMap["شركة الأخشاب المصرية"] || null, country_of_origin: "مصر", wastage_pct: 10 },
       { name_ar: "خشب MDF إيطالي 18مم", name_en: "Italian MDF 18mm", type: "wood", unit: "م²", price_per_unit: 450, supplier_id: supplierMap["إيطالية المنيوم"] || null, country_of_origin: "إيطاليا", wastage_pct: 8 },
       { name_ar: "كونتر 18مم روسي", name_en: "Russian Plywood 18mm", type: "wood", unit: "م²", price_per_unit: 320, supplier_id: supplierMap["شركة الأخشاب المصرية"] || null, country_of_origin: "مصر", wastage_pct: 10 },
@@ -155,6 +154,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
       { name_ar: "خشب جوز تركي", name_en: "Turkish Walnut", type: "wood", unit: "م²", price_per_unit: 1300, supplier_id: supplierMap["تركية للأخشاب"] || null, country_of_origin: "تركيا", wastage_pct: 15 },
     ];
 
+    const materialMap: Record<string, string> = {};
     for (const m of materials) {
       const { data: existing } = await supabaseAdmin
         .from("materials")
@@ -163,11 +163,68 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .maybeSingle();
       
       if (!existing) {
-        const { error } = await supabaseAdmin.from("materials").insert(m);
-        if (!error) results.push(`✓ خامة "${m.name_ar}" تم إنشاؤها`);
-        else results.push(`✗ خامة "${m.name_ar}" فشل: ${error.message}`);
+        const { data: inserted, error } = await supabaseAdmin.from("materials").insert(m).select("id").single();
+        if (inserted) {
+          materialMap[m.name_ar] = inserted.id;
+          results.push(`✓ خامة "${m.name_ar}" تم إنشاؤها`);
+        } else {
+          results.push(`✗ خامة "${m.name_ar}" فشل: ${error?.message}`);
+        }
       } else {
+        materialMap[m.name_ar] = existing.id;
         results.push(`- خامة "${m.name_ar}" موجودة بالفعل`);
+      }
+    }
+
+    // ============================================================
+    // 3b. WASTAGE RULES (based on material wastage_pct)
+    // ============================================================
+    const wastageRulesData = [
+      { material_id: materialMap["خشب MDF محلي 18مم"] || null, material_type: "wood", min_dimension: 0, max_dimension: 50, wastage_pct: 10 },
+      { material_id: materialMap["خشب MDF محلي 18مم"] || null, material_type: "wood", min_dimension: 50, max_dimension: 100, wastage_pct: 8 },
+      { material_id: materialMap["خشب MDF محلي 18مم"] || null, material_type: "wood", min_dimension: 100, max_dimension: null, wastage_pct: 6 },
+      { material_id: materialMap["خشب MDF إيطالي 18مم"] || null, material_type: "wood", min_dimension: 0, max_dimension: null, wastage_pct: 8 },
+      { material_id: materialMap["كونتر 18مم روسي"] || null, material_type: "wood", min_dimension: 0, max_dimension: null, wastage_pct: 10 },
+      { material_id: materialMap["ألمنيوم إطار مطابخ"] || null, material_type: "metal", min_dimension: 0, max_dimension: null, wastage_pct: 5 },
+      { material_id: null, material_type: "wood", min_dimension: 0, max_dimension: null, wastage_pct: 8 },
+      { material_id: null, material_type: "metal", min_dimension: 0, max_dimension: null, wastage_pct: 5 },
+    ];
+
+    for (const wr of wastageRulesData) {
+      const match = supabaseAdmin
+        .from("wastage_rules")
+        .select("id");
+      
+      // Try to find by material_id first, then by material_type + min_dimension
+      let existing = null;
+      if (wr.material_id) {
+        const { data } = await match.eq("material_id", wr.material_id).maybeSingle();
+        existing = data;
+      }
+      if (!existing) {
+        const { data } = await supabaseAdmin
+          .from("wastage_rules")
+          .select("id")
+          .eq("material_type", wr.material_type)
+          .eq("min_dimension", wr.min_dimension)
+          .eq("max_dimension", wr.max_dimension ?? null)
+          .maybeSingle();
+        existing = data;
+      }
+
+      if (!existing) {
+        const { error } = await supabaseAdmin.from("wastage_rules").insert({
+          material_id: wr.material_id,
+          material_type: wr.material_type,
+          min_dimension: wr.min_dimension,
+          max_dimension: wr.max_dimension,
+          wastage_pct: wr.wastage_pct,
+          active: true,
+        });
+        if (!error) results.push(`✓ قاعدة هدر لـ "${wr.material_type}" (${wr.min_dimension}-${wr.max_dimension ?? '∞'}) بنسبة ${wr.wastage_pct}%`);
+        else results.push(`✗ قاعدة هدر: ${error.message}`);
+      } else {
+        results.push(`- قاعدة هدر لـ "${wr.material_type}" موجودة بالفعل`);
       }
     }
 
@@ -233,7 +290,6 @@ export const seedSampleData = createServerFn({ method: "POST" })
     // 6. ACCESSORIES
     // ============================================================
     const accessories = [
-      // مطابخ — accessories
       { name_ar: "قفل عادي", name_en: "Standard Lock", unit_price: 45 },
       { name_ar: "قفل مغناطيسي", name_en: "Magnetic Lock", unit_price: 120 },
       { name_ar: "مفصلات هيدروليك (طقم)", name_en: "Hydraulic Hinges (set)", unit_price: 35 },
@@ -279,7 +335,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
     }
 
     // ============================================================
-    // 7. PRODUCT TEMPLATES
+    // 7. PRODUCT TEMPLATES + PRODUCTS
     // ============================================================
     const kitchenCatId = categoryMap["مطابخ"] || null;
     const wardrobeCatId = categoryMap["دواليب ملابس"] || null;
@@ -289,57 +345,98 @@ export const seedSampleData = createServerFn({ method: "POST" })
 
     const products = [
       // مطابخ
-      { name_ar: "مطبخ كلاسيك", name_en: "Classic Kitchen", code: "KIT-CLS-001", base_price: 15000, category_id: kitchenCatId, description_ar: "مطبخ خشب بتصميم كلاسيك فاخر مع ديكورات ونقوش" },
-      { name_ar: "مطبخ مودرن هاي جلواس", name_en: "Modern High-Gloss Kitchen", code: "KIT-MOD-002", base_price: 18000, category_id: kitchenCatId, description_ar: "مطبخ بتصميم عصري مودرن وواجهات لاكيه لامع" },
-      { name_ar: "مطبخ بسيط", name_en: "Simple Kitchen", code: "KIT-SMP-003", base_price: 9000, category_id: kitchenCatId, description_ar: "مطبخ بسيط عملي بأقل التكاليف" },
-      { name_ar: "مطبخ فاخر مع جزيرة", name_en: "Luxury Kitchen with Island", code: "KIT-LUX-004", base_price: 25000, category_id: kitchenCatId, description_ar: "مطبخ فاخر مع جزيرة وسطية ورخام" },
-      { name_ar: "مطبخ مودرن ألمنيوم", name_en: "Modern Aluminum Kitchen", code: "KIT-ALM-005", base_price: 22000, category_id: kitchenCatId, description_ar: "مطبخ ألمنيوم مودرن مع زجاج سكريت" },
+      { code: "KIT-CLS-001", name_ar: "مطبخ كلاسيك", name_en: "Classic Kitchen", base_price: 15000, category_id: kitchenCatId, description_ar: "مطبخ خشب بتصميم كلاسيك فاخر مع ديكورات ونقوش", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "KIT-MOD-002", name_ar: "مطبخ مودرن هاي جلواس", name_en: "Modern High-Gloss Kitchen", base_price: 18000, category_id: kitchenCatId, description_ar: "مطبخ بتصميم عصري مودرن وواجهات لاكيه لامع", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "KIT-SMP-003", name_ar: "مطبخ بسيط", name_en: "Simple Kitchen", base_price: 9000, category_id: kitchenCatId, description_ar: "مطبخ بسيط عملي بأقل التكاليف", labor_pct: 12, wastage_pct: 6, overhead_pct: 8, margin_pct: 20 },
+      { code: "KIT-LUX-004", name_ar: "مطبخ فاخر مع جزيرة", name_en: "Luxury Kitchen with Island", base_price: 25000, category_id: kitchenCatId, description_ar: "مطبخ فاخر مع جزيرة وسطية ورخام", labor_pct: 18, wastage_pct: 10, overhead_pct: 12, margin_pct: 30 },
+      { code: "KIT-ALM-005", name_ar: "مطبخ مودرن ألمنيوم", name_en: "Modern Aluminum Kitchen", base_price: 22000, category_id: kitchenCatId, description_ar: "مطبخ ألمنيوم مودرن مع زجاج سكريت", labor_pct: 15, wastage_pct: 5, overhead_pct: 10, margin_pct: 25 },
       // دواليب ملابس
-      { name_ar: "دولاب ملابس 6 ضلف", name_en: "Wardrobe 6 Doors", code: "WRD-6D-001", base_price: 8000, category_id: wardrobeCatId, description_ar: "دولاب ملابس بستة ضلف مع رفوف وكلاب تعليق" },
-      { name_ar: "دولاب ملابس 4 ضلف", name_en: "Wardrobe 4 Doors", code: "WRD-4D-002", base_price: 5500, category_id: wardrobeCatId, description_ar: "دولاب ملابس بأربعة ضلف مناسب لغرف النوم المتوسطة" },
-      { name_ar: "دولاب ملابس 8 ضلف", name_en: "Wardrobe 8 Doors", code: "WRD-8D-003", base_price: 12000, category_id: wardrobeCatId, description_ar: "دولاب ملابس كبير بثمانية ضلف مع جارنيتة" },
-      { name_ar: "دولاب ملابس 3 ضلف", name_en: "Wardrobe 3 Doors", code: "WRD-3D-004", base_price: 4000, category_id: wardrobeCatId, description_ar: "دولاب ملابس صغير بثلاثة ضلف للغرف الصغيرة" },
-      { name_ar: "دولاب ملابس مودرن زجاج", name_en: "Modern Glass Wardrobe", code: "WRD-GL-005", base_price: 10000, category_id: wardrobeCatId, description_ar: "دولاب ملابس مودرن بواجهات زجاج سكريت" },
-      { name_ar: "جارنيتة دولاب", name_en: "Wardrobe Garniture", code: "WRD-GRN-006", base_price: 3000, category_id: wardrobeCatId, description_ar: "جارنيتة دولاب ملابس إضافية (جزء علوي)" },
+      { code: "WRD-6D-001", name_ar: "دولاب ملابس 6 ضلف", name_en: "Wardrobe 6 Doors", base_price: 8000, category_id: wardrobeCatId, description_ar: "دولاب ملابس بستة ضلف مع رفوف وكلاب تعليق", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "WRD-4D-002", name_ar: "دولاب ملابس 4 ضلف", name_en: "Wardrobe 4 Doors", base_price: 5500, category_id: wardrobeCatId, description_ar: "دولاب ملابس بأربعة ضلف مناسب لغرف النوم المتوسطة", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "WRD-8D-003", name_ar: "دولاب ملابس 8 ضلف", name_en: "Wardrobe 8 Doors", base_price: 12000, category_id: wardrobeCatId, description_ar: "دولاب ملابس كبير بثمانية ضلف مع جارنيتة", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "WRD-3D-004", name_ar: "دولاب ملابس 3 ضلف", name_en: "Wardrobe 3 Doors", base_price: 4000, category_id: wardrobeCatId, description_ar: "دولاب ملابس صغير بثلاثة ضلف للغرف الصغيرة", labor_pct: 12, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "WRD-GL-005", name_ar: "دولاب ملابس مودرن زجاج", name_en: "Modern Glass Wardrobe", base_price: 10000, category_id: wardrobeCatId, description_ar: "دولاب ملابس مودرن بواجهات زجاج سكريت", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "WRD-GRN-006", name_ar: "جارنيتة دولاب", name_en: "Wardrobe Garniture", base_price: 3000, category_id: wardrobeCatId, description_ar: "جارنيتة دولاب ملابس إضافية (جزء علوي)", labor_pct: 12, wastage_pct: 6, overhead_pct: 8, margin_pct: 20 },
       // غرف نوم
-      { name_ar: "غرفة نوم كاملة VIP", name_en: "VIP Bedroom Set", code: "BRD-VIP-001", base_price: 35000, category_id: bedroomCatId, description_ar: "غرفة نوم كاملة فاخرة (سرير عرض 200 + دولاب 8 ضلف + تسريحة + 2 كومودينو)" },
-      { name_ar: "غرفة نوم قياسية", name_en: "Standard Bedroom", code: "BRD-STD-002", base_price: 18000, category_id: bedroomCatId, description_ar: "غرفة نوم قياسية (سرير عرض 180 + دولاب 4 ضلف + تسريحة)" },
-      { name_ar: "سرير خشب عرض 180", name_en: "Wooden Bed 180cm", code: "BED-WD-003", base_price: 6000, category_id: bedroomCatId, description_ar: "سرير خشب متين مع شنطة" },
-      { name_ar: "سرير عرض 200", name_en: "Bed 200cm", code: "BED-W2-004", base_price: 7500, category_id: bedroomCatId, description_ar: "سرير عرض 200 فاخر مع شنت كبير" },
-      { name_ar: "تسريحة كاملة بمراية", name_en: "Dresser with Mirror", code: "BRD-TRS-005", base_price: 4500, category_id: bedroomCatId, description_ar: "تسريحة خشب بمراية كبيرة و3 أدراج" },
-      { name_ar: "كومودينو", name_en: "Nightstand", code: "BRD-KMD-006", base_price: 1500, category_id: bedroomCatId, description_ar: "كومودينو خشب بدرجين جانبيين للسرير" },
-      { name_ar: "غرفة نوم اقتصادية", name_en: "Economy Bedroom", code: "BRD-ECO-007", base_price: 12000, category_id: bedroomCatId, description_ar: "غرفة نوم اقتصادية (سرير عرض 160 + دولاب 3 ضلف + تسريحة صغيرة)" },
+      { code: "BRD-VIP-001", name_ar: "غرفة نوم كاملة VIP", name_en: "VIP Bedroom Set", base_price: 35000, category_id: bedroomCatId, description_ar: "غرفة نوم كاملة فاخرة (سرير عرض 200 + دولاب 8 ضلف + تسريحة + 2 كومودينو)", labor_pct: 18, wastage_pct: 10, overhead_pct: 12, margin_pct: 30 },
+      { code: "BRD-STD-002", name_ar: "غرفة نوم قياسية", name_en: "Standard Bedroom", base_price: 18000, category_id: bedroomCatId, description_ar: "غرفة نوم قياسية (سرير عرض 180 + دولاب 4 ضلف + تسريحة)", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "BED-WD-003", name_ar: "سرير خشب عرض 180", name_en: "Wooden Bed 180cm", base_price: 6000, category_id: bedroomCatId, description_ar: "سرير خشب متين مع شنطة", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "BED-W2-004", name_ar: "سرير عرض 200", name_en: "Bed 200cm", base_price: 7500, category_id: bedroomCatId, description_ar: "سرير عرض 200 فاخر مع شنت كبير", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "BRD-TRS-005", name_ar: "تسريحة كاملة بمراية", name_en: "Dresser with Mirror", base_price: 4500, category_id: bedroomCatId, description_ar: "تسريحة خشب بمراية كبيرة و3 أدراج", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "BRD-KMD-006", name_ar: "كومودينو", name_en: "Nightstand", base_price: 1500, category_id: bedroomCatId, description_ar: "كومودينو خشب بدرجين جانبيين للسرير", labor_pct: 12, wastage_pct: 6, overhead_pct: 8, margin_pct: 20 },
+      { code: "BRD-ECO-007", name_ar: "غرفة نوم اقتصادية", name_en: "Economy Bedroom", base_price: 12000, category_id: bedroomCatId, description_ar: "غرفة نوم اقتصادية (سرير عرض 160 + دولاب 3 ضلف + تسريحة صغيرة)", labor_pct: 12, wastage_pct: 6, overhead_pct: 8, margin_pct: 20 },
       // طاولات
-      { name_ar: "طاولة طعام 6 كراسي", name_en: "Dining Table 6 Chairs", code: "DIN-6C-001", base_price: 9000, category_id: tableCatId, description_ar: "طاولة طعام مستطيلة بستة كراسي خشب زان" },
-      { name_ar: "طاولة طعام 8 كراسي", name_en: "Dining Table 8 Chairs", code: "DIN-8C-002", base_price: 12500, category_id: tableCatId, description_ar: "طاولة طعام كبيرة بثمانية كراسي من خشب البلوط" },
-      { name_ar: "طاولة طعام 4 كراسي", name_en: "Dining Table 4 Chairs", code: "DIN-4C-003", base_price: 6000, category_id: tableCatId, description_ar: "طاولة طعام صغيرة بأربعة كراسي" },
-      { name_ar: "طاولة قهوة", name_en: "Coffee Table", code: "TBL-COF-004", base_price: 2500, category_id: tableCatId, description_ar: "طاولة قهوة خشب زان مع زجاج" },
-      { name_ar: "طاولة جانبية", name_en: "Side Table", code: "TBL-SIDE-005", base_price: 1200, category_id: tableCatId, description_ar: "طاولة جانبية صغيرة بدرج واحد" },
+      { code: "DIN-6C-001", name_ar: "طاولة طعام 6 كراسي", name_en: "Dining Table 6 Chairs", base_price: 9000, category_id: tableCatId, description_ar: "طاولة طعام مستطيلة بستة كراسي خشب زان", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "DIN-8C-002", name_ar: "طاولة طعام 8 كراسي", name_en: "Dining Table 8 Chairs", base_price: 12500, category_id: tableCatId, description_ar: "طاولة طعام كبيرة بثمانية كراسي من خشب البلوط", labor_pct: 18, wastage_pct: 10, overhead_pct: 12, margin_pct: 30 },
+      { code: "DIN-4C-003", name_ar: "طاولة طعام 4 كراسي", name_en: "Dining Table 4 Chairs", base_price: 6000, category_id: tableCatId, description_ar: "طاولة طعام صغيرة بأربعة كراسي", labor_pct: 12, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "TBL-COF-004", name_ar: "طاولة قهوة", name_en: "Coffee Table", base_price: 2500, category_id: tableCatId, description_ar: "طاولة قهوة خشب زان مع زجاج", labor_pct: 12, wastage_pct: 6, overhead_pct: 8, margin_pct: 20 },
+      { code: "TBL-SIDE-005", name_ar: "طاولة جانبية", name_en: "Side Table", base_price: 1200, category_id: tableCatId, description_ar: "طاولة جانبية صغيرة بدرج واحد", labor_pct: 10, wastage_pct: 6, overhead_pct: 8, margin_pct: 20 },
       // أثاث مكتبي
-      { name_ar: "مكتب مدير", name_en: "Executive Desk", code: "OFF-ED-001", base_price: 7500, category_id: officeCatId, description_ar: "مكتب مدير خشب بلوط مع درف جانبي" },
-      { name_ar: "مكتب حاسوب", name_en: "Computer Desk", code: "OFF-CD-002", base_price: 3000, category_id: officeCatId, description_ar: "مكتب حاسوب بسيط مع درج لوحة مفاتيح" },
-      { name_ar: "رفوف مكتبية", name_en: "Office Shelves", code: "OFF-SHL-003", base_price: 3500, category_id: officeCatId, description_ar: "رفوف مكتبية معلقة 3 طبقات" },
-      { name_ar: "دولاب مكتبي", name_en: "Office Cabinet", code: "OFF-CAB-004", base_price: 5000, category_id: officeCatId, description_ar: "دولاب حفظ ملفات مكتبي ببابين زجاج" },
-      { name_ar: "كرسي مدير", name_en: "Executive Chair", code: "OFF-ECH-005", base_price: 2000, category_id: officeCatId, description_ar: "كرسي مدير دوار بقماش" },
-      { name_ar: "طاولة اجتماعات", name_en: "Meeting Table", code: "OFF-MT-006", base_price: 6000, category_id: officeCatId, description_ar: "طاولة اجتماعات 6 أشخاص مع قاعدة خشب" },
+      { code: "OFF-ED-001", name_ar: "مكتب مدير", name_en: "Executive Desk", base_price: 7500, category_id: officeCatId, description_ar: "مكتب مدير خشب بلوط مع درف جانبي", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "OFF-CD-002", name_ar: "مكتب حاسوب", name_en: "Computer Desk", base_price: 3000, category_id: officeCatId, description_ar: "مكتب حاسوب بسيط مع درج لوحة مفاتيح", labor_pct: 12, wastage_pct: 6, overhead_pct: 8, margin_pct: 20 },
+      { code: "OFF-SHL-003", name_ar: "رفوف مكتبية", name_en: "Office Shelves", base_price: 3500, category_id: officeCatId, description_ar: "رفوف مكتبية معلقة 3 طبقات", labor_pct: 12, wastage_pct: 6, overhead_pct: 8, margin_pct: 20 },
+      { code: "OFF-CAB-004", name_ar: "دولاب مكتبي", name_en: "Office Cabinet", base_price: 5000, category_id: officeCatId, description_ar: "دولاب حفظ ملفات مكتبي ببابين زجاج", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
+      { code: "OFF-ECH-005", name_ar: "كرسي مدير", name_en: "Executive Chair", base_price: 2000, category_id: officeCatId, description_ar: "كرسي مدير دوار بقماش", labor_pct: 10, wastage_pct: 5, overhead_pct: 8, margin_pct: 20 },
+      { code: "OFF-MT-006", name_ar: "طاولة اجتماعات", name_en: "Meeting Table", base_price: 6000, category_id: officeCatId, description_ar: "طاولة اجتماعات 6 أشخاص مع قاعدة خشب", labor_pct: 15, wastage_pct: 8, overhead_pct: 10, margin_pct: 25 },
     ];
 
     for (const p of products) {
-      const { data: existing } = await supabaseAdmin
+      // Create product_template
+      const { data: existingTemplate } = await supabaseAdmin
         .from("product_templates")
         .select("id")
         .eq("code", p.code)
         .maybeSingle();
       
-      if (!existing) {
+      if (!existingTemplate) {
         const { error } = await supabaseAdmin.from("product_templates").insert({
-          ...p,
+          code: p.code,
+          name_ar: p.name_ar,
+          name_en: p.name_en,
+          base_price: p.base_price,
+          category_id: p.category_id,
+          description_ar: p.description_ar,
           default_config: {},
+          active: true,
         });
         if (!error) results.push(`✓ قالب منتج "${p.name_ar}" تم إنشاؤه`);
         else results.push(`✗ قالب منتج "${p.name_ar}" فشل: ${error.message}`);
       } else {
         results.push(`- قالب منتج "${p.name_ar}" موجود بالفعل`);
+      }
+
+      // Also create product in the products table (for the old quote builder)
+      const { data: existingProduct } = await supabaseAdmin
+        .from("products")
+        .select("id")
+        .eq("code", p.code)
+        .maybeSingle();
+      
+      if (!existingProduct) {
+        const { error } = await supabaseAdmin.from("products").insert({
+          code: p.code,
+          name_ar: p.name_ar,
+          name_en: p.name_en,
+          base_price: p.base_price,
+          category_id: p.category_id,
+          description_ar: p.description_ar,
+          labor_pct: p.labor_pct,
+          wastage_pct: p.wastage_pct,
+          overhead_pct: p.overhead_pct,
+          margin_pct: p.margin_pct,
+          active: true,
+        });
+        if (!error) results.push(`✓ منتج "${p.name_ar}" تم إنشاؤه في جدول products`);
+      } else {
+        // Update existing product with latest values
+        await supabaseAdmin.from("products").update({
+          labor_pct: p.labor_pct,
+          wastage_pct: p.wastage_pct,
+          overhead_pct: p.overhead_pct,
+          margin_pct: p.margin_pct,
+          base_price: p.base_price,
+        }).eq("code", p.code);
+        results.push(`- منتج "${p.name_ar}" محدث`);
       }
     }
 
