@@ -33,6 +33,35 @@
     "somethingWrong": "Something went wrong",
     "retry": "Try again"
   },
+  "admin": {
+    "panel": "Admin Panel",
+    "noAccess": "Your account does not have admin access.",
+    "nav": {
+      "home": "Dashboard",
+      "quotes": "Quotes",
+      "configurator": "Quotation Builder",
+      "invoices": "Invoices",
+      "orders": "Production Tracking",
+      "customers": "Customers",
+      "products": "Product Templates",
+      "materials": "Materials",
+      "suppliers": "Suppliers",
+      "finishes": "Finishes",
+      "veneers": "Veneers",
+      "accessories": "Accessories",
+      "pricingFactors": "Pricing Factors",
+      "wastageRules": "Wastage Rules",
+      "pricingRules": "Pricing Rules",
+      "costAnalysis": "Cost Analysis",
+      "discounts": "Discounts",
+      "notifications": "Notifications",
+      "workers": "Workers",
+      "remakes": "Remakes",
+      "seedData": "Database Setup"
+    },
+    "nav": "لوحة الإدارة",
+    "noAccess": "حسابك ليس لديه صلاحية الوصول للإدارة."
+  },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Welcome {email}",
