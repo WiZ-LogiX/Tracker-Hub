@@ -1,14 +1,23 @@
 // R2 Server Functions — presigned URLs for client-side uploads/downloads.
 // All requests require an authenticated user with an active tenant membership.
 // Keys are scoped to tenant + entity so isolation holds even before RLS.
+//
+// IMPORTANT (R2 + browser PUT compatibility):
+// AWS SDK v3 ≥ 3.733 streams the request body to compute a *flow* checksum
+// (x-amz-checksum-crc32) and embeds it in the signed URL query string.
+// At sign-time the body is missing → checksum defaults to AAAAAA== (CRC32 of
+// 0 bytes). When the browser PUTs the real bytes, R2 re-validates the CRC
+// against the bytes it received and rejects with HTTP 400 + "InvalidChecksum".
+// Browser surfaces that as a generic "Failed to fetch".
+//
+// Fix: instantiate the client with `requestChecksumCalculation: "WHEN_REQUIRED"`
+// and `responseChecksumValidation: "WHEN_REQUIRED"` so the SDK never injects
+// pre-computed checksum query params into the signed URL.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
-import {
-  S3Client,
-  PutObjectCommand,
-} from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -96,24 +105,36 @@ async function sessionFromRequest(): Promise<SessionInfo> {
 
 function requireEnvConfig(): void {
   const required = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"];
-  const missing = required.filter(k => !process.env[k] && !process.env[k.replace("_NAME", "")]);
+  const missing = required.filter(
+    (k) => !process.env[k] && !process.env[k.replace("_NAME", "")],
+  );
   if (missing.length) {
     throw new Error(`Missing R2 env vars: ${missing.join(", ")}`);
   }
 }
 
+let _client: S3Client | undefined;
 function getR2Client(): S3Client {
+  if (_client) return _client;
+
   const accountId = process.env.R2_ACCOUNT_ID!;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID!;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY!;
-  const bucketName = process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
-  void bucketName;
 
-  return new S3Client({
+  _client = new S3Client({
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     region: "auto",
     credentials: { accessKeyId, secretAccessKey },
+    // Disable SDK request/response body-checksum hooks. Without these, the
+    // SDK either streams the body (signing-time) to compute a CRC32 — which
+    // produces garbage for a no-body PUT — or wraps the response, neither of
+    // which we want for browser-direct uploads via S3-compatible presign URLs.
+    // "WHEN_REQUIRED" leaves checksum fields off unless the operation demands them
+    // (e.g. multipart uploads with explicit ChecksumAlgorithm).
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
+  return _client;
 }
 
 function getBucketName(): string {
@@ -135,7 +156,10 @@ function generateObjectKey(
   entityId: string,
   originalFilename: string,
 ): string {
-  const ext = (originalFilename.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+  const ext =
+    (originalFilename.split(".").pop() || "bin")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "bin";
   const hash = `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
   return `${tenantId}/${entityType}/${entityId}/${hash}.${ext}`;
 }
@@ -153,8 +177,8 @@ export const getR2UploadUrl = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await sessionFromRequest();
     if (!session.tenantId) throw new Error("Forbidden: no tenant");
-
     requireEnvConfig();
+
     const key = generateObjectKey(session.tenantId, data.entityType, data.entityId, data.filename);
     const uploadUrl = await signPutUrl(key, data.contentType);
     return { uploadUrl, key, publicUrl: getPublicUrl(key) };
@@ -168,10 +192,15 @@ export const getR2BatchUploadUrls = createServerFn({ method: "POST" })
     requireEnvConfig();
 
     const uploads = await Promise.all(
-      data.files.map(async f => {
+      data.files.map(async (f) => {
         if (!session.tenantId) throw new Error("Forbidden: no tenant");
         try {
-          const key = generateObjectKey(session.tenantId, data.entityType, data.entityId, f.filename);
+          const key = generateObjectKey(
+            session.tenantId,
+            data.entityType,
+            data.entityId,
+            f.filename,
+          );
           const uploadUrl = await signPutUrl(key, f.contentType);
           return { key, uploadUrl, publicUrl: getPublicUrl(key) };
         } catch (e: any) {
@@ -192,12 +221,12 @@ export const getR2DownloadUrl = createServerFn({ method: "POST" })
       throw new Error("Forbidden: key outside tenant");
     }
     requireEnvConfig();
-    const cmd = new (await import("@aws-sdk/client-s3")).GetObjectCommand({
+
+    const cmd = new GetObjectCommand({
       Bucket: getBucketName(),
       Key: data.key,
     });
-    const { getSignedUrl: sign } = await import("@aws-sdk/s3-request-presigner");
-    const downloadUrl = await sign(getR2Client(), cmd, { expiresIn: 1800 });
+    const downloadUrl = await getSignedUrl(getR2Client(), cmd, { expiresIn: 1800 });
     return { downloadUrl };
   });
 
@@ -210,7 +239,9 @@ export const deleteR2Object = createServerFn({ method: "POST" })
       throw new Error("Forbidden: key outside tenant");
     }
     requireEnvConfig();
-    const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
-    await getR2Client().send(new DeleteObjectCommand({ Bucket: getBucketName(), Key: data.key }));
+
+    await getR2Client().send(
+      new DeleteObjectCommand({ Bucket: getBucketName(), Key: data.key }),
+    );
     return { deleted: true };
   });
