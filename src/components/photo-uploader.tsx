@@ -42,15 +42,32 @@ export function PhotoUploader({
 
   async function upload() {
     if (files.length === 0) return;
+    if (!entityId) {
+      toast.error(t("orders.uploadError"));
+      return;
+    }
     setBusy(true);
     setProgress({ done: 0, failed: 0, total: files.length });
     const results: Array<{ key: string; publicUrl: string; caption: string | null }> = [];
 
     try {
       const fileInfos = files.map(f => ({ filename: f.name, contentType: f.type || "image/jpeg" }));
-      const { uploads } = await getBatchUploadUrls({
-        data: { files: fileInfos, entityType, entityId },
-      });
+      let uploads: Array<{ key: string; uploadUrl: string; publicUrl?: string }> = [];
+      try {
+        const res = await getBatchUploadUrls({
+          data: { files: fileInfos, entityType, entityId },
+        });
+        uploads = res.uploads ?? [];
+      } catch (presignErr: any) {
+        console.error("[PhotoUploader] presign failed", {
+          error: presignErr,
+          message: presignErr?.message ?? String(presignErr),
+        });
+        toast.error(t("orders.uploadError") + ": " + (presignErr?.message ?? "presign failed"));
+        setProgress(null);
+        setBusy(false);
+        return;
+      }
 
       let done = 0;
       let failed = 0;
@@ -74,11 +91,11 @@ export function PhotoUploader({
             failed++;
             continue;
           }
-          const publicUrl = getR2PublicUrl(info.key);
+          const publicUrl = info.publicUrl || getR2PublicUrl(info.key);
           results.push({ key: info.key, publicUrl, caption: caption ?? null });
           done++;
         } catch (e) {
-          console.error("[PhotoUploader] upload error", e);
+          console.error("[PhotoUploader] PUT threw", e);
           failed++;
         }
         setProgress({ done, failed, total: files.length });
@@ -92,10 +109,6 @@ export function PhotoUploader({
         toast.error(t("orders.uploadFailed", { n: failed }));
       }
       setFiles([]);
-      setProgress(null);
-    } catch (err: any) {
-      console.error("[PhotoUploader] presign failed", err);
-      toast.error(err?.message ?? t("orders.uploadError"));
       setProgress(null);
     } finally {
       setBusy(false);
@@ -119,7 +132,7 @@ export function PhotoUploader({
           {files.map((f, i) => (
             <span key={i} className="inline-flex items-center gap-1 text-xs bg-background px-2 py-1 rounded border">
               {f.name}
-              <button type="button" onClick={() => removeAt(i)} aria-label="remove" className="text-muted-foreground hover:text-destructive">
+              <button type="button" onClick={() => removeAt(i)} aria-label={t("common.delete")} className="text-muted-foreground hover:text-destructive">
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -137,7 +150,7 @@ export function PhotoUploader({
       )}
       {progress && (
         <div className="text-xs text-muted-foreground">
-          {t("orders.uploading", { n: progress.done })} / {progress.total}
+          {t("orders.uploading", { done: progress.done, total: progress.total })}
         </div>
       )}
       <Button
@@ -148,7 +161,7 @@ export function PhotoUploader({
         className="gap-2"
       >
         <Upload className="h-4 w-4" />
-        {busy ? t("orders.uploading", { n: files.length }) : t("orders.upload", { n: files.length || "" })}
+        {busy ? t("orders.uploading", { done: files.length, total: files.length }) : t("orders.upload", { n: files.length })}
       </Button>
     </div>
   );
