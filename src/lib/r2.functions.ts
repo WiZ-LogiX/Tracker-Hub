@@ -8,8 +8,8 @@ import { createClient } from "@supabase/supabase-js";
 import {
   S3Client,
   PutObjectCommand,
-  getSignedUrl,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { Database } from "@/integrations/supabase/types";
 
 const EntityTypeSchema = z.enum([
@@ -113,22 +113,6 @@ function getR2Client(): S3Client {
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     region: "auto",
     credentials: { accessKeyId, secretAccessKey },
-    /**
-     * CRITICAL: the tracking middleware SHA-streams the file body to compute
-     * `x-amz-checksum-crc32` *during signing*. With a 0-byte body at sign-time
-     * the SDK fills in `x-amz-checksum-crc32=AAAAAA%3D%3D` (the CRC of empty
-     * input). When the browser PUTs the real bytes, R2 validates that the
-     * stream's CRC matches what was signed — and rejects with HTTP 400 +
-     * "Failed to fetch" on the client.
-     *
-     * Disabling request checksum calculation forces the SDK to ship only the
-     * metadata bucket, allowing the browser's PUT to validate body integrity
-     * on its own without a pre-computed hash mismatch.
-     */
-    requestHandler: undefined,
-    // Ensures no trailing checksum query params even if the SDK tries to add them.
-    // (Older SDKs read this; newer SDKs fall back to config below.)
-    responseChecksumValidation: "WHEN_REQUIRED",
   });
 }
 
@@ -141,16 +125,8 @@ async function signPutUrl(key: string, contentType: string): Promise<string> {
     Bucket: getBucketName(),
     Key: key,
     ContentType: contentType,
-    // Skip checksum on the object itself; S3/R2 will compute a server-side
-    // CRC32 when the file flows through and accept either side.
   });
-  // `unhoistableHeaders` here would force header inclusion; we don't want any.
-  return getSignedUrl(getR2Client(), cmd, {
-    expiresIn: 900,
-    signableHeaders: new Set(["host"]),
-    // Some SDKs honor `unhoistableHeaders` to allow excluding headers from signing.
-    unhoistableHeaders: new Set(),
-  });
+  return getSignedUrl(getR2Client(), cmd, { expiresIn: 900 });
 }
 
 function generateObjectKey(
