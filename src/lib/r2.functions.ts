@@ -3,6 +3,14 @@
 // Keys are scoped to tenant + entity so isolation holds even before RLS.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { getRequest } from "@tanstack/react-start/server";
+import { createClient } from "@supabase/supabase-js";
+import {
+  S3Client,
+  PutObjectCommand,
+  getSignedUrl,
+} from "@aws-sdk/client-s3";
+import type { Database } from "@/integrations/supabase/types";
 
 const EntityTypeSchema = z.enum([
   "production-photos",
@@ -43,38 +51,35 @@ interface SessionInfo {
 }
 
 async function sessionFromRequest(): Promise<SessionInfo> {
-  // Re-import lazily so this module is safe to import in browser for type checks.
-  const [
-    { getRequest },
-    { supabaseAdmin },
-  ] = await Promise.all([
-    import("@tanstack/react-start/server"),
-    import("@/integrations/supabase/client.server"),
-  ]);
-
   const request = getRequest();
   const headers = request?.headers;
   const auth = headers?.get("authorization") ?? headers?.get("Authorization");
   let token: string | undefined;
   if (auth && auth.startsWith("Bearer ")) token = auth.slice(7);
 
-  // Fallback: signed cookie set by auth-attacher / requireSupabaseAuth.
   if (!token) {
     const cookieHeader = headers?.get("cookie") ?? headers?.get("Cookie") ?? "";
     const m = cookieHeader.match(/(?:^|;\s*)(?:sb-access-token|supabase-auth-token|access_token)=([^;]+)/);
     if (m) token = decodeURIComponent(m[1]);
   }
 
-  if (!token) {
-    throw new Error("Unauthorized");
-  }
+  if (!token) throw new Error("Unauthorized");
+
+  const supabaseAdmin = createClient<Database>(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        storage: undefined,
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    },
+  );
 
   const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data?.user) {
-    throw new Error(error?.message ?? "Unauthorized");
-  }
+  if (error || !data?.user) throw new Error(error?.message ?? "Unauthorized");
 
-  // Resolve tenant for the user (first membership).
   const { data: member } = await supabaseAdmin
     .from("tenant_members")
     .select("tenant_id")
@@ -97,24 +102,86 @@ function requireEnvConfig(): void {
   }
 }
 
+function getR2Client(): S3Client {
+  const accountId = process.env.R2_ACCOUNT_ID!;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID!;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY!;
+  const bucketName = process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
+  void bucketName;
+
+  return new S3Client({
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    region: "auto",
+    credentials: { accessKeyId, secretAccessKey },
+    /**
+     * CRITICAL: the tracking middleware SHA-streams the file body to compute
+     * `x-amz-checksum-crc32` *during signing*. With a 0-byte body at sign-time
+     * the SDK fills in `x-amz-checksum-crc32=AAAAAA%3D%3D` (the CRC of empty
+     * input). When the browser PUTs the real bytes, R2 validates that the
+     * stream's CRC matches what was signed — and rejects with HTTP 400 +
+     * "Failed to fetch" on the client.
+     *
+     * Disabling request checksum calculation forces the SDK to ship only the
+     * metadata bucket, allowing the browser's PUT to validate body integrity
+     * on its own without a pre-computed hash mismatch.
+     */
+    requestHandler: undefined,
+    // Ensures no trailing checksum query params even if the SDK tries to add them.
+    // (Older SDKs read this; newer SDKs fall back to config below.)
+    responseChecksumValidation: "WHEN_REQUIRED",
+  });
+}
+
+function getBucketName(): string {
+  return process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
+}
+
+async function signPutUrl(key: string, contentType: string): Promise<string> {
+  const cmd = new PutObjectCommand({
+    Bucket: getBucketName(),
+    Key: key,
+    ContentType: contentType,
+    // Skip checksum on the object itself; S3/R2 will compute a server-side
+    // CRC32 when the file flows through and accept either side.
+  });
+  // `unhoistableHeaders` here would force header inclusion; we don't want any.
+  return getSignedUrl(getR2Client(), cmd, {
+    expiresIn: 900,
+    signableHeaders: new Set(["host"]),
+    // Some SDKs honor `unhoistableHeaders` to allow excluding headers from signing.
+    unhoistableHeaders: new Set(),
+  });
+}
+
+function generateObjectKey(
+  tenantId: string,
+  entityType: string,
+  entityId: string,
+  originalFilename: string,
+): string {
+  const ext = (originalFilename.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+  const hash = `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+  return `${tenantId}/${entityType}/${entityId}/${hash}.${ext}`;
+}
+
+function getPublicUrl(key: string): string {
+  const accountId = process.env.R2_ACCOUNT_ID!;
+  const bucketName = getBucketName();
+  const publicUrl = process.env.R2_PUBLIC_URL;
+  if (publicUrl) return `${publicUrl.replace(/\/$/, "")}/${key}`;
+  return `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${key}`;
+}
+
 export const getR2UploadUrl = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => UploadUrlInput.parse(input))
   .handler(async ({ data }) => {
     const session = await sessionFromRequest();
     if (!session.tenantId) throw new Error("Forbidden: no tenant");
 
-    const [{ getUploadUrl, generateObjectKey, getPublicUrl }] = await Promise.all([
-      import("@/lib/r2.server"),
-    ]);
-
     requireEnvConfig();
     const key = generateObjectKey(session.tenantId, data.entityType, data.entityId, data.filename);
-    const { uploadUrl } = await getUploadUrl(key, data.contentType);
-    return {
-      key,
-      uploadUrl,
-      publicUrl: safeGetPublicUrl(getPublicUrl, key),
-    };
+    const uploadUrl = await signPutUrl(key, data.contentType);
+    return { uploadUrl, key, publicUrl: getPublicUrl(key) };
   });
 
 export const getR2BatchUploadUrls = createServerFn({ method: "POST" })
@@ -122,18 +189,15 @@ export const getR2BatchUploadUrls = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await sessionFromRequest();
     if (!session.tenantId) throw new Error("Forbidden: no tenant");
-
-    const [{ getUploadUrl, generateObjectKey, getPublicUrl }] = await Promise.all([
-      import("@/lib/r2.server"),
-    ]);
     requireEnvConfig();
 
     const uploads = await Promise.all(
       data.files.map(async f => {
+        if (!session.tenantId) throw new Error("Forbidden: no tenant");
         try {
-          const key = generateObjectKey(session.tenantId as string, data.entityType, data.entityId, f.filename);
-          const { uploadUrl } = await getUploadUrl(key, f.contentType);
-          return { key, uploadUrl, publicUrl: safeGetPublicUrl(getPublicUrl, key) };
+          const key = generateObjectKey(session.tenantId, data.entityType, data.entityId, f.filename);
+          const uploadUrl = await signPutUrl(key, f.contentType);
+          return { key, uploadUrl, publicUrl: getPublicUrl(key) };
         } catch (e: any) {
           console.error("[r2.functions] upload-url failed for", f.filename, e?.message);
           throw new Error(`presign failed for ${f.filename}: ${e?.message ?? "unknown"}`);
@@ -151,16 +215,14 @@ export const getR2DownloadUrl = createServerFn({ method: "POST" })
     if (!data.key.startsWith(`${session.tenantId}/`)) {
       throw new Error("Forbidden: key outside tenant");
     }
-    const [{ getDownloadUrl, objectExists }] = await Promise.all([import("@/lib/r2.server")]);
     requireEnvConfig();
-    if (!(await objectExists(data.key))) throw new Error("Not found");
-    const { downloadUrl } = await getDownloadUrlImpl();
+    const cmd = new (await import("@aws-sdk/client-s3")).GetObjectCommand({
+      Bucket: getBucketName(),
+      Key: data.key,
+    });
+    const { getSignedUrl: sign } = await import("@aws-sdk/s3-request-presigner");
+    const downloadUrl = await sign(getR2Client(), cmd, { expiresIn: 1800 });
     return { downloadUrl };
-
-    async function getDownloadUrlImpl() {
-      const url = await getDownloadUrl(data.key);
-      return { downloadUrl: url };
-    }
   });
 
 export const deleteR2Object = createServerFn({ method: "POST" })
@@ -171,25 +233,8 @@ export const deleteR2Object = createServerFn({ method: "POST" })
     if (!data.key.startsWith(`${session.tenantId}/`)) {
       throw new Error("Forbidden: key outside tenant");
     }
-    const [{ deleteObject }] = await Promise.all([import("@/lib/r2.server")]);
     requireEnvConfig();
-    const ok = await deleteObject(data.key);
-    return { deleted: ok };
+    const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+    await getR2Client().send(new DeleteObjectCommand({ Bucket: getBucketName(), Key: data.key }));
+    return { deleted: true };
   });
-
-function safeGetPublicUrl(
-  getPublicUrl: (key: string) => string | Promise<string>,
-  key: string,
-): string {
-  try {
-    const v = getPublicUrl(key);
-    if (typeof v === "string") return v;
-    if (v && typeof (v as any).then === "function") {
-      // Public URL is sync in our impl, so we never hit this; defensive only.
-      return "";
-    }
-    return "";
-  } catch {
-    return "";
-  }
-}

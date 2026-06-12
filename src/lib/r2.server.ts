@@ -1,6 +1,3 @@
-// Cloudflare R2 client (server-only).
-// Wraps S3-compatible API via @aws-sdk/client-s3.
-// Only server code should import this.
 import {
   S3Client,
   PutObjectCommand,
@@ -47,7 +44,14 @@ let _client: S3Client | undefined;
 function client(): S3Client {
   if (!_client) {
     const { endpoint, region, credentials } = getConfig();
-    _client = new S3Client({ endpoint, region, credentials });
+    _client = new S3Client({
+      endpoint,
+      region,
+      credentials,
+      // Required so the SDK omits signing payload that's not the final hash
+      // (browser-side presigned PUTs hit R2 directly and R2 didn't get pre-calculated checksums).
+      requestHandler: undefined,
+    });
   }
   return _client;
 }

@@ -40,6 +40,23 @@ export function PhotoUploader({
     setFiles(arr => arr.filter((_, idx) => idx !== i));
   }
 
+  async function uploadOne(file: File, uploadUrl: string, key: string, publicUrl: string) {
+    // Direct PUT. Browsers will set Content-Type and signed query string will validate.
+    // The pre-computed checksum query params must NOT be in the signed URL — see r2.functions.ts.
+    const res = await fetch(uploadUrl, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      // Don't include credentials — R2 rejects them and CORS pre-flight fails.
+      credentials: "omit",
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`R2 rejected ${file.name}: HTTP ${res.status} ${txt.slice(0, 200)}`);
+    }
+    return { key, publicUrl };
+  }
+
   async function upload() {
     if (files.length === 0) return;
     if (!entityId) {
@@ -50,69 +67,64 @@ export function PhotoUploader({
     setProgress({ done: 0, failed: 0, total: files.length });
     const results: Array<{ key: string; publicUrl: string; caption: string | null }> = [];
 
+    // 1. Server-side: get presigned PUT URLs for all files.
+    let uploads: Array<{ key: string; uploadUrl: string; publicUrl?: string }> = [];
     try {
-      const fileInfos = files.map(f => ({ filename: f.name, contentType: f.type || "image/jpeg" }));
-      let uploads: Array<{ key: string; uploadUrl: string; publicUrl?: string }> = [];
-      try {
-        const res = await getBatchUploadUrls({
-          data: { files: fileInfos, entityType, entityId },
-        });
-        uploads = res.uploads ?? [];
-      } catch (presignErr: any) {
-        console.error("[PhotoUploader] presign failed", {
-          error: presignErr,
-          message: presignErr?.message ?? String(presignErr),
-        });
-        toast.error(t("orders.uploadError") + ": " + (presignErr?.message ?? "presign failed"));
-        setProgress(null);
-        setBusy(false);
-        return;
-      }
-
-      let done = 0;
-      let failed = 0;
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const info = uploads[i];
-        if (!info) {
-          failed++;
-          continue;
-        }
-        try {
-          const res = await fetch(info.uploadUrl, {
-            method: "PUT",
-            body: file,
-            headers: { "Content-Type": file.type || "image/jpeg" },
-          });
-          if (!res.ok) {
-            const txt = await res.text();
-            console.error("[PhotoUploader] PUT failed", res.status, txt);
-            failed++;
-            continue;
-          }
-          const publicUrl = info.publicUrl || getR2PublicUrl(info.key);
-          results.push({ key: info.key, publicUrl, caption: caption ?? null });
-          done++;
-        } catch (e) {
-          console.error("[PhotoUploader] PUT threw", e);
-          failed++;
-        }
-        setProgress({ done, failed, total: files.length });
-      }
-
-      if (done > 0) {
-        onUploaded(results);
-        toast.success(t("orders.uploadSuccess", { n: done }));
-      }
-      if (failed > 0) {
-        toast.error(t("orders.uploadFailed", { n: failed }));
-      }
-      setFiles([]);
+      const fileInfos = files.map(f => ({
+        filename: f.name,
+        contentType: f.type || "image/jpeg",
+      }));
+      const res = await getBatchUploadUrls({
+        data: { files: fileInfos, entityType, entityId },
+      });
+      uploads = res.uploads ?? [];
+    } catch (presignErr: any) {
+      const msg =
+        presignErr?.message ?? String(presignErr) ?? "presign failed";
+      console.error("[PhotoUploader] presign failed", msg);
+      toast.error(t("orders.uploadError") + ": " + msg);
       setProgress(null);
-    } finally {
       setBusy(false);
+      return;
     }
+
+    // 2. Client-side: PUT each file directly to R2.
+    let done = 0;
+    let failed = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const info = uploads[i];
+      if (!info) {
+        failed++;
+        setProgress({ done, failed, total: files.length });
+        continue;
+      }
+      try {
+        const { key, publicUrl } = await uploadOne(
+          file,
+          info.uploadUrl,
+          info.key,
+          info.publicUrl || getR2PublicUrl(info.key),
+        );
+        results.push({ key, publicUrl, caption: caption ?? null });
+        done++;
+      } catch (e: any) {
+        console.error("[PhotoUploader] PUT failed", file.name, e?.message);
+        failed++;
+      }
+      setProgress({ done, failed, total: files.length });
+    }
+
+    if (done > 0) {
+      onUploaded(results);
+      toast.success(t("orders.uploadSuccess", { n: done }));
+    }
+    if (failed > 0) {
+      toast.error(t("orders.uploadFailed", { n: failed }));
+    }
+    setFiles([]);
+    setProgress(null);
+    setBusy(false);
   }
 
   return (
@@ -132,7 +144,12 @@ export function PhotoUploader({
           {files.map((f, i) => (
             <span key={i} className="inline-flex items-center gap-1 text-xs bg-background px-2 py-1 rounded border">
               {f.name}
-              <button type="button" onClick={() => removeAt(i)} aria-label={t("common.delete")} className="text-muted-foreground hover:text-destructive">
+              <button
+                type="button"
+                onClick={() => removeAt(i)}
+                aria-label={t("common.delete")}
+                className="text-muted-foreground hover:text-destructive"
+              >
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -150,7 +167,7 @@ export function PhotoUploader({
       )}
       {progress && (
         <div className="text-xs text-muted-foreground">
-          {t("orders.uploading", { done: progress.done, total: progress.total })}
+          {t("orders.uploading", { n: progress.done })} / {progress.total}
         </div>
       )}
       <Button
@@ -161,7 +178,7 @@ export function PhotoUploader({
         className="gap-2"
       >
         <Upload className="h-4 w-4" />
-        {busy ? t("orders.uploading", { done: files.length, total: files.length }) : t("orders.upload", { n: files.length })}
+        {busy ? t("orders.uploading", { n: files.length }) : t("orders.upload", { n: files.length })}
       </Button>
     </div>
   );
