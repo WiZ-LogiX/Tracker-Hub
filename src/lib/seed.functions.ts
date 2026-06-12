@@ -5,7 +5,7 @@ import { DEFAULT_FORMULA } from "@/lib/pricing/engine";
 
 export const ensurePricingSetup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async () => {
     const results: string[] = [];
 
     // --- Pricing Factors ---
@@ -25,9 +25,9 @@ export const ensurePricingSetup = createServerFn({ method: "POST" })
         .select("id")
         .eq("key", factor.key)
         .maybeSingle();
-      
+
       if (!existing) {
-        await supabaseAdmin.from("pricing_factors").insert(factor);
+        await supabaseAdmin.from("pricing_factors").insert(factor as any);
         results.push(`✓ عامل التسعير "${factor.label_ar}" تم إضافته`);
       } else {
         results.push(`- عامل التسعير "${factor.label_ar}" موجود بالفعل`);
@@ -55,9 +55,9 @@ export const ensurePricingSetup = createServerFn({ method: "POST" })
         name: "القاعدة الافتراضية",
         version: nextVersion,
         status: "active",
-        formula: DEFAULT_FORMULA,
+        formula: DEFAULT_FORMULA as any,
         effective_from: new Date().toISOString(),
-      });
+      } as any);
       results.push(`✓ قاعدة التسعير الافتراضية (v${nextVersion}) تم إنشاؤها وتفعيلها`);
     } else {
       results.push("- قاعدة التسعير الافتراضية موجودة بالفعل");
@@ -68,7 +68,7 @@ export const ensurePricingSetup = createServerFn({ method: "POST" })
 
 export const seedSampleData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .handler(async () => {
     const results: string[] = [];
 
     // ============================================================
@@ -89,9 +89,9 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("name_ar", c.name_ar)
         .maybeSingle();
-      
+
       if (!existing) {
-        const { data: inserted } = await supabaseAdmin.from("categories").insert(c).select("id").single();
+        const { data: inserted } = await supabaseAdmin.from("categories").insert(c as any).select("id").single();
         if (inserted) {
           categoryMap[c.name_ar] = inserted.id;
           results.push(`✓ تصنيف "${c.name_ar}" تم إنشاؤه`);
@@ -123,7 +123,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("name", s.name)
         .maybeSingle();
-      
+
       if (!existing) {
         const { data: inserted } = await supabaseAdmin.from("suppliers").insert(s).select("id").single();
         if (inserted) {
@@ -161,7 +161,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("name_ar", m.name_ar)
         .maybeSingle();
-      
+
       if (!existing) {
         const { data: inserted, error } = await supabaseAdmin.from("materials").insert(m).select("id").single();
         if (inserted) {
@@ -191,24 +191,26 @@ export const seedSampleData = createServerFn({ method: "POST" })
     ];
 
     for (const wr of wastageRulesData) {
-      const match = supabaseAdmin
-        .from("wastage_rules")
-        .select("id");
-      
       // Try to find by material_id first, then by material_type + min_dimension
       let existing = null;
       if (wr.material_id) {
-        const { data } = await match.eq("material_id", wr.material_id).maybeSingle();
-        existing = data;
-      }
-      if (!existing) {
         const { data } = await supabaseAdmin
           .from("wastage_rules")
           .select("id")
-          .eq("material_type", wr.material_type)
-          .eq("min_dimension", wr.min_dimension)
-          .eq("max_dimension", wr.max_dimension ?? null)
+          .eq("material_id", wr.material_id)
           .maybeSingle();
+        existing = data;
+      }
+      if (!existing) {
+        let existing2Query = supabaseAdmin
+          .from("wastage_rules")
+          .select("id")
+          .eq("material_type", wr.material_type)
+          .eq("min_dimension", wr.min_dimension);
+        existing2Query = wr.max_dimension == null
+          ? existing2Query.is("max_dimension", null)
+          : existing2Query.eq("max_dimension", wr.max_dimension);
+        const { data } = await existing2Query.maybeSingle();
         existing = data;
       }
 
@@ -220,7 +222,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
           max_dimension: wr.max_dimension,
           wastage_pct: wr.wastage_pct,
           active: true,
-        });
+        } as any);
         if (!error) results.push(`✓ قاعدة هدر لـ "${wr.material_type}" (${wr.min_dimension}-${wr.max_dimension ?? '∞'}) بنسبة ${wr.wastage_pct}%`);
         else results.push(`✗ قاعدة هدر: ${error.message}`);
       } else {
@@ -248,7 +250,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("name_ar", f.name_ar)
         .maybeSingle();
-      
+
       if (!existing) {
         await supabaseAdmin.from("finishes").insert(f);
         results.push(`✓ تشطيب "${f.name_ar}" تم إنشاؤه`);
@@ -277,7 +279,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("name_ar", v.name_ar)
         .maybeSingle();
-      
+
       if (!existing) {
         await supabaseAdmin.from("veneers").insert(v);
         results.push(`✓ قشرة "${v.name_ar}" تم إنشاؤها`);
@@ -325,7 +327,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("name_ar", a.name_ar)
         .maybeSingle();
-      
+
       if (!existing) {
         await supabaseAdmin.from("accessories").insert(a);
         results.push(`✓ إكسسوار "${a.name_ar}" تم إنشاؤه`);
@@ -387,7 +389,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("code", p.code)
         .maybeSingle();
-      
+
       if (!existingTemplate) {
         const { error } = await supabaseAdmin.from("product_templates").insert({
           code: p.code,
@@ -411,7 +413,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("code", p.code)
         .maybeSingle();
-      
+
       if (!existingProduct) {
         const { error } = await supabaseAdmin.from("products").insert({
           code: p.code,
@@ -462,7 +464,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("name", w.name)
         .maybeSingle();
-      
+
       if (!existing) {
         await supabaseAdmin.from("workers").insert(w);
         results.push(`✓ عامل "${w.name}" تم إنشاؤه`);
@@ -488,9 +490,9 @@ export const seedSampleData = createServerFn({ method: "POST" })
         .select("id")
         .eq("code", d.code)
         .maybeSingle();
-      
+
       if (!existing) {
-        await supabaseAdmin.from("discounts").insert(d);
+        await supabaseAdmin.from("discounts").insert(d as any);
         results.push(`✓ خصم "${d.code}" تم إنشاؤه`);
       } else {
         results.push(`- خصم "${d.code}" موجود بالفعل`);

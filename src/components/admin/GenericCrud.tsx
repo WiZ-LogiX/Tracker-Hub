@@ -22,6 +22,60 @@ interface CrudRow {
   [key: string]: unknown;
 }
 
+// Tables the GenericCrud component knows how to render. This list is
+// intentionally broad so we get typed Supabase inserts/updates without
+// forcing every consumer to be a perfect union member.
+const KNOWN_CRUD_TABLES = [
+  "accessories",
+  "categories",
+  "companies",
+  "configurations",
+  "customers",
+  "discounts",
+  "finishes",
+  "internal_notes",
+  "material_variants",
+  "materials",
+  "notification_log",
+  "notification_templates",
+  "pricing_factors",
+  "pricing_rules",
+  "product_templates",
+  "products",
+  "quote_items",
+  "quote_requests",
+  "remakes",
+  "suppliers",
+  "tenants",
+  "veneers",
+  "wastage_rules",
+  "workers",
+] as const;
+
+type CrudTable = (typeof KNOWN_CRUD_TABLES)[number];
+
+function isKnownTable(name: string): name is CrudTable {
+  return (KNOWN_CRUD_TABLES as readonly string[]).includes(name);
+}
+
+function fromTable(client: typeof supabase, name: string) {
+  if (isKnownTable(name)) {
+    return client.from(name);
+  }
+  // Fallback to typed-any for ad-hoc tables. We can't statically narrow this,
+  // and the existing call sites are passing string `table` props.
+  return client.from(name as CrudTable);
+}
+
+function payloadToInsertObject(payload: Record<string, string | number | null>): Record<string, unknown> {
+  // Strip null values for insert so DB defaults kick in. Keep numbers as numbers.
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    out[k] = v;
+  }
+  return out;
+}
+
 export function GenericCrud({
   title, subtitle, table, fields,
 }: {
@@ -30,17 +84,17 @@ export function GenericCrud({
   const [rows, setRows] = useState<CrudRow[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CrudRow | null>(null);
-  
+
   const blank = Object.fromEntries(
     fields.map(f => [f.key, f.default ?? (f.type === 'number' ? 0 : '')])
   ) as Record<string, string | number>;
-  
+
   const [form, setForm] = useState<Record<string, string | number>>(blank);
 
   useEffect(() => { load(); }, [table]);
-  
+
   async function load() {
-    const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
+    const { data, error } = await fromTable(supabase, table).select('*').order('created_at', { ascending: false });
     if (error) {
       toast.error(error.message);
       setRows([]);
@@ -48,11 +102,11 @@ export function GenericCrud({
     }
     setRows((data as CrudRow[]) ?? []);
   }
-  
+
   function openNew() { setEditing(null); setForm(blank); setOpen(true); }
-  
-  function openEdit(r: CrudRow) { 
-    setEditing(r); 
+
+  function openEdit(r: CrudRow) {
+    setEditing(r);
     const next = { ...blank };
     for (const f of fields) {
       const v = r[f.key];
@@ -60,27 +114,29 @@ export function GenericCrud({
     }
     setForm(next);
   }
-  
+
   async function save() {
     const payload: Record<string, string | number | null> = {};
     for (const f of fields) {
       const v = form[f.key];
       payload[f.key] = f.type === 'number' ? Number(v) : (v ?? "");
     }
+    const insertPayload = payloadToInsertObject(payload);
+    const tbl = fromTable(supabase, table);
     const { error } = editing
-      ? await supabase.from(table).update(payload).eq('id', editing.id)
-      : await supabase.from(table).insert(payload);
+      ? await tbl.update(insertPayload as any).eq('id', editing.id)
+      : await tbl.insert(insertPayload as any);
     if (error) return toast.error(error.message);
-    toast.success("تم الحفظ"); 
-    setOpen(false); 
+    toast.success("تم الحفظ");
+    setOpen(false);
     load();
   }
-  
+
   async function remove(id: string) {
     if (!confirm("تأكيد الحذف؟")) return;
-    const { error } = await supabase.from(table).delete().eq('id', id);
+    const { error } = await fromTable(supabase, table).delete().eq('id', id);
     if (error) return toast.error(error.message);
-    toast.success("تم الحذف"); 
+    toast.success("تم الحذف");
     load();
   }
 
@@ -123,10 +179,10 @@ export function GenericCrud({
             {fields.map(f => (
               <div key={f.key}>
                 <Label>{f.label}</Label>
-                <Input 
-                  type={f.type === 'number' ? 'number' : 'text'} 
-                  value={form[f.key] ?? ''} 
-                  onChange={e => setForm({ ...form, [f.key]: e.target.value })} 
+                <Input
+                  type={f.type === 'number' ? 'number' : 'text'}
+                  value={form[f.key] ?? ''}
+                  onChange={e => setForm({ ...form, [f.key]: e.target.value })}
                 />
               </div>
             ))}

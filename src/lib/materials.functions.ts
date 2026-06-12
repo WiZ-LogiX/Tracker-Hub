@@ -25,7 +25,7 @@ export const listMaterials = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase } = context;
-    
+
     // Get materials
     const { data: materials, error: matError } = await supabase
       .from("materials")
@@ -40,7 +40,7 @@ export const listMaterials = createServerFn({ method: "GET" })
         .from("wastage_rules")
         .select("material_id, wastage_pct")
         .eq("active", true);
-      
+
       if (!wrError && wastageRules) {
         for (const wr of wastageRules) {
           if (wr.material_id) wastageMap.set(wr.material_id, Number(wr.wastage_pct));
@@ -50,14 +50,14 @@ export const listMaterials = createServerFn({ method: "GET" })
       // Ignore if material_id column doesn't exist
     }
 
-    return { 
+    return {
       items: (materials ?? []).map((r: any) => ({
         ...serialize(r),
         // Priority: wastage_rules table > materials.wastage_pct column
-        wastage_rule: wastageMap.has(r.id) 
-          ? { wastage_pct: wastageMap.get(r.id)! } 
+        wastage_rule: wastageMap.has(r.id)
+          ? { wastage_pct: wastageMap.get(r.id)! }
           : (r.wastage_pct != null && r.wastage_pct > 0 ? { wastage_pct: Number(r.wastage_pct) } : null),
-      })) 
+      }))
     };
   });
 
@@ -115,14 +115,18 @@ export const upsertMaterial = createServerFn({ method: "POST" })
     // Try to create/update wastage rule for this material (if material_id column exists)
     try {
       const wastagePct = data.wastage_pct ?? 0;
-      if (wastagePct > 0) {
+      if (wastagePct > 0 && materialId) {
+        const materialType = values.type ?? "wood";
         const { error: wrError } = await supabase
           .from("wastage_rules")
           .upsert({
             material_id: materialId,
+            material_type: materialType,
+            min_dimension: 0,
+            max_dimension: null,
             wastage_pct: wastagePct,
             active: true,
-          }, { onConflict: "material_id" });
+          } as any, { onConflict: "material_id" });
         if (wrError && !wrError.message.includes("material_id")) {
           console.error("[upsertMaterial] wastage rule upsert error:", wrError);
         }
@@ -158,7 +162,7 @@ export const getMaterialWastage = createServerFn({ method: "POST" })
         .eq("material_id", data.materialId)
         .eq("active", true)
         .maybeSingle();
-      
+
       if (!error && rule) {
         return { wastagePct: Number(rule.wastage_pct) };
       }
