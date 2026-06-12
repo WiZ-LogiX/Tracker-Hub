@@ -10,3 +10,32 @@ export interface R2Config {
   publicUrl: string | undefined;
   accountId: string;
 }
+
+/**
+ * CORS policy required on the R2 bucket for browser-direct PUT uploads.
+ * Paste this into the bucket's CORS configuration via Cloudflare dashboard
+ * (R2 → pelecanon → Settings → CORS Policy) or via Wrangler/R2 API.
+ *
+ * Why each entry is necessary:
+ * - "PUT" with `Content-Type` triggers a CORS preflight (OPTIONS).
+ *   Without AllowedMethod: ["PUT"], the preflight fails before the PUT.
+ * - Without AllowedHeader: ["Content-Type"], the browser will refuse to send
+ *   the Content-Type header on the actual PUT, and the signed URL won't
+ *   match (signed-headers includes `host` but the request still has to be
+ *   accepted by the server).
+ * - MaxAgeSeconds keeps the preflight cached so subsequent uploads don't
+ *   burn an extra round-trip.
+ *
+ * Replace "https://your-app-domain.example" with every origin that needs to
+ * upload. For local development, include http://localhost:5173 too.
+ */
+export const R2_REQUIRED_CORS_POLICY = {
+  AllowedOrigins: [
+    "https://your-app-domain.example",
+    "http://localhost:5173",
+  ],
+  AllowedMethods: ["PUT", "GET", "HEAD"],
+  AllowedHeaders: ["Content-Type", "Authorization"],
+  ExposeHeaders: ["ETag"],
+  MaxAgeSeconds: 3600,
+};

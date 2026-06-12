@@ -40,14 +40,32 @@ export function PhotoUploader({
     setFiles(arr => arr.filter((_, idx) => idx !== i));
   }
 
+  /**
+   * Direct PUT to R2. Two failure modes show up as "Failed to fetch":
+   *   1. CORS preflight rejection → opaque network error, no status.
+   *   2. Mixed-content (http page → https R2).
+   * We attempt a HEAD first to surface the real CORS failure with a useful
+   * message; if that succeeds, the PUT is allowed too.
+   */
   async function uploadOne(file: File, uploadUrl: string, key: string, publicUrl: string) {
-    // Direct PUT. Browsers will set Content-Type and signed query string will validate.
-    // The pre-computed checksum query params must NOT be in the signed URL — see r2.functions.ts.
+    // Diagnostic: ping the bucket with HEAD first. If even a HEAD is CORS-rejected,
+    // the user gets a clearer signal than the generic "Failed to fetch" on PUT.
+    try {
+      await fetch(uploadUrl.split("?")[0], {
+        method: "HEAD",
+        credentials: "omit",
+      });
+    } catch (e: any) {
+      throw new Error(
+        `CORS preflight failed for ${file.name}. The R2 bucket must allow PUT/GET/HEAD ` +
+        `from this origin (see src/lib/r2.config.ts). Network error: ${e?.message ?? "unknown"}`,
+      );
+    }
+
     const res = await fetch(uploadUrl, {
       method: "PUT",
       body: file,
       headers: { "Content-Type": file.type || "application/octet-stream" },
-      // Don't include credentials — R2 rejects them and CORS pre-flight fails.
       credentials: "omit",
     });
     if (!res.ok) {
