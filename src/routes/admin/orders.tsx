@@ -74,13 +74,21 @@ function OrdersPage() {
         const { key, uploadUrl } = uploads[i];
         try {
           const uploadRes = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'image/jpeg' } });
-          if (!uploadRes.ok) { const errText = await uploadRes.text(); throw new Error(`Upload failed: ${uploadRes.status} - ${errText}`); }
+          if (!uploadRes.ok) {
+            const errText = await uploadRes.text();
+            throw new Error(`Upload failed: ${uploadRes.status} - ${errText}`);
+          }
           const photoUrl = getR2PublicUrl(key);
           const { error } = await supabase.from('production_photos').insert({ order_id: selected.id, stage: selected.current_stage, photo_url: photoUrl, caption: caption || null, uploaded_by: user?.id });
-          if (error) throw error; ok++;
+          if (error) throw error;
+          ok++;
         } catch (err: any) {
-          if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) toast.error('CORS error');
-          else console.error('R2 upload error:', err); fail++;
+          if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+            toast.error(t("orders.upload", { n: fail }) + " (CORS)");
+          } else {
+            console.error('R2 upload error:', err);
+          }
+          fail++;
         }
       }
       if (ok) toast.success(t("orders.upload", { n: ok }));
@@ -89,16 +97,15 @@ function OrdersPage() {
     } catch (err: any) { toast.error(err?.message ?? "Upload failed"); }
   }
   async function deletePhoto(p: any) {
-    const r2Key = p.photo_url ? null : null; // extract if needed
-    const { error } = await supabase.from('production_photos').delete().eq('id', p.id);
-    if (error) return toast.error(error.message);
+    await supabase.from('production_photos').delete().eq('id', p.id);
     await reloadOrderData(selected.id);
   }
   async function assignWorker(stage: OrderStage, workerId: string) {
     if (!selected || !workerId) return;
     const { error } = await supabase.from('production_assignments').insert({ order_id: selected.id, stage: stage as any, worker_id: workerId, status: 'pending' });
     if (error) return toast.error(error.message);
-    toast.success(t("common.save")); await reloadOrderData(selected.id);
+    toast.success(t("common.save"));
+    await reloadOrderData(selected.id);
   }
   async function updateAssignment(a: any, patch: any) {
     const { error } = await supabase.from('production_assignments').update(patch).eq('id', a.id);
@@ -241,7 +248,7 @@ function OrderDetail({ o, logs, photos, assignments, inspections, workers, note,
               <div><span className="font-medium">{a.workers?.name ?? '—'}</span> • {STAGE_LABEL_AR[a.stage as OrderStage]}</div>
               <Badge variant={a.status === 'completed' ? 'default' : a.status === 'in_progress' ? 'secondary' : 'outline'}>{a.status}</Badge>
             </div>
-            {(a.started_at || a.finished_at) && <div className="text-[10px] text-muted-foreground">{a.started_at && `Start: ${new Date(a.started_at).toLocaleString()}`}{a.finished_at && ` • End: ${new Date(a.finished_at).toLocaleString()}`}</div>}
+            {(a.started_at || a.finished_at) && <div className="text-[10px] text-muted-foreground">{a.started_at && t("orders.start") + `: ${new Date(a.started_at).toLocaleString()}`}{a.finished_at && ` • ${t("orders.finish")}: ${new Date(a.finished_at).toLocaleString()}`}</div>}
             <div className="flex gap-1">
               {a.status === 'pending' && <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => onUpdateAssignment(a, { status: 'in_progress', started_at: new Date().toISOString() })}>{t("orders.start")}</Button>}
               {a.status === 'in_progress' && <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => onUpdateAssignment(a, { status: 'completed', finished_at: new Date().toISOString() })}>{t("orders.finish")}</Button>}

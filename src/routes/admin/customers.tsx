@@ -151,14 +151,14 @@ function CustomersPage() {
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? t("customers.edit") : t("customers.new")}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>{t("customers.name")} *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={i18n.language === 'ar' ? "مثال: أحمد محمد علي" : "e.g. John Doe"} /></div>
+            <div><Label>{t("customers.name")} *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
             <div><Label>{t("customers.phone")} *</Label><Input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="01XXXXXXXXX" inputMode="tel" /></div>
-            <div><Label>{t("customers.email")}</Label><Input type="email" value={form.email ?? ''} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="customer@example.com" /></div>
+            <div><Label>{t("customers.email")}</Label><Input type="email" value={form.email ?? ''} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>{t("customers.governorate")}</Label><Input value={form.governorate ?? ''} onChange={e => setForm({ ...form, governorate: e.target.value })} placeholder={i18n.language === 'ar' ? "القاهرة، الجيزة..." : "Cairo, Giza..."} /></div>
+              <div><Label>{t("customers.governorate")}</Label><Input value={form.governorate ?? ''} onChange={e => setForm({ ...form, governorate: e.target.value })} /></div>
             </div>
-            <div><Label>{t("customers.address")}</Label><Input value={form.address ?? ''} onChange={e => setForm({ ...form, address: e.target.value })} placeholder={i18n.language === 'ar' ? "الشارع، رقم المبنى..." : "Street, building..."} /></div>
-            <Button onClick={save} className="w-full">{editing ? t("common.save") : t("customers.new")}</Button>
+            <div><Label>{t("customers.address")}</Label><Input value={form.address ?? ''} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
+            <Button onClick={save} className="w-full">{editing ? t("common.save") : t("common.new")}</Button>
           </div>
         </DialogContent>
       </Dialog>
