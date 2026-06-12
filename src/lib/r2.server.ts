@@ -1,146 +1,101 @@
 // Cloudflare R2 client (server-only).
-// Uses S3-compatible API via @aws-sdk/client-s3.
-// Never import this from client code.
+// Wraps S3-compatible API via @aws-sdk/client-s3.
+// Only server code should import this.
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
-import {
-  getSignedUrl as getSignedUrlS3,
-  S3RequestPresigner,
-} from "@aws-sdk/s3-request-presigner";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createHash } from "crypto";
-import type { R2Config } from "./r2.config";
 
-function getR2Config(): R2Config {
+interface R2Config {
+  endpoint: string;
+  region: string;
+  credentials: { accessKeyId: string; secretAccessKey: string };
+  bucketName: string;
+  publicUrl: string | undefined;
+  accountId: string;
+}
+
+function getConfig(): R2Config {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  // Support both R2_BUCKET and R2_BUCKET_NAME for compatibility
-  const bucketName = process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
-  const publicUrl = process.env.R2_PUBLIC_URL; // Optional: custom domain for public access
+  const bucketName =
+    process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
+  const publicUrl = process.env.R2_PUBLIC_URL;
 
   if (!accountId || !accessKeyId || !secretAccessKey) {
     throw new Error(
-      "Missing R2 environment variables. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY.",
+      "Missing R2 environment variables (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY).",
     );
   }
-
-  const endpoint = `https://${accountId}.r2.cloudflarestorage.com`;
-
   return {
-    endpoint,
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     region: "auto",
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
+    credentials: { accessKeyId, secretAccessKey },
     bucketName,
     publicUrl,
     accountId,
   };
 }
 
-let _r2Client: S3Client | undefined;
-
-function getR2Client(): S3Client {
-  if (!_r2Client) {
-    const { endpoint, region, credentials } = getR2Config();
-    _r2Client = new S3Client({
-      endpoint,
-      region,
-      credentials,
-    });
+let _client: S3Client | undefined;
+function client(): S3Client {
+  if (!_client) {
+    const { endpoint, region, credentials } = getConfig();
+    _client = new S3Client({ endpoint, region, credentials });
   }
-  return _r2Client;
+  return _client;
 }
 
-/**
- * Generate a presigned PUT URL for direct browser-to-R2 upload.
- * @param key - Object key (path) in the bucket
- * @param contentType - MIME type of the file
- * @param expiresIn - URL expiration in seconds (default: 15 minutes)
- * @returns Presigned URL and the object key
- */
 export async function getUploadUrl(
   key: string,
   contentType: string,
   expiresIn = 900,
 ): Promise<{ uploadUrl: string; key: string }> {
-  const { bucketName } = getR2Config();
-  const client = getR2Client();
-
-  const command = new PutObjectCommand({
-    Bucket: bucketName,
+  const cmd = new PutObjectCommand({
+    Bucket: getConfig().bucketName,
     Key: key,
     ContentType: contentType,
   });
-
-  const uploadUrl = await getSignedUrlS3(client, command, { expiresIn });
+  const uploadUrl = await getSignedUrl(client(), cmd, { expiresIn });
   return { uploadUrl, key };
 }
 
-/**
- * Generate a presigned GET URL for private object access.
- * @param key - Object key in the bucket
- * @param expiresIn - URL expiration in seconds (default: 30 minutes)
- * @returns Presigned download URL
- */
-export async function getDownloadUrl(
-  key: string,
-  expiresIn = 1800,
-): Promise<string> {
-  const { bucketName } = getR2Config();
-  const client = getR2Client();
-
-  const command = new HeadObjectCommand({
-    Bucket: bucketName,
+export async function getDownloadUrl(key: string, expiresIn = 1800): Promise<string> {
+  const cmd = new GetObjectCommand({
+    Bucket: getConfig().bucketName,
     Key: key,
   });
-
-  // Check if object exists first
-  try {
-    await client.send(command);
-  } catch {
-    throw new Error(`Object not found: ${key}`);
-  }
-
-  const getCommand = new PutObjectCommand({
-    Bucket: bucketName,
-    Key: key,
-  });
-
-  // Use a proper GET command for download
-  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
-  const downloadCommand = new GetObjectCommand({
-    Bucket: bucketName,
-    Key: key,
-  });
-
-  return getSignedUrlS3(client, downloadCommand, { expiresIn });
+  return getSignedUrl(client(), cmd, { expiresIn });
 }
 
-/**
- * Delete an object from R2.
- * @param key - Object key in the bucket
- * @returns true if deleted, false if not found
- */
 export async function deleteObject(key: string): Promise<boolean> {
-  const { bucketName } = getR2Config();
-  const client = getR2Client();
-
   try {
-    await client.send(
-      new DeleteObjectCommand({
-        Bucket: bucketName,
-        Key: key,
-      }),
+    await client().send(
+      new DeleteObjectCommand({ Bucket: getConfig().bucketName, Key: key }),
     );
     return true;
   } catch (err: any) {
-    if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
+    if (err?.name === "NotFound" || err?.$metadata?.httpStatusCode === 404) {
+      return false;
+    }
+    throw err;
+  }
+}
+
+export async function objectExists(key: string): Promise<boolean> {
+  try {
+    await client().send(
+      new HeadObjectCommand({ Bucket: getConfig().bucketName, Key: key }),
+    );
+    return true;
+  } catch (err: any) {
+    if (err?.name === "NotFound" || err?.$metadata?.httpStatusCode === 404) {
       return false;
     }
     throw err;
@@ -148,8 +103,8 @@ export async function deleteObject(key: string): Promise<boolean> {
 }
 
 /**
- * Generate a unique object key for uploads.
- * Uses tenant/order context for organization.
+ * Generate a unique object key: `tenantId/entityType/entityId/hash.ext`.
+ * The leading tenantId is the primary isolation boundary — never bypass it.
  */
 export function generateObjectKey(
   tenantId: string,
@@ -157,49 +112,19 @@ export function generateObjectKey(
   entityId: string,
   originalFilename: string,
 ): string {
-  const ext = originalFilename.split(".").pop()?.toLowerCase() || "bin";
+  if (!tenantId) throw new Error("tenantId is required for object key generation");
+  const ext = (originalFilename.split(".").pop() || "bin").toLowerCase();
   const hash = createHash("sha256")
-    .update(`${Date.now()}-${Math.random()}`)
+    .update(`${Date.now()}-${Math.random()}-${originalFilename}`)
     .digest("hex")
     .slice(0, 12);
   return `${tenantId}/${entityType}/${entityId}/${hash}.${ext}`;
 }
 
-/**
- * Get the public URL for an object (if bucket has public access or custom domain).
- * For private buckets, use getDownloadUrl instead.
- */
 export function getPublicUrl(key: string): string {
-  const { bucketName, publicUrl } = getR2Config();
-
+  const { bucketName, publicUrl, accountId } = getConfig();
   if (publicUrl) {
     return `${publicUrl.replace(/\/$/, "")}/${key}`;
   }
-
-  // Default public URL format (requires bucket to be public)
-  const { R2_ACCOUNT_ID } = process.env;
-  return `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucketName}/${key}`;
-}
-
-/**
- * Check if an object exists in R2.
- */
-export async function objectExists(key: string): Promise<boolean> {
-  const { bucketName } = getR2Config();
-  const client = getR2Client();
-
-  try {
-    await client.send(
-      new HeadObjectCommand({
-        Bucket: bucketName,
-        Key: key,
-      }),
-    );
-    return true;
-  } catch (err: any) {
-    if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
-      return false;
-    }
-    throw err;
-  }
+  return `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${key}`;
 }

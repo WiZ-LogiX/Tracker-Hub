@@ -39,20 +39,18 @@ const NAV = [
   { to: "/admin/seed", labelKey: "admin.nav.seedData", icon: Database },
 ];
 
-
 function SidebarContent() {
   const loc = useLocation();
   const { signOut, user } = useAuth();
   const nav = useNavigate();
-  const { t, i18n } = useTranslation();
-  
-  // Determine active nav item
+  const { t } = useTranslation();
+
   const path = loc.pathname;
   let bestTo: string | null = null;
   for (const item of NAV) {
     const matches = item.exact
       ? path === item.to
-      : path === item.to || path.startsWith(item.to + '/');
+      : path === item.to || path.startsWith(item.to + "/");
     if (matches && (!bestTo || item.to.length > bestTo.length)) {
       bestTo = item.to;
     }
@@ -62,9 +60,13 @@ function SidebarContent() {
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       <div className="px-6 py-6 border-b border-sidebar-border">
         <Link to="/" className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-md bg-gold flex items-center justify-center text-gold-foreground font-serif font-bold">P</div>
+          <div className="h-9 w-9 rounded-md bg-gold flex items-center justify-center text-gold-foreground font-serif font-bold">
+            P
+          </div>
           <div>
-            <div className="font-serif font-bold text-lg leading-none text-sidebar-foreground">PeleCanon</div>
+            <div className="font-serif font-bold text-lg leading-none text-sidebar-foreground">
+              PeleCanon
+            </div>
             <div className="text-[10px] text-sidebar-foreground/60">{t("admin.panel")}</div>
           </div>
         </Link>
@@ -73,10 +75,15 @@ function SidebarContent() {
         {NAV.map(item => {
           const active = item.to === bestTo;
           return (
-            <Link key={item.to} to={item.to}
+            <Link
+              key={item.to}
+              to={item.to}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition ${
-                active ? 'bg-gold text-gold-foreground font-medium' : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-              }`}>
+                active
+                  ? "bg-gold text-gold-foreground font-medium"
+                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              }`}
+            >
               <item.icon className="h-4 w-4 shrink-0" />
               <span>{t(item.labelKey)}</span>
             </Link>
@@ -84,9 +91,18 @@ function SidebarContent() {
         })}
       </nav>
       <div className="p-3 border-t border-sidebar-border">
-        <div className="px-3 py-2 text-xs text-sidebar-foreground/60 truncate">{user?.email}</div>
-        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          onClick={async () => { await signOut(); nav({ to: '/auth' }); }}>
+        <div className="px-3 py-2 text-xs text-sidebar-foreground/60 truncate">
+          {user?.email}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start gap-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          onClick={async () => {
+            await signOut();
+            nav({ to: "/auth" });
+          }}
+        >
           <LogOut className="h-4 w-4" /> {t("common.logout")}
         </Button>
       </div>
@@ -101,22 +117,28 @@ function AdminLayout() {
   const isRtl = i18n.language === "ar";
 
   useEffect(() => {
-    if (!loading && !user) nav({ to: '/auth' });
+    if (!loading && !user) nav({ to: "/auth" });
   }, [loading, user, nav]);
 
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="h-6 w-6 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin" aria-label="loading" />
+        <div
+          className="h-6 w-6 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin"
+          aria-label="loading"
+        />
       </div>
     );
   }
+
   if (!isStaff) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 text-center">
         <div>
           <p className="mb-4">{t("admin.noAccess")}</p>
-          <Link to="/"><Button variant="outline">{t("common.home")}</Button></Link>
+          <Link to="/">
+            <Button variant="outline">{t("common.home")}</Button>
+          </Link>
         </div>
       </div>
     );
@@ -124,16 +146,22 @@ function AdminLayout() {
 
   return (
     <div className="min-h-screen flex bg-background">
-      <aside className={`hidden md:flex md:w-64 shrink-0 fixed inset-y-0 ${isRtl ? "right-0" : "left-0"}`}>
+      <aside
+        className={`hidden md:flex md:w-64 shrink-0 fixed inset-y-0 ${isRtl ? "right-0" : "left-0"}`}
+      >
         <SidebarContent />
       </aside>
       <div className={`flex-1 ${isRtl ? "md:mr-64" : "md:ml-64"} flex flex-col min-w-0`}>
         <header className="border-b bg-card px-4 py-3 flex items-center gap-3">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden"><Menu /></Button>
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu />
+              </Button>
             </SheetTrigger>
-            <SheetContent side={isRtl ? "right" : "left"} className="p-0 w-72"><SidebarContent /></SheetContent>
+            <SheetContent side={isRtl ? "right" : "left"} className="p-0 w-72">
+              <SidebarContent />
+            </SheetContent>
           </Sheet>
           <div className="font-serif font-bold md:hidden">PeleCanon Admin</div>
           <div className="flex-1" />

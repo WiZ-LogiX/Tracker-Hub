@@ -1,27 +1,27 @@
 export const ORDER_STAGES = [
-  'deposit_received',
-  'design_approved',
-  'cutting',
-  'assembly',
-  'finishing',
-  'quality_check',
-  'ready_for_pickup',
-  'delivered',
-  'completed',
+  "deposit_received",
+  "design_approved",
+  "cutting",
+  "assembly",
+  "finishing",
+  "quality_check",
+  "ready_for_pickup",
+  "delivered",
+  "completed",
 ] as const;
 
-export type OrderStage = typeof ORDER_STAGES[number];
+export type OrderStage = (typeof ORDER_STAGES)[number];
 
 export const STAGE_LABEL_AR: Record<OrderStage, string> = {
-  deposit_received: 'استلام العربون',
-  design_approved: 'اعتماد التصميم',
-  cutting: 'قص الخامات',
-  assembly: 'التجميع',
-  finishing: 'التشطيب والدهان',
-  quality_check: 'فحص الجودة',
-  ready_for_pickup: 'جاهز للاستلام',
-  delivered: 'تم التسليم',
-  completed: 'مكتمل',
+  deposit_received: "استلام العربون",
+  design_approved: "اعتماد التصميم",
+  cutting: "قص الخامات",
+  assembly: "التجميع",
+  finishing: "التشطيب والدهان",
+  quality_check: "فحص الجودة",
+  ready_for_pickup: "جاهز للاستلام",
+  delivered: "تم التسليم",
+  completed: "مكتمل",
 };
 
 /**
@@ -29,7 +29,7 @@ export const STAGE_LABEL_AR: Record<OrderStage, string> = {
  * or the raw stage string for unknown values (e.g. legacy or invalid db rows).
  */
 export function getStageLabelAr(stage: string | null | undefined): string {
-  if (!stage) return '—';
+  if (!stage) return "—";
   if ((ORDER_STAGES as readonly string[]).includes(stage)) {
     return STAGE_LABEL_AR[stage as OrderStage];
   }
