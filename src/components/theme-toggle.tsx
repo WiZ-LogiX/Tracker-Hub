@@ -1,4 +1,5 @@
 import { Moon, Sun, Monitor } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,11 +12,15 @@ import { useTranslation } from "react-i18next";
 
 export function ThemeToggle() {
   const { setTheme, resolved } = useTheme();
-  const { t } = useTranslation();
+  const { t, ready } = useTranslation();
+  // SSR/CSR consistency: until mounted, emit a stable fallback label.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const ariaLabel = mounted ? t("common.theme") : "Theme";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={t("common.theme")}>
+        <Button variant="ghost" size="icon" aria-label={ariaLabel}>
           {resolved === "dark" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
         </Button>
       </DropdownMenuTrigger>
