@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,8 +13,13 @@ export interface FieldDef {
   key: string;
   label: string;
   type?: 'text' | 'number';
-  default?: any;
+  default?: string | number;
   showInTable?: boolean;
+}
+
+interface CrudRow {
+  id: string;
+  [key: string]: unknown;
 }
 
 export function GenericCrud({
@@ -22,36 +27,61 @@ export function GenericCrud({
 }: {
   title: string; subtitle?: string; table: string; fields: FieldDef[];
 }) {
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<CrudRow[]>([]);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
-  const blank = Object.fromEntries(fields.map(f => [f.key, f.default ?? (f.type === 'number' ? 0 : '')]));
-  const [form, setForm] = useState<any>(blank);
+  const [editing, setEditing] = useState<CrudRow | null>(null);
+  
+  const blank = Object.fromEntries(
+    fields.map(f => [f.key, f.default ?? (f.type === 'number' ? 0 : '')])
+  ) as Record<string, string | number>;
+  
+  const [form, setForm] = useState<Record<string, string | number>>(blank);
 
   useEffect(() => { load(); }, [table]);
+  
   async function load() {
-    const { data } = await (supabase as any).from(table).select('*').order('created_at', { ascending: false });
-    setRows(data ?? []);
-  }
-  function openNew() { setEditing(null); setForm(blank); setOpen(true); }
-  function openEdit(r: any) { setEditing(r); setForm({ ...blank, ...r }); setOpen(true); }
-  async function save() {
-    const payload: any = {};
-    for (const f of fields) {
-      payload[f.key] = f.type === 'number' ? Number(form[f.key]) : form[f.key];
+    const { data, error } = await supabase.from(table).select('*').order('created_at', { ascending: false });
+    if (error) {
+      toast.error(error.message);
+      setRows([]);
+      return;
     }
-    const q = editing
-      ? (supabase as any).from(table).update(payload).eq('id', editing.id)
-      : (supabase as any).from(table).insert(payload);
-    const { error } = await q;
-    if (error) return toast.error(error.message);
-    toast.success("تم الحفظ"); setOpen(false); load();
+    setRows((data as CrudRow[]) ?? []);
   }
+  
+  function openNew() { setEditing(null); setForm(blank); setOpen(true); }
+  
+  function openEdit(r: CrudRow) { 
+    setEditing(r); 
+    const next = { ...blank };
+    for (const f of fields) {
+      const v = r[f.key];
+      if (v !== undefined && v !== null) next[f.key] = String(v);
+    }
+    setForm(next);
+  }
+  
+  async function save() {
+    const payload: Record<string, string | number | null> = {};
+    for (const f of fields) {
+      const v = form[f.key];
+      payload[f.key] = f.type === 'number' ? Number(v) : (v ?? "");
+    }
+    const { error } = editing
+      ? await supabase.from(table).update(payload).eq('id', editing.id)
+      : await supabase.from(table).insert(payload);
+    if (error) return toast.error(error.message);
+    toast.success("تم الحفظ"); 
+    setOpen(false); 
+    load();
+  }
+  
   async function remove(id: string) {
     if (!confirm("تأكيد الحذف؟")) return;
-    const { error } = await (supabase as any).from(table).delete().eq('id', id);
+    const { error } = await supabase.from(table).delete().eq('id', id);
     if (error) return toast.error(error.message);
-    toast.success("تم الحذف"); load();
+    toast.success("تم الحذف"); 
+    load();
   }
 
   const tableFields = fields.filter(f => f.showInTable !== false);
@@ -93,7 +123,11 @@ export function GenericCrud({
             {fields.map(f => (
               <div key={f.key}>
                 <Label>{f.label}</Label>
-                <Input type={f.type === 'number' ? 'number' : 'text'} value={form[f.key] ?? ''} onChange={e => setForm({ ...form, [f.key]: e.target.value })} />
+                <Input 
+                  type={f.type === 'number' ? 'number' : 'text'} 
+                  value={form[f.key] ?? ''} 
+                  onChange={e => setForm({ ...form, [f.key]: e.target.value })} 
+                />
               </div>
             ))}
             <Button onClick={save} className="w-full">حفظ</Button>

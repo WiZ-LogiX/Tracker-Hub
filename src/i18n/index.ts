@@ -26,12 +26,15 @@ if (!i18n.isInitialized) {
       },
       fallbackLng: "ar",
       supportedLngs: SUPPORTED_LANGS as unknown as string[],
+      load: "languageOnly",
       interpolation: { escapeValue: false },
       detection: {
         order: ["localStorage", "navigator"],
         lookupLocalStorage: "pelecanon-lang",
         caches: ["localStorage"],
       },
+      saveMissing: false,
+      returnEmptyString: false,
     });
 }
 

@@ -1,11 +1,8 @@
-// Portable Postgres client (provider-agnostic).
-// Works today against Supabase's pooled connection (SUPABASE_DB_URL).
-// To switch providers (Neon, RDS, Railway, self-hosted...), set DATABASE_URL
-// to the new connection string. No other code changes required.
-//
-// SERVER-ONLY: never import this from client code.
-import postgres from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
+// Portable Postgres client using Neon HTTP driver.
+// Works on Cloudflare Workers without persistent TCP connections.
+// To switch providers, just change the DATABASE_URL.
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "./schema";
 
 function resolveConnectionString(): string {
@@ -18,18 +15,14 @@ function resolveConnectionString(): string {
   return url;
 }
 
+let _db: ReturnType<typeof createDb> | undefined;
+
 function createDb() {
   const connectionString = resolveConnectionString();
-  // `prepare: false` is required when talking to a pgbouncer transaction-mode
-  // pooler (Supabase pooler URL on port 6543, and most managed Postgres poolers).
-  // Safe to keep on for direct connections as well.
-  const client = postgres(connectionString, { prepare: false, max: 5 });
+  const client = neon(connectionString);
   return drizzle(client, { schema });
 }
 
-let _db: ReturnType<typeof createDb> | undefined;
-
-// Import like: import { db } from "@/db/client.server";
 export const db = new Proxy({} as ReturnType<typeof createDb>, {
   get(_, prop, receiver) {
     if (!_db) _db = createDb();

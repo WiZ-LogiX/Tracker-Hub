@@ -16,7 +16,7 @@ import { listMaterials, upsertMaterial, deleteMaterial } from "@/lib/materials.f
 
 export const Route = createFileRoute("/admin/materials")({ component: MaterialsPage });
 
-interface Row {
+interface MaterialRow {
   id: string;
   name_ar: string;
   name_en: string;
@@ -29,17 +29,22 @@ interface Row {
   active: boolean;
 }
 
-const blank: Row = {
-  id: '', name_ar: '', name_en: '', type: 'wood', unit: 'm²',
-  price_per_unit: 0, wastage_pct: null, supplier_id: null, country_of_origin: '', active: true,
+interface Supplier {
+  id: string;
+  name: string;
+}
+
+const blank: MaterialRow = {
+  id: "", name_ar: "", name_en: "", type: "wood", unit: "m²",
+  price_per_unit: 0, wastage_pct: null, supplier_id: null, country_of_origin: "", active: true,
 };
 
 function MaterialsPage() {
-  const [rows, setRows] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [rows, setRows] = useState<MaterialRow[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Row | null>(null);
-  const [form, setForm] = useState<Row>(blank);
+  const [editing, setEditing] = useState<MaterialRow | null>(null);
+  const [form, setForm] = useState<MaterialRow>(blank);
 
   const listFn = useServerFn(listMaterials);
   const upsertFn = useServerFn(upsertMaterial);
@@ -51,16 +56,17 @@ function MaterialsPage() {
         listFn(),
         supabase.from('suppliers').select('*').eq('active', true),
       ]);
-      setRows(m.items ?? []);
-      setSuppliers(s.data ?? []);
-    } catch (e: any) {
-      toast.error(e?.message ?? "فشل تحميل البيانات");
+      setRows((m.items as MaterialRow[]) ?? []);
+      setSuppliers((s.data as Supplier[]) ?? []);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "فشل تحميل البيانات";
+      toast.error(message);
     }
   }
   useEffect(() => { load(); }, []);
 
   function openNew() { setEditing(null); setForm(blank); setOpen(true); }
-  function openEdit(r: any) { setEditing(r); setForm({ ...blank, ...r }); setOpen(true); }
+  function openEdit(r: MaterialRow) { setEditing(r); setForm({ ...blank, ...r }); setOpen(true); }
 
   async function save() {
     if (!form.name_ar) return toast.error("الاسم بالعربي مطلوب");
@@ -73,15 +79,16 @@ function MaterialsPage() {
           type: form.type || 'wood',
           unit: form.unit || 'm²',
           price_per_unit: Number(form.price_per_unit),
-          wastage_pct: form.wastage_pct == null || (form.wastage_pct as any) === '' ? null : Number(form.wastage_pct),
+          wastage_pct: form.wastage_pct == null || form.wastage_pct === undefined ? null : Number(form.wastage_pct),
           supplier_id: form.supplier_id || null,
           country_of_origin: form.country_of_origin || null,
           active: form.active,
         },
       });
       toast.success("تم الحفظ"); setOpen(false); load();
-    } catch (e: any) {
-      toast.error(e?.message ?? "فشل الحفظ");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "فشل الحفظ";
+      toast.error(message);
     }
   }
 
@@ -90,12 +97,16 @@ function MaterialsPage() {
     try {
       await deleteFn({ data: { id } });
       load();
-    } catch (e: any) {
-      toast.error(e?.message ?? "فشل الحذف");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "فشل الحذف";
+      toast.error(message);
     }
   }
 
-  function supName(id: string | null) { return id ? (suppliers.find(s => s.id === id)?.name ?? '—') : '—'; }
+  function supName(id: string | null | undefined): string {
+    if (!id) return '—';
+    return suppliers.find(s => s.id === id)?.name ?? '—';
+  }
 
   return (
     <div className="space-y-6">

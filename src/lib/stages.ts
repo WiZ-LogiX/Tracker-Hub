@@ -24,6 +24,18 @@ export const STAGE_LABEL_AR: Record<OrderStage, string> = {
   completed: 'مكتمل',
 };
 
+/**
+ * Type-safe accessor for stage labels. Returns the Arabic label for known stages,
+ * or the raw stage string for unknown values (e.g. legacy or invalid db rows).
+ */
+export function getStageLabelAr(stage: string | null | undefined): string {
+  if (!stage) return '—';
+  if ((ORDER_STAGES as readonly string[]).includes(stage)) {
+    return STAGE_LABEL_AR[stage as OrderStage];
+  }
+  return stage;
+}
+
 export function stageIndex(s: OrderStage): number {
   return ORDER_STAGES.indexOf(s);
 }
