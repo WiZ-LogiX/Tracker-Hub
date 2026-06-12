@@ -13,7 +13,6 @@ import { Route as TrackRouteImport } from './routes/track'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 import { Route as AdminWastageRulesRouteImport } from './routes/admin/wastage-rules'
 import { Route as AdminVeneersRouteImport } from './routes/admin/veneers'
@@ -58,11 +57,6 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AdminRoute,
 } as any)
 const AdminWorkersRoute = AdminWorkersRouteImport.update({
   id: '/workers',
@@ -209,7 +203,6 @@ export interface FileRoutesByFullPath {
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
-  '/admin/': typeof AdminIndexRoute
   '/admin/invoices/$id': typeof AdminInvoicesIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
@@ -218,6 +211,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/track': typeof TrackRoute
   '/admin/accessories': typeof AdminAccessoriesRoute
@@ -239,7 +233,6 @@ export interface FileRoutesByTo {
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
-  '/admin': typeof AdminIndexRoute
   '/admin/invoices/$id': typeof AdminInvoicesIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
@@ -271,7 +264,6 @@ export interface FileRoutesById {
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
-  '/admin/': typeof AdminIndexRoute
   '/admin/invoices/$id': typeof AdminInvoicesIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
@@ -304,7 +296,6 @@ export interface FileRouteTypes {
     | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
-    | '/admin/'
     | '/admin/invoices/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
@@ -313,6 +304,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/auth'
     | '/track'
     | '/admin/accessories'
@@ -334,7 +326,6 @@ export interface FileRouteTypes {
     | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
-    | '/admin'
     | '/admin/invoices/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
@@ -365,7 +356,6 @@ export interface FileRouteTypes {
     | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
-    | '/admin/'
     | '/admin/invoices/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
@@ -409,13 +399,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/admin/': {
-      id: '/admin/'
-      path: '/'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRoute
     }
     '/admin/workers': {
       id: '/admin/workers'
@@ -620,7 +603,6 @@ interface AdminRouteChildren {
   AdminVeneersRoute: typeof AdminVeneersRoute
   AdminWastageRulesRoute: typeof AdminWastageRulesRoute
   AdminWorkersRoute: typeof AdminWorkersRoute
-  AdminIndexRoute: typeof AdminIndexRoute
   AdminQuotesIdRoute: typeof AdminQuotesIdRoute
   AdminQuotesConfiguratorRoute: typeof AdminQuotesConfiguratorRoute
   AdminQuotesNewRoute: typeof AdminQuotesNewRoute
@@ -647,7 +629,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminVeneersRoute: AdminVeneersRoute,
   AdminWastageRulesRoute: AdminWastageRulesRoute,
   AdminWorkersRoute: AdminWorkersRoute,
-  AdminIndexRoute: AdminIndexRoute,
   AdminQuotesIdRoute: AdminQuotesIdRoute,
   AdminQuotesConfiguratorRoute: AdminQuotesConfiguratorRoute,
   AdminQuotesNewRoute: AdminQuotesNewRoute,
