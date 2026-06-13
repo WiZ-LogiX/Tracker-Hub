@@ -103,13 +103,28 @@ async function sessionFromRequest(): Promise<SessionInfo> {
   };
 }
 
+/**
+ * Sprint 0: R2_PUBLIC_URL is now required at boot. The S3-API URL pattern
+ * (`https://<account>.r2.cloudflarestorage.com/...`) is NOT publicly readable
+ * without explicit bucket-level public access granted out-of-band; we refuse
+ * to silently fall back to it.
+ */
 function requireEnvConfig(): void {
-  const required = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"];
+  const required = [
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
+    "R2_PUBLIC_URL",
+  ];
   const missing = required.filter(
-    (k) => !process.env[k] && !process.env[k.replace("_NAME", "")],
+    (k) => !process.env[k] && !(k === "R2_BUCKET" && process.env.R2_BUCKET_NAME),
   );
   if (missing.length) {
-    throw new Error(`Missing R2 env vars: ${missing.join(", ")}`);
+    throw new Error(
+      `Missing required R2 env vars: ${missing.join(", ")}. ` +
+      `R2_PUBLIC_URL must point at the public bucket or custom CDN domain.`,
+    );
   }
 }
 
@@ -125,12 +140,6 @@ function getR2Client(): S3Client {
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     region: "auto",
     credentials: { accessKeyId, secretAccessKey },
-    // Disable SDK request/response body-checksum hooks. Without these, the
-    // SDK either streams the body (signing-time) to compute a CRC32 — which
-    // produces garbage for a no-body PUT — or wraps the response, neither of
-    // which we want for browser-direct uploads via S3-compatible presign URLs.
-    // "WHEN_REQUIRED" leaves checksum fields off unless the operation demands them
-    // (e.g. multipart uploads with explicit ChecksumAlgorithm).
     requestChecksumCalculation: "WHEN_REQUIRED",
     responseChecksumValidation: "WHEN_REQUIRED",
   });
@@ -165,11 +174,8 @@ function generateObjectKey(
 }
 
 function getPublicUrl(key: string): string {
-  const accountId = process.env.R2_ACCOUNT_ID!;
-  const bucketName = getBucketName();
-  const publicUrl = process.env.R2_PUBLIC_URL;
-  if (publicUrl) return `${publicUrl.replace(/\/$/, "")}/${key}`;
-  return `https://${accountId}.r2.cloudflarestorage.com/${bucketName}/${key}`;
+  // Sprint 0: R2_PUBLIC_URL is always set after requireEnvConfig().
+  return `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${key}`;
 }
 
 export const getR2UploadUrl = createServerFn({ method: "POST" })

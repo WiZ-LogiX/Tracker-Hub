@@ -41,26 +41,39 @@ export function PhotoUploader({
   }
 
   /**
-   * Direct PUT to R2. Two failure modes show up as "Failed to fetch":
-   *   1. CORS preflight rejection → opaque network error, no status.
-   *   2. Mixed-content (http page → https R2).
-   * We attempt a HEAD first to surface the real CORS failure with a useful
-   * message; if that succeeds, the PUT is allowed too.
+   * Sprint 0: real OPTIONS preflight, not HEAD.
+   *
+   * HEAD on a signed-PUT URL is a CORS *simple* request — browsers don't
+   * preflight it and don't send Content-Type/Authorization, so it succeeds
+   * even when the PUT that follows would be blocked. The error trace was
+   * therefore catching the wrong signal.
+   *
+   * OPTIONS with `Access-Control-Request-Method: PUT` and
+   * `Access-Control-Request-Headers: content-type` simulates the preflight
+   * the browser will actually issue for the real upload. If the bucket's
+   * CORS policy rejects it, we get a real status code and a clear error.
    */
-  async function uploadOne(file: File, uploadUrl: string, key: string, publicUrl: string) {
-    // Diagnostic: ping the bucket with HEAD first. If even a HEAD is CORS-rejected,
-    // the user gets a clearer signal than the generic "Failed to fetch" on PUT.
-    try {
-      await fetch(uploadUrl.split("?")[0], {
-        method: "HEAD",
-        credentials: "omit",
-      });
-    } catch (e: any) {
+  async function probePreflight(uploadUrl: string): Promise<void> {
+    const res = await fetch(uploadUrl, {
+      method: "OPTIONS",
+      headers: {
+        Origin: window.location.origin,
+        "Access-Control-Request-Method": "PUT",
+        "Access-Control-Request-Headers": "content-type",
+      },
+      credentials: "omit",
+    });
+    if (!res.ok) {
       throw new Error(
-        `CORS preflight failed for ${file.name}. The R2 bucket must allow PUT/GET/HEAD ` +
-        `from this origin (see src/lib/r2.config.ts). Network error: ${e?.message ?? "unknown"}`,
+        `CORS preflight failed (HTTP ${res.status}). ` +
+        `Confirm the R2 bucket policy allows PUT/GET/HEAD from ${window.location.origin} ` +
+        `with the Content-Type header — see src/lib/r2.config.ts.`,
       );
     }
+  }
+
+  async function uploadOne(file: File, uploadUrl: string, key: string, publicUrl: string) {
+    await probePreflight(uploadUrl);
 
     const res = await fetch(uploadUrl, {
       method: "PUT",
@@ -85,7 +98,6 @@ export function PhotoUploader({
     setProgress({ done: 0, failed: 0, total: files.length });
     const results: Array<{ key: string; publicUrl: string; caption: string | null }> = [];
 
-    // 1. Server-side: get presigned PUT URLs for all files.
     let uploads: Array<{ key: string; uploadUrl: string; publicUrl?: string }> = [];
     try {
       const fileInfos = files.map(f => ({
@@ -106,7 +118,6 @@ export function PhotoUploader({
       return;
     }
 
-    // 2. Client-side: PUT each file directly to R2.
     let done = 0;
     let failed = 0;
     for (let i = 0; i < files.length; i++) {
@@ -127,7 +138,7 @@ export function PhotoUploader({
         results.push({ key, publicUrl, caption: caption ?? null });
         done++;
       } catch (e: any) {
-        console.error("[PhotoUploader] PUT failed", file.name, e?.message);
+        console.error("[PhotoUploader] upload failed", file.name, e?.message);
         failed++;
       }
       setProgress({ done, failed, total: files.length });
