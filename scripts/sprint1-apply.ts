@@ -330,7 +330,7 @@ async function main() {
     bail(
       "DATABASE_URL is not set. Example: export DATABASE_URL=postgresql://postgres:PASS@db.x.supabase.co:5432/postgres",
     );
-  assertUrl(url);
+  const parsedUrl = assertUrl(url);
   const effectiveUrl = await maybeForceIpv4(url);
 
   const files = await listMigrations();
@@ -342,8 +342,19 @@ async function main() {
     process.exit(0);
   }
 
+  // Decode user/pass straight from the URL rather than rely on pg's
+  // connectionString parser — Supabase pooler users are
+  // "postgres.<project_ref>" and the embedded `.` confuses some pg versions
+  // when combined with TLS SNI work. The discrete fields are unambiguous.
+  const decoded = decodeURIComponent(parsedUrl.password);
+  const effectiveParsed = new URL(effectiveUrl);
+
   const client = new pg.Client({
-    connectionString: effectiveUrl,
+    host: effectiveParsed.hostname,
+    port: Number(effectiveParsed.port || "5432"),
+    user: decodeURIComponent(parsedUrl.username),
+    password: decoded,
+    database: (effectiveParsed.pathname || "/postgres").replace(/^\//, "") || "postgres",
     ssl: { rejectUnauthorized: false },
   });
   try {
