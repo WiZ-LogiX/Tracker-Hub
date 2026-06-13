@@ -6,9 +6,14 @@
  *   npx tsx scripts/sprint1-apply.ts
  *   npx tsx scripts/sprint1-apply.ts --only 20260612_tenancy_v1.sql
  *   npx tsx scripts/sprint1-apply.ts --allow-pooler-port
+ *   npx tsx scripts/sprint1-apply.ts --ipv4          # force IPv4 (skip IPv6)
  *
- * No shebang — `tsx` parses the file with esbuild before Node sees the
- * interpreter directive, so any `#!/usr/bin/env` line trips the loader.
+ * Why --ipv4 exists:
+ *   ENETUNREACH surfaces when the kernel picks the AAAA record on a
+ *   network that has no IPv6 path. We replace the connection URL with
+ *   the resolved IPv4 address (and keep the original hostname in PGHOST
+ *   so TLS SNI still works — pg.Client parses connectionString for the
+ *   network endpoint, but TLS uses PGHOST).
  *
  * What it does
  * ------------
@@ -28,6 +33,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import dns from "node:dns/promises";
 import pg from "pg";
 
 type Exit = "ok" | "fail-driver" | "fail-preflight";
@@ -35,6 +41,7 @@ type Exit = "ok" | "fail-driver" | "fail-preflight";
 const argv = process.argv.slice(2);
 const DRY_RUN = argv.includes("--dry-run");
 const ALLOW_POOLER_PORT = argv.includes("--allow-pooler-port");
+const FORCE_IPV4 = argv.includes("--ipv4");
 const ONLY_FLAG = argv.indexOf("--only");
 const ONLY = ONLY_FLAG >= 0 ? argv[ONLY_FLAG + 1] : undefined;
 
@@ -73,6 +80,30 @@ function assertUrl(u: string): URL {
     );
   }
   return parsed;
+}
+
+/**
+ * Replace the hostname in the connection string with the first IPv4
+ * address returned for it. We don't touch anything else, so credentials
+ * and the port survive intact. The original hostname is stashed in
+ * PGHOST so Supabase's TLS SNI still hits the correct virtual host
+ * (Supabase's certificate pool is SNI-keyed).
+ */
+async function maybeForceIpv4(url: string): Promise<string> {
+  if (!FORCE_IPV4) return url;
+  const parsed = new URL(url);
+  const hostname = parsed.hostname;
+  log("→", `Forcing IPv4 lookup for ${hostname}`);
+  const records = await dns.lookup(hostname, { family: 4, all: true });
+  if (!records.length) bail(`No A records found for ${hostname}`);
+  const addr = records[0].address;
+  log("→", `Resolved ${hostname} → ${addr}`);
+  // Preserve username/password/path/port/protocol via the replacement:
+  // build a fresh URL pointing at the IP and copy credentials over.
+  const replaced = new URL(url);
+  replaced.hostname = addr;
+  process.env.PGHOST = hostname; // helps TLS SNI on pg
+  return replaced.toString();
 }
 
 async function listMigrations(): Promise<string[]> {
@@ -300,6 +331,7 @@ async function main() {
       "DATABASE_URL is not set. Example: export DATABASE_URL=postgresql://postgres:PASS@db.x.supabase.co:5432/postgres",
     );
   assertUrl(url);
+  const effectiveUrl = await maybeForceIpv4(url);
 
   const files = await listMigrations();
   log("→", `Applying ${files.length} migration file(s):`);
@@ -311,7 +343,7 @@ async function main() {
   }
 
   const client = new pg.Client({
-    connectionString: url,
+    connectionString: effectiveUrl,
     ssl: { rejectUnauthorized: false },
   });
   try {
