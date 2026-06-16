@@ -111,7 +111,7 @@ function SidebarContent() {
 }
 
 function AdminLayout() {
-  const { user, loading, isStaff } = useAuth();
+  const { user, loading, isStaff, memberships } = useAuth();
   const nav = useNavigate();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
@@ -120,7 +120,30 @@ function AdminLayout() {
     if (!loading && !user) nav({ to: "/auth" });
   }, [loading, user, nav]);
 
+  // Three render branches:
+  //   - loading:           show a spinner.
+  //   - !user:             redirect to /auth (handled by useEffect above).
+  //   - !loading && user && !memberships.length:
+  //                        we're either still bootstrapping this user's team
+  //                        (one-time mutation in flight) or they really have
+  //                        no team. Show a placeholder rather than the
+  //                        access-denied screen because the bootstrap bridge
+  //                        may be a few hundred ms behind.
+  //   - !isStaff:          genuine no-access screen.
+  //   - else:              render the admin shell.
   if (loading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div
+          className="h-6 w-6 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin"
+          aria-label="loading"
+        />
+      </div>
+    );
+  }
+
+  if (!isStaff && memberships.length === 0) {
+    // Bootstrap in flight. Brief loader; the bridge re-renders on completion.
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div

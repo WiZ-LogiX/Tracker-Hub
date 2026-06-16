@@ -65,9 +65,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" },
+      // Self-hosted Google Fonts (loaded via @fontsource) replace the
+      // blocked fonts.googleapis.com link. See src/styles.css for the
+      // @fontsource/cairo, /inter, /playfair-display imports.
     ],
   }),
   shellComponent: RootShell,
