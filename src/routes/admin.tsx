@@ -118,6 +118,7 @@ function AdminLayout() {
     memberships,
     bootstrapping,
     bootstrapError,
+    bootstrapAttempted,
     retryBootstrap,
     signOut: doSignOut,
   } = useAuth();
@@ -130,13 +131,15 @@ function AdminLayout() {
   }, [loading, user, nav]);
 
   // Render branches:
-  //   - loading:                 spinner.
-  //   - !user:                   redirect handled by useEffect above.
-  //   - bootstrapping:           spinner with a hint (one-time mutation).
-  //   - memberships empty, with bootstrapError: error card with retry button.
-  //                              No more infinite spin.
-  //   - !isStaff:                no-access screen.
-  //   - else:                    the admin shell.
+  //   - loading:                  spinner.
+  //   - !user:                    redirect handled by useEffect above.
+  //   - bootstrapping:            spinner with a hint (one-time mutation).
+  //   - !memberships.length && bootstrapping done:
+  //                               either bootstrap failed (show error + retry)
+  //                               or it succeeded but membership list is still
+  //                               empty (show "no team" with manual setup CTA).
+  //   - !isStaff:                 no-access screen.
+  //   - else:                     the admin shell.
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -164,19 +167,30 @@ function AdminLayout() {
     );
   }
 
-  if (!isStaff && bootstrapError) {
+  if (!isStaff && memberships.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-md text-center space-y-4">
-          <p className="text-sm font-medium text-destructive">
-            {t("admin.bootstrapFailedTitle") ?? "Couldn't prepare your workspace"}
+        <div className="max-w-md w-full text-center space-y-4">
+          <p className="text-sm font-medium">
+            {bootstrapError
+              ? (t("admin.bootstrapFailedTitle") ?? "Couldn't prepare your workspace")
+              : (t("admin.noTeamTitle") ?? "No team set up yet")}
           </p>
-          <p className="text-xs text-muted-foreground break-words">
-            {bootstrapError}
-          </p>
+          {bootstrapError ? (
+            <pre className="text-xs text-muted-foreground break-words whitespace-pre-wrap text-left bg-muted p-3 rounded">
+              {bootstrapError}
+            </pre>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {t("admin.noTeamDesc") ??
+                "Your account belongs to no team yet. Click Set up my workspace to create one."}
+            </p>
+          )}
           <div className="flex gap-2 justify-center">
             <Button onClick={retryBootstrap}>
-              {t("common.retry") ?? "Retry"}
+              {bootstrapError
+                ? (t("common.retry") ?? "Retry")
+                : (t("admin.setupWorkspace") ?? "Set up my workspace")}
             </Button>
             <Button
               variant="outline"
