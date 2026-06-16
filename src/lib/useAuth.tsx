@@ -67,11 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [bootstrapAttempted, setBootstrapAttempted] = useState(false);
-  // Tracks the user id for which we've already attempted to bootstrap, so we
-  // don't auto-retry on every render. A manual retry resets this.
   const bootstrappedForRef = useRef<string | null>(null);
-  // Identifier for the in-flight bootstrap call. We discard results from any
-  // call that started before a sign-out / re-auth.
   const bootstrapTokenRef = useRef(0);
 
   const bootstrapFn = useServerFn(bootstrapMyTenant);
@@ -83,12 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setBootstrapError(null);
       setBootstrapAttempted(false);
       try {
-        console.log("[useAuth] running bootstrap for", uid);
         const raw = await bootstrapFn({ data: {} });
-        if (token !== bootstrapTokenRef.current) return; // stale
-        // TanStack Start wraps client responses as { result, context }; in
-        // some pipelines the raw payload is returned directly. Tolerate
-        // both shapes so a shape mismatch doesn't blank the admin screen.
+        if (token !== bootstrapTokenRef.current) return;
         const result: any =
           raw && typeof raw === "object" && "result" in raw
             ? (raw as any).result
@@ -98,19 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setBootstrapAttempted(true);
           return;
         }
-        console.log("[useAuth] bootstrap succeeded", {
-          tenantId: result.tenantId,
-          role: result.role,
-          created: result.created,
-          membershipsLength: result.memberships?.length ?? 0,
-          memberships: result.memberships,
-        });
         bootstrappedForRef.current = uid;
 
-        // Trust the server's view of the user's memberships rather than
-        // round-tripping through Postgrest (which is gated by RLS — a
-        // fresh install may not yet have the policy that lets a user read
-        // their own tenant_members row).
         const serverMemberships: Membership[] = (result.memberships ?? []).map(
           (m: any) => ({
             tenantId: m.tenantId as string,
@@ -155,9 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(data.session);
         setUser(data.session?.user ?? null);
         if (data.session?.user) {
-          // Best-effort: try Postgrest first for snappiness; if it returns
-          // empty due to RLS, the auto-bootstrap effect below will pick up
-          // the slack via the server-fn bypass path.
           const list = await fetchMemberships(data.session.user.id);
           if (cancelled) return;
           setMemberships(list);
@@ -187,8 +165,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       bootstrappedForRef.current = null;
       bootstrapTokenRef.current++;
       if (sess?.user) {
-        // Use server-fn path (bypasses RLS). The Postgrest client-side path
-        // was unreliable when RLS didn't yet allow self-reads.
         void runBootstrap(sess.user.id);
       }
     });
@@ -200,12 +176,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Auto-bootstrap safety net. Whenever we have a signed-in user but
-   * memberships are empty (e.g. Postgrest returned [] under RLS), kick off
-   * the server fn once. The check on `bootstrappedForRef` + `bootstrapAttempted`
-   * prevents endless retries on persistent failures.
-   */
   useEffect(() => {
     if (!user) return;
     if (memberships.length > 0) return;

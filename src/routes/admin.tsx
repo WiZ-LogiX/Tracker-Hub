@@ -7,7 +7,7 @@ import {
   LayoutDashboard, FileText, Receipt, ClipboardList,
   Package, Layers3, Palette, Wrench, Ticket, LogOut, Menu,
   Truck, Trees, SlidersHorizontal, GitBranch, Sparkles, Bell,
-  Users, RefreshCcw, BarChart3, UserCircle, Database
+  Users, RefreshCcw, BarChart3, UserCircle, Database, UserCog
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -17,6 +17,7 @@ export const Route = createFileRoute("/admin")({ component: AdminLayout });
 
 const NAV = [
   { to: "/admin", labelKey: "admin.nav.home", icon: LayoutDashboard, exact: true },
+  { to: "/admin/team", labelKey: "admin.nav.team", icon: UserCog },
   { to: "/admin/quotes", labelKey: "admin.nav.quotes", icon: FileText },
   { to: "/admin/quotes/configurator", labelKey: "admin.nav.configurator", icon: Sparkles },
   { to: "/admin/invoices", labelKey: "admin.nav.invoices", icon: Receipt },
@@ -85,7 +86,7 @@ function SidebarContent() {
               }`}
             >
               <item.icon className="h-4 w-4 shrink-0" />
-              <span>{t(item.labelKey)}</span>
+              <span>{t(item.labelKey as never) ?? item.labelKey}</span>
             </Link>
           );
         })}
@@ -130,16 +131,6 @@ function AdminLayout() {
     if (!loading && !user) nav({ to: "/auth" });
   }, [loading, user, nav]);
 
-  // Render branches:
-  //   - loading:                  spinner.
-  //   - !user:                    redirect handled by useEffect above.
-  //   - bootstrapping:            spinner with a hint (one-time mutation).
-  //   - !memberships.length && bootstrapping done:
-  //                               either bootstrap failed (show error + retry)
-  //                               or it succeeded but membership list is still
-  //                               empty (show "no team" with manual setup CTA).
-  //   - !isStaff:                 no-access screen.
-  //   - else:                     the admin shell.
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
