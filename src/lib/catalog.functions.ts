@@ -4,48 +4,16 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 /**
- * Server functions for catalog reads/writes.
+ * Catalog reads/writes via service role.
  *
- * Background: the Phase 1 multi-tenant migration added `tenant_id` and RLS to
- * the 8 catalog tables (product_templates, materials, suppliers, finishes,
- * veneers, accessories, pricing_factors, wastage_rules, pricing_rules), but
- * those RLS policies ended up restrictive enough that admin users genuinely
- * cannot read these tables when filtering by `tenant_id`. The diagnostic
- * /admin/health page proves it: every other tenant-scoped table returns
- * rows through RLS, these 8 return 0.
- *
- * Until policies are tightened server-side, these server fns use the admin
- * client which bypasses RLS. They still require an authenticated user, so
- * unauthenticated visitors can't reach them. Once the policies are loosened
- * to match the model's actual membership semantics, these fns can drop back
- * to the regular client path.
+ * Reason: several catalog tables (product_templates, materials, suppliers,
+ * finishes, veneers, accessories, pricing_factors, wastage_rules,
+ * pricing_rules, discounts, workers) have Phase 1 RLS policies that the
+ * admin role can't satisfy through PostgREST — reads return 0 rows.
+ * Until those policies are loosened server-side, these fns route reads &
+ * writes through `supabaseAdmin` which bypasses RLS entirely. Still gated
+ * by `requireSupabaseAuth` so uninvited visitors can't reach them.
  */
-
-const ProductTemplateRowSchema = z.object({
-  id: z.string().uuid(),
-  category_id: z.string().uuid().nullable().optional(),
-  code: z.string().nullable().optional(),
-  name_ar: z.string(),
-  name_en: z.string().nullable().optional(),
-  description_ar: z.string().nullable().optional(),
-  base_price: z.union([z.string(), z.number()]),
-  default_config: z.any().optional(),
-  active: z.boolean(),
-  created_at: z.string(),
-  tenant_id: z.string().uuid().nullable().optional(),
-});
-
-const ProductTemplateRow = z.object({
-  id: z.string().uuid().optional(),
-  category_id: z.string().uuid().nullable().optional(),
-  code: z.string().nullable().optional(),
-  name_ar: z.string().min(1),
-  name_en: z.string().nullable().optional(),
-  description_ar: z.string().nullable().optional(),
-  base_price: z.number(),
-  default_config: z.any().optional(),
-  active: z.boolean(),
-});
 
 const MaterialRow = z.object({
   id: z.string().uuid().optional(),
@@ -92,14 +60,24 @@ const AccessoryRow = z.object({
   active: z.boolean(),
 });
 
-const PricingFactorRow = z.object({
+const DiscountRow = z.object({
   id: z.string().uuid().optional(),
-  key: z.string().min(1),
-  label_ar: z.string().min(1),
-  kind: z.string().min(1),
-  scope: z.string().optional(),
-  value_pct: z.number(),
-  value_fixed: z.number().optional(),
+  code: z.string().min(1),
+  type: z.string().min(1),
+  value: z.number(),
+  max_value: z.number().nullable().optional(),
+  valid_from: z.string().nullable().optional(),
+  valid_to: z.string().nullable().optional(),
+  usage_count: z.number().optional(),
+  max_uses: z.number().nullable().optional(),
+  active: z.boolean(),
+});
+
+const WorkerRow = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1),
+  role: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
   active: z.boolean(),
 });
 
@@ -121,6 +99,18 @@ const PricingRuleRow = z.object({
   formula: z.any(),
   effective_from: z.string().nullable().optional(),
   effective_to: z.string().nullable().optional(),
+});
+
+const ProductTemplateRow = z.object({
+  id: z.string().uuid().optional(),
+  category_id: z.string().uuid().nullable().optional(),
+  code: z.string().nullable().optional(),
+  name_ar: z.string().min(1),
+  name_en: z.string().nullable().optional(),
+  description_ar: z.string().nullable().optional(),
+  base_price: z.number(),
+  default_config: z.any().optional(),
+  active: z.boolean(),
 });
 
 const IdInput = z.object({ id: z.string().uuid() });
@@ -158,7 +148,7 @@ export const upsertProductTemplate = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
 export const deleteProductTemplate = createServerFn({ method: "POST" })
@@ -206,7 +196,7 @@ export const upsertMaterial = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
 export const deleteMaterial = createServerFn({ method: "POST" })
@@ -252,7 +242,7 @@ export const upsertSupplier = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
 export const deleteSupplier = createServerFn({ method: "POST" })
@@ -300,7 +290,7 @@ export const upsertFinish = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
 export const deleteFinish = createServerFn({ method: "POST" })
@@ -346,7 +336,7 @@ export const upsertVeneer = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
 export const deleteVeneer = createServerFn({ method: "POST" })
@@ -392,7 +382,7 @@ export const upsertAccessory = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
 export const deleteAccessory = createServerFn({ method: "POST" })
@@ -407,48 +397,94 @@ export const deleteAccessory = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---------------- pricing_factors ----------------
+// ---------------- discounts ----------------
 
-export const listPricingFactors = createServerFn({ method: "GET" })
+export const listDiscounts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { data, error } = await supabaseAdmin
-      .from("pricing_factors")
+      .from("discounts")
       .select(
-        "id, key, label_ar, kind, scope, value_pct, value_fixed, active",
+        "id, code, type, value, max_value, valid_from, valid_to, usage_count, max_uses, active, created_at",
       )
-      .order("key");
+      .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return { items: data ?? [] };
   });
 
-export const upsertPricingFactor = createServerFn({ method: "POST" })
+export const upsertDiscount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => PricingFactorRow.parse(d))
+  .inputValidator((d) => DiscountRow.parse(d))
   .handler(async ({ data }) => {
     if (data.id) {
       const { error } = await supabaseAdmin
-        .from("pricing_factors")
+        .from("discounts")
         .update(data)
         .eq("id", data.id);
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
     const { data: row, error } = await supabaseAdmin
-      .from("pricing_factors")
+      .from("discounts")
       .insert(data)
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
-export const deletePricingFactor = createServerFn({ method: "POST" })
+export const deleteDiscount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => IdInput.parse(d))
   .handler(async ({ data }) => {
     const { error } = await supabaseAdmin
-      .from("pricing_factors")
+      .from("discounts")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------------- workers ----------------
+
+export const listWorkers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { data, error } = await supabaseAdmin
+      .from("workers")
+      .select("id, name, role, phone, active, created_at")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return { items: data ?? [] };
+  });
+
+export const upsertWorker = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => WorkerRow.parse(d))
+  .handler(async ({ data }) => {
+    if (data.id) {
+      const { error } = await supabaseAdmin
+        .from("workers")
+        .update(data)
+        .eq("id", data.id);
+      if (error) throw new Error(error.message);
+      return { id: data.id };
+    }
+    const { data: row, error } = await supabaseAdmin
+      .from("workers")
+      .insert(data)
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return { id: row?.id ?? null };
+  });
+
+export const deleteWorker = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => IdInput.parse(d))
+  .handler(async ({ data }) => {
+    const { error } = await supabaseAdmin
+      .from("workers")
       .delete()
       .eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -488,7 +524,7 @@ export const upsertWastageRule = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
 export const deleteWastageRule = createServerFn({ method: "POST" })
@@ -536,7 +572,7 @@ export const upsertPricingRule = createServerFn({ method: "POST" })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
-    return { id: row.id };
+    return { id: row?.id ?? null };
   });
 
 export const deletePricingRule = createServerFn({ method: "POST" })

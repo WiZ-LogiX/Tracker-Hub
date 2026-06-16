@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
+import { listWastageRules, upsertWastageRule, deleteWastageRule } from "@/lib/catalog.functions";
+import { listMaterials } from "@/lib/catalog.functions";
 
 export const Route = createFileRoute("/admin/wastage-rules")({ component: WastageRulesPage });
 
@@ -22,14 +24,19 @@ function WastageRulesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState<any>({ material_id: '_none', material_type: 'wood', min_dimension: 0, max_dimension: '', wastage_pct: 8, active: true });
+  const listFn = useServerFn(listWastageRules);
+  const upsertFn = useServerFn(upsertWastageRule);
+  const deleteFn = useServerFn(deleteWastageRule);
+  const listMaterialsFn = useServerFn(listMaterials);
 
   useEffect(() => { load(); }, []);
   async function load() {
     const [r, m] = await Promise.all([
-      supabase.from("wastage_rules").select("*").order("material_type").order("min_dimension"),
-      supabase.from("materials").select("id,name_ar,type").eq("active", true).order("name_ar"),
+      listFn(),
+      listMaterialsFn(),
     ]);
-    setRows(r.data ?? []); setMaterials(m.data ?? []);
+    setRows(r.items ?? []);
+    setMaterials(m.items ?? []);
   }
 
   function openNew() { setEditing(null); setForm({ material_id: '_none', material_type: 'wood', min_dimension: 0, max_dimension: '', wastage_pct: 8, active: true }); setOpen(true); }
@@ -37,17 +44,27 @@ function WastageRulesPage() {
 
   async function save() {
     const payload = { material_id: form.material_id === '_none' ? null : form.material_id, material_type: form.material_type, min_dimension: Number(form.min_dimension), max_dimension: form.max_dimension ? Number(form.max_dimension) : null, wastage_pct: Number(form.wastage_pct), active: form.active };
-    const q = editing ? supabase.from("wastage_rules").update(payload).eq("id", editing.id) : supabase.from("wastage_rules").insert(payload);
-    const { error } = await q;
-    if (error) return toast.error(error.message);
-    toast.success(t("wastageRules.saved")); setOpen(false); load();
+    try {
+      const upd = upsertFn;
+      if (editing) {
+        await upd({ data: { ...payload, id: editing.id } });
+      } else {
+        await upd({ data: payload });
+      }
+      toast.success(t("wastageRules.saved")); setOpen(false); load();
+    } catch (e: any) {
+      toast.error(e?.message ?? t("wastageRules.saved"));
+    }
   }
 
   async function remove(id: string) {
     if (!confirm(t("common.confirmDelete"))) return;
-    const { error } = await supabase.from("wastage_rules").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success(t("wastageRules.deleted")); load();
+    try {
+      await deleteFn({ data: { id } });
+      toast.success(t("wastageRules.deleted")); load();
+    } catch (e: any) {
+      toast.error(e?.message ?? t("wastageRules.deleted"));
+    }
   }
 
   async function applyMaterialWastage() {
@@ -55,8 +72,18 @@ function WastageRulesPage() {
     for (const m of materials) {
       if (!m.wastage_pct) continue;
       const existing = rows.find(r => r.material_id === m.id);
-      if (existing) { const { error } = await supabase.from("wastage_rules").update({ wastage_pct: Number(m.wastage_pct) }).eq("id", existing.id); if (!error) count++; }
-      else { const { error } = await supabase.from("wastage_rules").insert({ material_id: m.id, material_type: m.type || 'wood', min_dimension: 0, max_dimension: null, wastage_pct: Number(m.wastage_pct), active: true }); if (!error) count++; }
+      const payload = { material_id: m.id, material_type: m.type || 'wood', min_dimension: 0, max_dimension: null, wastage_pct: Number(m.wastage_pct), active: true };
+      if (existing) {
+        try {
+          await upsertFn({ data: { ...payload, id: existing.id } });
+          count++;
+        } catch { /* ignore */ }
+      } else {
+        try {
+          await upsertFn({ data: payload });
+          count++;
+        } catch { /* ignore */ }
+      }
     }
     toast.success(t("wastageRules.applied", { count })); load();
   }

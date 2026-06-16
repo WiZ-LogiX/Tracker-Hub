@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { DEFAULT_FORMULA } from "@/lib/pricing/engine";
+import {
+  listPricingRules,
+  upsertPricingRule,
+  deletePricingRule,
+} from "@/lib/catalog.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +17,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, CheckCircle2, Archive, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
-import { DEFAULT_FORMULA } from "@/lib/pricing/engine";
 
 export const Route = createFileRoute("/admin/pricing-rules")({ component: PricingRulesPage });
 
@@ -22,9 +27,17 @@ function PricingRulesPage() {
   const [name, setName] = useState('');
   const [formulaText, setFormulaText] = useState(JSON.stringify(DEFAULT_FORMULA, null, 2));
 
+  const listFn = useServerFn(listPricingRules);
+  const upsertFn = useServerFn(upsertPricingRule);
+  const deleteFn = useServerFn(deletePricingRule);
+
   async function load() {
-    const { data } = await supabase.from('pricing_rules').select('*').order('version', { ascending: false });
-    setRows(data ?? []);
+    try {
+      const r = await listFn();
+      setRows(r.items ?? []);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load");
+    }
   }
   useEffect(() => { load(); }, []);
 
@@ -38,41 +51,83 @@ function PricingRulesPage() {
   async function save() {
     let formula: any;
     try { formula = JSON.parse(formulaText); } catch { return toast.error("JSON غير صالح"); }
-    if (editing) {
-      const { error } = await supabase.from('pricing_rules').update({ name, formula }).eq('id', editing.id);
-      if (error) return toast.error(error.message);
-    } else {
-      const maxV = rows.reduce((m, r) => Math.max(m, r.version), 0);
-      const { error } = await supabase.from('pricing_rules').insert({ name, formula, version: maxV + 1, status: 'draft' });
-      if (error) return toast.error(error.message);
+    try {
+      if (editing) {
+        await upsertFn({ data: {
+          id: editing.id,
+          name, version: editing.version, status: editing.status, formula,
+        }});
+      } else {
+        const maxV = rows.reduce((m, r) => Math.max(m, r.version), 0);
+        await upsertFn({ data: {
+          name, version: maxV + 1, status: 'draft', formula,
+          effective_from: null, effective_to: null,
+        }});
+      }
+      toast.success("تم الحفظ"); setOpen(false); load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Save failed");
     }
-    toast.success("تم الحفظ"); setOpen(false); load();
   }
   async function activate(r: any) {
-    await supabase.from('pricing_rules').update({ status: 'archived', effective_to: new Date().toISOString() }).eq('status', 'active');
-    const { error } = await supabase.from('pricing_rules').update({ status: 'active', effective_from: new Date().toISOString(), effective_to: null }).eq('id', r.id);
-    if (error) return toast.error(error.message);
-    toast.success(`تم تطبيق v${r.version} على نظام عروض الأسعار`); load();
+    try {
+      for (const x of rows) {
+        if (x.status === 'active') {
+          await upsertFn({ data: {
+            id: x.id,
+            name: x.name, version: x.version, status: x.status === 'active' ? 'archived' : x.status,
+            formula: x.formula,
+            effective_from: x.effective_from,
+            effective_to: x.status === 'active' ? new Date().toISOString() : x.effective_to,
+          }});
+        }
+      }
+      await upsertFn({ data: {
+        id: r.id,
+        name: r.name, version: r.version, status: 'active',
+        formula: r.formula,
+        effective_from: new Date().toISOString(),
+        effective_to: null,
+      }});
+      toast.success(`تم تطبيق v${r.version} على نظام عروض الأسعار`); load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    }
   }
   async function archive(r: any) {
-    const { error } = await supabase.from('pricing_rules').update({ status: 'archived', effective_to: new Date().toISOString() }).eq('id', r.id);
-    if (error) return toast.error(error.message);
-    load();
+    try {
+      await upsertFn({ data: {
+        id: r.id, name: r.name, version: r.version, status: 'archived',
+        formula: r.formula,
+        effective_from: r.effective_from,
+        effective_to: new Date().toISOString(),
+      }});
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    }
   }
   async function remove(r: any) {
     if (r.status === 'active') return toast.error("لا يمكن حذف النسخة الفعّالة — قم بأرشفتها أولاً");
     if (!confirm(`حذف النسخة v${r.version}؟ لا يمكن التراجع.`)) return;
-    const { error } = await supabase.from('pricing_rules').delete().eq('id', r.id);
-    if (error) return toast.error(error.message);
-    toast.success("تم الحذف"); load();
+    try {
+      await deleteFn({ data: { id: r.id } });
+      toast.success("تم الحذف"); load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    }
   }
   async function duplicate(r: any) {
-    const maxV = rows.reduce((m, x) => Math.max(m, x.version), 0);
-    const { error } = await supabase.from('pricing_rules').insert({
-      name: `${r.name} (نسخة)`, formula: r.formula, version: maxV + 1, status: 'draft',
-    });
-    if (error) return toast.error(error.message);
-    toast.success("تم إنشاء نسخة قابلة للتعديل"); load();
+    try {
+      const maxV = rows.reduce((m, x) => Math.max(m, x.version), 0);
+      await upsertFn({ data: {
+        name: `${r.name} (نسخة)`, version: maxV + 1, status: 'draft', formula: r.formula,
+        effective_from: null, effective_to: null,
+      }});
+      toast.success("تم إنشاء نسخة قابلة للتعديل"); load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed");
+    }
   }
 
   return (

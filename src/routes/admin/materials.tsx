@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { formatEGP } from "@/lib/pricing";
-import { listMaterials, upsertMaterial, deleteMaterial } from "@/lib/materials.functions";
+import { listMaterials, upsertMaterial, deleteMaterial } from "@/lib/catalog.functions";
+import { listSuppliers } from "@/lib/catalog.functions";
 
 export const Route = createFileRoute("/admin/materials")({ component: MaterialsPage });
 
@@ -49,15 +49,16 @@ function MaterialsPage() {
   const listFn = useServerFn(listMaterials);
   const upsertFn = useServerFn(upsertMaterial);
   const deleteFn = useServerFn(deleteMaterial);
+  const listSuppliersFn = useServerFn(listSuppliers);
 
   async function load() {
     try {
       const [m, s] = await Promise.all([
         listFn(),
-        supabase.from('suppliers').select('*').eq('active', true),
+        listSuppliersFn(),
       ]);
       setRows((m.items as MaterialRow[]) ?? []);
-      setSuppliers((s.data as Supplier[]) ?? []);
+      setSuppliers((s.items as Supplier[]) ?? []);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "فشل تحميل البيانات";
       toast.error(message);
