@@ -7,20 +7,12 @@ import type { TenantRole } from "@/lib/tenant-context";
 /**
  * Self-healing tenant bootstrap for legacy authenticated users.
  *
- * When Phase 1 cut over from `public.user_roles` to `tenant_members`, pre-
- * existing users who had no row in `user_roles` (or whose row was lost
- * during the migration) ended up signed-in but with zero tenant
- * memberships. RLS then denies every table read, and the admin shell
- * (`isStaff === false`) refuses to render anything useful.
- *
- * This server fn detects that condition and inserts the missing
- * `tenant_members` row using the service role, attaching the user to the
- * default `pelecanon` tenant as `owner`. It is idempotent: if a membership
- * already exists, we return it without inserting.
- *
- * To support role transitions later, the optional `role` input lets the
- * caller pick non-owner roles, but the default is the safest for new
- * operators.
+ * Returns the caller's tenant memberships after performing any necessary
+ * backfill (tenant creation, membership insert). The server-side result is
+ * the source of truth — clients use it directly instead of round-tripping
+ * through Postgrest's RLS-limited vantage point. This is critical for
+ * users whose Row-Level Security policies on `tenant_members` may be
+ * over-restrictive in fresh installs.
  */
 const BootstrapInput = z
   .object({
@@ -31,18 +23,26 @@ const BootstrapInput = z
   .optional()
   .default({});
 
+export interface BootstrapMembership {
+  tenantId: string;
+  tenantSlug: string | null;
+  tenantName: string | null;
+  role: TenantRole;
+}
+
 export interface BootstrapResult {
   tenantId: string;
   tenantSlug: string | null;
   tenantName: string | null;
   role: TenantRole;
+  memberships: BootstrapMembership[];
   created: boolean;
 }
 
 export const bootstrapMyTenant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => BootstrapInput.parse(input ?? {}))
-  .handler(async ({ data, context }): Promise<BootstrapResult> => {
+  .handler(async ({ data, context }): Promise<BootstrapResult> {
     const { userId } = context;
     const requestedRole = data?.role ?? "owner";
 
@@ -74,7 +74,6 @@ export const bootstrapMyTenant = createServerFn({ method: "POST" })
       tenantName = inserted.name;
     }
 
-    // Both branches above set tenantId; the throw is exhaustive on failure.
     if (!tenantId) {
       throw new Error("Failed to resolve default tenant");
     }
@@ -86,33 +85,52 @@ export const bootstrapMyTenant = createServerFn({ method: "POST" })
       .eq("user_id", userId)
       .maybeSingle();
 
-    if (existingMembership) {
-      return {
-        tenantId: existingMembership.tenant_id,
-        tenantSlug,
-        tenantName,
-        role: existingMembership.role as TenantRole,
-        created: false,
-      };
+    if (!existingMembership) {
+      // 3. No row → insert one with the requested role.
+      const { error: insertErr } = await supabaseAdmin
+        .from("tenant_members")
+        .insert({
+          tenant_id: tenantId,
+          user_id: userId,
+          role: requestedRole,
+        });
+      if (insertErr) {
+        throw new Error(insertErr.message);
+      }
     }
 
-    // 3. No row → insert one with the requested role.
-    const { error: insertErr } = await supabaseAdmin
+    // 4. Read all memberships for this user. Since we're using the service
+    //    role client, we bypass any RLS that might exist on tenant_members
+    //    and return the canonical list to the client.
+    const { data: allMemberships, error: listErr } = await supabaseAdmin
       .from("tenant_members")
-      .insert({
-        tenant_id: tenantId,
-        user_id: userId,
-        role: requestedRole,
-      });
-    if (insertErr) {
-      throw new Error(insertErr.message);
+      .select("role, tenant_id, tenants(slug, name)")
+      .eq("user_id", userId);
+    if (listErr) {
+      throw new Error(listErr.message);
     }
+
+    const memberships: BootstrapMembership[] = (allMemberships ?? []).map(
+      (m: any) => ({
+        tenantId: m.tenant_id as string,
+        tenantSlug: m.tenants?.slug ?? null,
+        tenantName: m.tenants?.name ?? null,
+        role: m.role as TenantRole,
+      }),
+    );
+
+    // Pick the primary membership returned by the bootstrap step. If the
+    // user has multiple memberships, calling code can switch via the
+    // client UI; for now we expose the falsiest-looking default.
+    const primary =
+      memberships.find((m) => m.tenantId === tenantId) ?? memberships[0];
 
     return {
-      tenantId,
-      tenantSlug,
-      tenantName,
-      role: requestedRole,
-      created: true,
+      tenantId: primary?.tenantId ?? tenantId,
+      tenantSlug: primary?.tenantSlug ?? tenantSlug,
+      tenantName: primary?.tenantName ?? tenantName,
+      role: primary?.role ?? requestedRole,
+      memberships,
+      created: !existingMembership,
     };
   });

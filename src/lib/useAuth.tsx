@@ -28,11 +28,11 @@ interface AuthCtx {
   currentTenantId: string | null;
   currentRole: TenantRole | null;
   loading: boolean;
-  /** True while the bootstrap server-fn is in flight (signed in but no memberships). */
+  /** True while the bootstrap server-fn is in flight. */
   bootstrapping: boolean;
-  /** Latest bootstrap error message (null until a bootstrap attempt completes/fails). */
+  /** Last bootstrap error (null until a bootstrap attempt completes/fails). */
   bootstrapError: string | null;
-  /** Whether `bootstrapMyTenant` has been called and finished (success OR failure). */
+  /** Has `bootstrapMyTenant` been called and finished (success OR failure). */
   bootstrapAttempted: boolean;
   isStaff: boolean;
   signOut: () => Promise<void>;
@@ -84,30 +84,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setBootstrapAttempted(false);
       try {
         console.log("[useAuth] running bootstrap for", uid);
-        const result = await bootstrapFn({ data: {} });
+        const raw = await bootstrapFn({ data: {} });
         if (token !== bootstrapTokenRef.current) return; // stale
+        // TanStack Start wraps client responses as { result, context }; in
+        // some pipelines the raw payload is returned directly. Tolerate
+        // both shapes so a shape mismatch doesn't blank the admin screen.
+        const result: any =
+          raw && typeof raw === "object" && "result" in raw
+            ? (raw as any).result
+            : raw;
         if (!result) {
           setBootstrapError("No response from server");
           setBootstrapAttempted(true);
           return;
         }
-        console.log("[useAuth] bootstrap succeeded", result);
+        console.log("[useAuth] bootstrap succeeded", {
+          tenantId: result.tenantId,
+          role: result.role,
+          created: result.created,
+          membershipsLength: result.memberships?.length ?? 0,
+          memberships: result.memberships,
+        });
         bootstrappedForRef.current = uid;
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem("pelecanon:active-tenant", result.tenantId);
-        }
-        // Re-load memberships to pick up the canonical row.
-        const list = await fetchMemberships(uid);
+
+        // Trust the server's view of the user's memberships rather than
+        // round-tripping through Postgrest (which is gated by RLS — a
+        // fresh install may not yet have the policy that lets a user read
+        // their own tenant_members row).
+        const serverMemberships: Membership[] = (result.memberships ?? []).map(
+          (m: any) => ({
+            tenantId: m.tenantId as string,
+            tenantSlug: (m.tenantSlug ?? null) as string | null,
+            tenantName: (m.tenantName ?? null) as string | null,
+            role: m.role as TenantRole,
+          }),
+        );
         if (token !== bootstrapTokenRef.current) return;
-        setMemberships(list);
+        setMemberships(serverMemberships);
+
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(
+            "pelecanon:active-tenant",
+            result.tenantId,
+          );
+        }
         setCurrentTenantId(result.tenantId);
         setBootstrapAttempted(true);
       } catch (e: unknown) {
         if (token !== bootstrapTokenRef.current) return;
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[useAuth] bootstrap FAILED", msg, e);
-        // Mark as "attempted" so the bridge doesn't auto-retry on every render,
-        // but DO surface the error so the UI can show a "retry" button.
         bootstrappedForRef.current = uid;
         setBootstrapError(msg);
         setBootstrapAttempted(true);
@@ -129,6 +155,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(data.session);
         setUser(data.session?.user ?? null);
         if (data.session?.user) {
+          // Best-effort: try Postgrest first for snappiness; if it returns
+          // empty due to RLS, the auto-bootstrap effect below will pick up
+          // the slack via the server-fn bypass path.
           const list = await fetchMemberships(data.session.user.id);
           if (cancelled) return;
           setMemberships(list);
@@ -158,11 +187,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       bootstrappedForRef.current = null;
       bootstrapTokenRef.current++;
       if (sess?.user) {
-        void (async () => {
-          const list = await fetchMemberships(sess.user.id);
-          setMemberships(list);
-          setCurrentTenantId(list[0]?.tenantId ?? null);
-        })();
+        // Use server-fn path (bypasses RLS). The Postgrest client-side path
+        // was unreliable when RLS didn't yet allow self-reads.
+        void runBootstrap(sess.user.id);
       }
     });
 
@@ -173,39 +200,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Auto-bootstrap safety net. Whenever we have a signed-in user but
+   * memberships are empty (e.g. Postgrest returned [] under RLS), kick off
+   * the server fn once. The check on `bootstrappedForRef` + `bootstrapAttempted`
+   * prevents endless retries on persistent failures.
+   */
   useEffect(() => {
     if (!user) return;
     if (memberships.length > 0) return;
     if (bootstrappedForRef.current === user.id) return;
     if (bootstrapping) return;
+    if (bootstrapAttempted && !bootstrapError) return;
     void runBootstrap(user.id);
-  }, [user, memberships.length, bootstrapping, runBootstrap]);
+  }, [
+    user,
+    memberships.length,
+    bootstrapping,
+    bootstrapAttempted,
+    bootstrapError,
+    runBootstrap,
+  ]);
 
   async function fetchMemberships(uid: string): Promise<Membership[]> {
-    const { data, error } = await supabase
-      .from("tenant_members")
-      .select("role, tenant_id")
-      .eq("user_id", uid);
-    if (error) {
-      console.error("[useAuth] fetchMemberships failed", error);
+    try {
+      const { data, error } = await supabase
+        .from("tenant_members")
+        .select("role, tenant_id")
+        .eq("user_id", uid);
+      if (error) {
+        console.warn("[useAuth] fetchMemberships error", error?.message ?? error);
+        return [];
+      }
+      return (data ?? []).map((m: any) => ({
+        tenantId: m.tenant_id as string,
+        tenantSlug: null,
+        tenantName: null,
+        role: m.role as TenantRole,
+      }));
+    } catch (e: unknown) {
+      console.warn("[useAuth] fetchMemberships threw", e);
       return [];
     }
-    return (data ?? []).map((m: any) => ({
-      tenantId: m.tenant_id as string,
-      tenantSlug: null,
-      tenantName: null,
-      role: m.role as TenantRole,
-    }));
   }
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     if (!user) return;
     const list = await fetchMemberships(user.id);
     setMemberships(list);
     if (currentTenantId && !list.some((l) => l.tenantId === currentTenantId)) {
       setCurrentTenantId(list[0]?.tenantId ?? null);
     }
-  }
+  }, [user, currentTenantId]);
 
   const retryBootstrap = useCallback(async () => {
     if (!user) return;
@@ -216,7 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await runBootstrap(user.id);
   }, [user, runBootstrap]);
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setMemberships([]);
     setCurrentTenantId(null);
@@ -225,7 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setBootstrapAttempted(false);
     bootstrappedForRef.current = null;
     bootstrapTokenRef.current++;
-  }
+  }, []);
 
   const value = useMemo<AuthCtx>(() => {
     const current = memberships.find((m) => m.tenantId === currentTenantId) ?? null;
@@ -253,6 +299,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bootstrapping,
     bootstrapError,
     bootstrapAttempted,
+    signOut,
+    refresh,
     retryBootstrap,
   ]);
 
