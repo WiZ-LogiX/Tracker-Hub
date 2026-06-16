@@ -29,6 +29,7 @@ import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
 import { Route as AdminMaterialsRouteImport } from './routes/admin/materials'
 import { Route as AdminInvoicesRouteImport } from './routes/admin/invoices'
+import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminFinishesRouteImport } from './routes/admin/finishes'
 import { Route as AdminDiscountsRouteImport } from './routes/admin/discounts'
 import { Route as AdminCustomersRouteImport } from './routes/admin/customers'
@@ -140,6 +141,11 @@ const AdminInvoicesRoute = AdminInvoicesRouteImport.update({
   path: '/invoices',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminHealthRoute = AdminHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminFinishesRoute = AdminFinishesRouteImport.update({
   id: '/finishes',
   path: '/finishes',
@@ -201,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/invoices': typeof AdminInvoicesRouteWithChildren
   '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -232,6 +239,7 @@ export interface FileRoutesByTo {
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/invoices': typeof AdminInvoicesRouteWithChildren
   '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -265,6 +273,7 @@ export interface FileRoutesById {
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
+  '/admin/health': typeof AdminHealthRoute
   '/admin/invoices': typeof AdminInvoicesRouteWithChildren
   '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -299,6 +308,7 @@ export interface FileRouteTypes {
     | '/admin/customers'
     | '/admin/discounts'
     | '/admin/finishes'
+    | '/admin/health'
     | '/admin/invoices'
     | '/admin/materials'
     | '/admin/notifications'
@@ -330,6 +340,7 @@ export interface FileRouteTypes {
     | '/admin/customers'
     | '/admin/discounts'
     | '/admin/finishes'
+    | '/admin/health'
     | '/admin/invoices'
     | '/admin/materials'
     | '/admin/notifications'
@@ -362,6 +373,7 @@ export interface FileRouteTypes {
     | '/admin/customers'
     | '/admin/discounts'
     | '/admin/finishes'
+    | '/admin/health'
     | '/admin/invoices'
     | '/admin/materials'
     | '/admin/notifications'
@@ -534,6 +546,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminInvoicesRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/health': {
+      id: '/admin/health'
+      path: '/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AdminHealthRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/finishes': {
       id: '/admin/finishes'
       path: '/finishes'
@@ -625,6 +644,7 @@ interface AdminRouteChildren {
   AdminCustomersRoute: typeof AdminCustomersRoute
   AdminDiscountsRoute: typeof AdminDiscountsRoute
   AdminFinishesRoute: typeof AdminFinishesRoute
+  AdminHealthRoute: typeof AdminHealthRoute
   AdminInvoicesRoute: typeof AdminInvoicesRouteWithChildren
   AdminMaterialsRoute: typeof AdminMaterialsRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
@@ -653,6 +673,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCustomersRoute: AdminCustomersRoute,
   AdminDiscountsRoute: AdminDiscountsRoute,
   AdminFinishesRoute: AdminFinishesRoute,
+  AdminHealthRoute: AdminHealthRoute,
   AdminInvoicesRoute: AdminInvoicesRouteWithChildren,
   AdminMaterialsRoute: AdminMaterialsRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
