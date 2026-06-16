@@ -28,14 +28,6 @@ interface AuthUserRow {
   created_at: string | null;
 }
 
-/**
- * Service-role row counts. RLS does NOT apply — you see the actual DB state.
- *
- * Splits the table list into tenant-scoped (counts rows that should be tenant-
- * filtered) and metadata (tenants, tenant_members, auth.users). It's the same
- * shape as before, but uses the admin client under the hood so the numbers
- * are real.
- */
 export const getTableCounts = createServerFn({ method: "POST" }).handler(
   async (): Promise<{ rows: TableRowCount[] }> => {
     const tables = [
@@ -67,7 +59,6 @@ export const getTableCounts = createServerFn({ method: "POST" }).handler(
       "tenants",
       "tenant_members",
     ];
-
     const rows: TableRowCount[] = [];
     for (const tbl of tables) {
       try {
@@ -84,45 +75,6 @@ export const getTableCounts = createServerFn({ method: "POST" }).handler(
       }
     }
     return { rows };
-  },
-);
-
-export const getMemberships = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ rows: MembershipRow[]; error: string | null }> => {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from("tenant_members")
-        .select("user_id, role, tenant_id, tenants(slug, name), auth:auth.users(email)")
-        .order("created_at", { ascending: true });
-      if (error) return { rows: [], error: error.message };
-      // The embedded `auth` join doesn't actually resolve through PostgREST
-      // (auth isn't an exposed FK target), so fall back to a second query
-      // for emails.
-      const userIds = Array.from(
-        new Set((data ?? []).map((r: any) => r.user_id as string).filter(Boolean)),
-      );
-      const emails: Record<string, string> = {};
-      if (userIds.length > 0) {
-        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({
-          page: 1,
-          perPage: 200,
-        });
-        for (const u of listData?.users ?? []) {
-          emails[u.id] = u.email ?? "—";
-        }
-      }
-      const rows: MembershipRow[] = (data ?? []).map((r: any) => ({
-        user_id: r.user_id,
-        email: emails[r.user_id] ?? "—",
-        tenant_id: r.tenant_id,
-        role: r.role,
-        tenant_slug: (r.tenants as any)?.slug ?? null,
-        tenant_name: (r.tenants as any)?.name ?? null,
-      }));
-      return { rows, error: null };
-    } catch (e: any) {
-      return { rows: [], error: e?.message ?? String(e) };
-    }
   },
 );
 
@@ -153,6 +105,45 @@ export const getAuthUsers = createServerFn({ method: "POST" }).handler(
         id: u.id,
         email: u.email ?? null,
         created_at: u.created_at ?? null,
+      }));
+      return { rows, error: null };
+    } catch (e: any) {
+      return { rows: [], error: e?.message ?? String(e) };
+    }
+  },
+);
+
+/**
+ * Memberships — joined with tenants via PostgREST's *confirmed* nested
+ * select syntax. Email is resolved separately via admin.listUsers (auth is
+ * not a publicly exposed schema, so you can't `.select('auth.users(email)')`
+ * the way the previous version tried: PostgREST rejects the FK path with
+ * "failed to parse select parameter").
+ */
+export const getMemberships = createServerFn({ method: "POST" }).handler(
+  async (): Promise<{ rows: MembershipRow[]; error: string | null }> => {
+    try {
+      const [{ data: memberships, error: mErr }, { data: users, error: uErr }] =
+        await Promise.all([
+          supabaseAdmin
+            .from("tenant_members")
+            .select("user_id, role, tenant_id, tenants(slug, name)")
+            .order("created_at", { ascending: true }),
+          supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 }),
+        ]);
+      if (mErr) return { rows: [], error: mErr.message };
+      if (uErr) return { rows: [], error: uErr.message };
+
+      const emailById: Record<string, string> = {};
+      for (const u of users?.users ?? []) emailById[u.id] = u.email ?? "—";
+
+      const rows: MembershipRow[] = (memberships ?? []).map((m: any) => ({
+        user_id: m.user_id,
+        email: emailById[m.user_id] ?? "—",
+        tenant_id: m.tenant_id,
+        role: m.role,
+        tenant_slug: (m.tenants as any)?.slug ?? null,
+        tenant_name: (m.tenants as any)?.name ?? null,
       }));
       return { rows, error: null };
     } catch (e: any) {
