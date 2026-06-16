@@ -24,7 +24,10 @@ if (!i18n.isInitialized) {
         en: { translation: en },
         fr: { translation: fr },
       },
-      fallbackLng: "ar",
+      // English is the safe fallback: any key missing in the active locale
+      // resolves to its English string, so the page never stays in Arabic
+      // just because the user picked English.
+      fallbackLng: "en",
       supportedLngs: SUPPORTED_LANGS as unknown as string[],
       load: "languageOnly",
       interpolation: { escapeValue: false },
@@ -35,12 +38,19 @@ if (!i18n.isInitialized) {
       },
       saveMissing: false,
       returnEmptyString: false,
+      // If a key can't be found in the active locale OR the fallback, show
+      // the last segment of the dotted path (e.g. "title" for "materials.title")
+      // instead of an empty string. Keeps the UI legible while we backfill.
+      parseMissingKeyHandler: (key: string) => {
+        const segments = key.split(".");
+        return segments[segments.length - 1] ?? key;
+      },
     });
 }
 
 export function applyLangToDocument(lang: string) {
   if (typeof document === "undefined") return;
-  const meta = LANG_META[(SUPPORTED_LANGS as readonly string[]).includes(lang) ? (lang as SupportedLang) : "ar"];
+  const meta = LANG_META[(SUPPORTED_LANGS as readonly string[]).includes(lang) ? (lang as SupportedLang) : "en"];
   document.documentElement.lang = lang;
   document.documentElement.dir = meta.dir;
 }
