@@ -9,7 +9,7 @@ import type { TenantRole } from "@/lib/tenant-context";
  *
  * Returns the caller's tenant memberships after performing any necessary
  * backfill (tenant creation, membership insert). The server-side result is
- * the source of truth — clients use it directly instead of round-tripping
+ * the source of truth \u2014 clients use it directly instead of round-tripping
  * through Postgrest's RLS-limited vantage point. This is critical for
  * users whose Row-Level Security policies on `tenant_members` may be
  * over-restrictive in fresh installs.
@@ -41,15 +41,15 @@ export interface BootstrapResult {
 
 export const bootstrapMyTenant = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => BootstrapInput.parse(input ?? {}))
-  .handler(async ({ data, context }): Promise<BootstrapResult> {
+  .inputValidator((input) => BootstrapInput.parse(input ?? {}))
+  .handler(async ({ data, context }) => {
     const { userId } = context;
     const requestedRole = data?.role ?? "owner";
 
     // 1. Resolve or create the default tenant.
-    let tenantId: string | null = null;
-    let tenantSlug: string | null = null;
-    let tenantName: string | null = null;
+    let tenantId = null;
+    let tenantSlug = null;
+    let tenantName = null;
 
     const { data: existingTenant } = await supabaseAdmin
       .from("tenants")
@@ -86,7 +86,7 @@ export const bootstrapMyTenant = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (!existingMembership) {
-      // 3. No row → insert one with the requested role.
+      // 3. No row \u2192 insert one with the requested role.
       const { error: insertErr } = await supabaseAdmin
         .from("tenant_members")
         .insert({
@@ -110,18 +110,16 @@ export const bootstrapMyTenant = createServerFn({ method: "POST" })
       throw new Error(listErr.message);
     }
 
-    const memberships: BootstrapMembership[] = (allMemberships ?? []).map(
-      (m: any) => ({
-        tenantId: m.tenant_id as string,
-        tenantSlug: m.tenants?.slug ?? null,
-        tenantName: m.tenants?.name ?? null,
-        role: m.role as TenantRole,
-      }),
-    );
+    const memberships = (allMemberships ?? []).map((m) => ({
+      tenantId: m.tenant_id,
+      tenantSlug: m.tenants?.slug ?? null,
+      tenantName: m.tenants?.name ?? null,
+      role: m.role,
+    }));
 
     // Pick the primary membership returned by the bootstrap step. If the
     // user has multiple memberships, calling code can switch via the
-    // client UI; for now we expose the falsiest-looking default.
+    // client UI; for now we expose the first as the default.
     const primary =
       memberships.find((m) => m.tenantId === tenantId) ?? memberships[0];
 
