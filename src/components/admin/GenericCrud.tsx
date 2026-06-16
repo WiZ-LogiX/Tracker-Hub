@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +10,35 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import {
+  listProductTemplates,
+  upsertProductTemplate,
+  deleteProductTemplate,
+  listMaterials,
+  upsertMaterial,
+  deleteMaterial,
+  listSuppliers,
+  upsertSupplier,
+  deleteSupplier,
+  listFinishes,
+  upsertFinish,
+  deleteFinish,
+  listVeneers,
+  upsertVeneer,
+  deleteVeneer,
+  listAccessories,
+  upsertAccessory,
+  deleteAccessory,
+  listPricingFactors,
+  upsertPricingFactor,
+  deletePricingFactor,
+  listWastageRules,
+  upsertWastageRule,
+  deleteWastageRule,
+  listPricingRules,
+  upsertPricingRule,
+  deletePricingRule,
+} from "@/lib/catalog.functions";
 
 export interface FieldDef {
   key: string;
@@ -63,8 +93,28 @@ type CrudTable = (typeof KNOWN_CRUD_TABLES)[number];
 // .update() would compromise tenant isolation.
 const PROTECTED_INSERT_FIELDS = ["id", "tenant_id", "created_at", "updated_at"];
 
+// Tables whose Phase 1 RLS policies are over-restrictive for the current
+// role set — admins can't read catalog data through PostgREST even when
+// they're members of the tenant. Those tables go through service-role
+// server fns instead.
+const TABLES_WITH_BYPASS = new Set<string>([
+  "product_templates",
+  "materials",
+  "suppliers",
+  "finishes",
+  "veneers",
+  "accessories",
+  "pricing_factors",
+  "wastage_rules",
+  "pricing_rules",
+]);
+
 function isKnownTable(name: string): name is CrudTable {
   return (KNOWN_CRUD_TABLES as readonly string[]).includes(name);
+}
+
+function isBypassTable(name: string): boolean {
+  return TABLES_WITH_BYPASS.has(name);
 }
 
 function fromTable(client: typeof supabase, name: string) {
@@ -86,6 +136,38 @@ export function GenericCrud({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CrudRow | null>(null);
   const [loading, setLoading] = useState(false);
+  const bypass = isBypassTable(table);
+
+  // Hooks we allocate only when the table is in the bypass set; this keeps
+  // call-site JSX unchanged (no `useServerBypass` prop) without paying for a
+  // 12-hook setup when the table uses RLS-mediated reads.
+  const listProductTemplatesFn = useServerFn(listProductTemplates);
+  const upsertProductTemplateFn = useServerFn(upsertProductTemplate);
+  const deleteProductTemplateFn = useServerFn(deleteProductTemplate);
+  const listMaterialsServerFn = useServerFn(listMaterials);
+  const upsertMaterialServerFn = useServerFn(upsertMaterial);
+  const deleteMaterialServerFn = useServerFn(deleteMaterial);
+  const listSuppliersFn = useServerFn(listSuppliers);
+  const upsertSupplierFn = useServerFn(upsertSupplier);
+  const deleteSupplierFn = useServerFn(deleteSupplier);
+  const listFinishesFn = useServerFn(listFinishes);
+  const upsertFinishFn = useServerFn(upsertFinish);
+  const deleteFinishFn = useServerFn(deleteFinish);
+  const listVeneersFn = useServerFn(listVeneers);
+  const upsertVeneerFn = useServerFn(upsertVeneer);
+  const deleteVeneerFn = useServerFn(deleteVeneer);
+  const listAccessoriesFn = useServerFn(listAccessories);
+  const upsertAccessoryFn = useServerFn(upsertAccessory);
+  const deleteAccessoryFn = useServerFn(deleteAccessory);
+  const listPricingFactorsFn = useServerFn(listPricingFactors);
+  const upsertPricingFactorFn = useServerFn(upsertPricingFactor);
+  const deletePricingFactorFn = useServerFn(deletePricingFactor);
+  const listWastageRulesFn = useServerFn(listWastageRules);
+  const upsertWastageRuleFn = useServerFn(upsertWastageRule);
+  const deleteWastageRuleFn = useServerFn(deleteWastageRule);
+  const listPricingRulesFn = useServerFn(listPricingRules);
+  const upsertPricingRuleFn = useServerFn(upsertPricingRule);
+  const deletePricingRuleFn = useServerFn(deletePricingRule);
 
   const blank = Object.fromEntries(
     fields.map(f => [f.key, f.default ?? (f.type === 'number' ? 0 : '')])
@@ -109,6 +191,34 @@ export function GenericCrud({
 
   async function load() {
     setLoading(true);
+
+    if (bypass) {
+      // Server-fn route — RLS is bypassed via the service-role admin client.
+      try {
+        const fetchers: Record<string, () => Promise<{ items: any[] }>> = {
+          product_templates: () => listProductTemplatesFn(),
+          materials: () => listMaterialsServerFn(),
+          suppliers: () => listSuppliersFn(),
+          finishes: () => listFinishesFn(),
+          veneers: () => listVeneersFn(),
+          accessories: () => listAccessoriesFn(),
+          pricing_factors: () => listPricingFactorsFn(),
+          wastage_rules: () => listWastageRulesFn(),
+          pricing_rules: () => listPricingRulesFn(),
+        };
+        const fetcher = fetchers[table];
+        if (!fetcher) throw new Error(`No server-fn fetcher registered for ${table}`);
+        const result = await fetcher();
+        setRows((result.items as CrudRow[]) ?? []);
+      } catch (e: any) {
+        toast.error(e?.message ?? "فشل التحميل");
+        setRows([]);
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Standard client-side read path (RLS-enforced).
     const tbl = fromTable(supabase, table);
     const { data, error } = await tbl
       .select("*")
@@ -158,6 +268,33 @@ export function GenericCrud({
       if (PROTECTED_INSERT_FIELDS.includes(f.key)) continue;
       payload[f.key] = form[f.key] ?? (f.type === 'number' ? 0 : "");
     }
+
+    if (bypass) {
+      try {
+        const upserters: Record<string, (input: any) => Promise<any>> = {
+          product_templates: upsertProductTemplateFn,
+          materials: upsertMaterialServerFn,
+          suppliers: upsertSupplierFn,
+          finishes: upsertFinishFn,
+          veneers: upsertVeneerFn,
+          accessories: upsertAccessoryFn,
+          pricing_factors: upsertPricingFactorFn,
+          wastage_rules: upsertWastageRuleFn,
+          pricing_rules: upsertPricingRuleFn,
+        };
+        const upsert = upserters[table];
+        if (!upsert) throw new Error(`No server-fn upsert registered for ${table}`);
+        await upsert({ ...payload, id: editing?.id });
+      } catch (e: any) {
+        toast.error(e?.message ?? "فشل الحفظ");
+        return;
+      }
+      toast.success("تم الحفظ");
+      setOpen(false);
+      load();
+      return;
+    }
+
     const tbl = fromTable(supabase, table);
     const { error } = editing
       ? await tbl.update(payload).eq("id", editing.id)
@@ -171,6 +308,32 @@ export function GenericCrud({
   async function remove(id: string) {
     if (!confirm("تأكيد الحذف؟")) return;
     if (!isKnownTable(table)) return;
+
+    if (bypass) {
+      try {
+        const deleters: Record<string, (input: any) => Promise<any>> = {
+          product_templates: deleteProductTemplateFn,
+          materials: deleteMaterialServerFn,
+          suppliers: deleteSupplierFn,
+          finishes: deleteFinishFn,
+          veneers: deleteVeneerFn,
+          accessories: deleteAccessoryFn,
+          pricing_factors: deletePricingFactorFn,
+          wastage_rules: deleteWastageRuleFn,
+          pricing_rules: deletePricingRuleFn,
+        };
+        const del = deleters[table];
+        if (!del) throw new Error(`No server-fn deleter registered for ${table}`);
+        await del({ id });
+      } catch (e: any) {
+        toast.error(e?.message ?? "فشل الحذف");
+        return;
+      }
+      toast.success("تم الحذف");
+      load();
+      return;
+    }
+
     const { error } = await fromTable(supabase, table).delete().eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("تم الحذف");
