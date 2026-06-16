@@ -21,7 +21,6 @@ import {
 // ---------- Shared column helpers ----------
 const id = () => uuid("id").primaryKey().defaultRandom();
 const tenantId = () => uuid("tenant_id").notNull();
-const companyId = () => uuid("company_id").notNull();
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -29,7 +28,6 @@ const createdAt = () =>
 export const materials = pgTable("materials", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   nameAr: text("name_ar").notNull(),
   nameEn: text("name_en").notNull(),
   type: text("type").notNull().default("wood"),
@@ -45,7 +43,6 @@ export const materials = pgTable("materials", {
 export const materialVariants = pgTable("material_variants", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   materialId: uuid("material_id").notNull(),
   supplierId: uuid("supplier_id"),
   countryOfOrigin: text("country_of_origin"),
@@ -60,7 +57,6 @@ export const materialVariants = pgTable("material_variants", {
 export const finishes = pgTable("finishes", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   nameAr: text("name_ar").notNull(),
   nameEn: text("name_en").notNull(),
   priceModifierPct: numeric("price_modifier_pct").notNull().default("0"),
@@ -72,7 +68,6 @@ export const finishes = pgTable("finishes", {
 export const accessories = pgTable("accessories", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   nameAr: text("name_ar").notNull(),
   nameEn: text("name_en").notNull(),
   unitPrice: numeric("unit_price").notNull().default("0"),
@@ -83,7 +78,6 @@ export const accessories = pgTable("accessories", {
 export const categories = pgTable("categories", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   nameAr: text("name_ar").notNull(),
   nameEn: text("name_en").notNull(),
   pricingUnit: text("pricing_unit").notNull().default("linear_meter"),
@@ -93,7 +87,6 @@ export const categories = pgTable("categories", {
 export const products = pgTable("products", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   categoryId: uuid("category_id"),
   code: text("code").notNull(),
   nameAr: text("name_ar").notNull(),
@@ -111,7 +104,6 @@ export const products = pgTable("products", {
 export const productTemplates = pgTable("product_templates", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   categoryId: uuid("category_id"),
   code: text("code"),
   nameAr: text("name_ar").notNull(),
@@ -127,7 +119,6 @@ export const productTemplates = pgTable("product_templates", {
 export const pricingFactors = pgTable("pricing_factors", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   key: text("key").notNull(),
   labelAr: text("label_ar").notNull(),
   kind: text("kind").notNull(),
@@ -141,7 +132,6 @@ export const pricingFactors = pgTable("pricing_factors", {
 export const pricingRules = pgTable("pricing_rules", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   name: text("name").notNull(),
   version: integer("version").notNull().default(1),
   status: text("status").notNull().default("draft"),
@@ -154,7 +144,6 @@ export const pricingRules = pgTable("pricing_rules", {
 export const discounts = pgTable("discounts", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   code: text("code").notNull(),
   type: text("type").notNull().default("percentage"),
   value: numeric("value").notNull(),
@@ -171,7 +160,6 @@ export const discounts = pgTable("discounts", {
 export const customers = pgTable("customers", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
@@ -183,7 +171,6 @@ export const customers = pgTable("customers", {
 export const quoteRequests = pgTable("quote_requests", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   referenceNumber: text("reference_number").notNull(),
   customerId: uuid("customer_id"),
   customerName: text("customer_name").notNull(),
@@ -202,7 +189,6 @@ export const quoteRequests = pgTable("quote_requests", {
 export const quotes = pgTable("quotes", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   requestId: uuid("request_id"),
   customerId: uuid("customer_id").notNull(),
   createdBy: uuid("created_by"),
@@ -223,7 +209,6 @@ export const quotes = pgTable("quotes", {
 export const quoteItems = pgTable("quote_items", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   quoteId: uuid("quote_id").notNull(),
   productId: uuid("product_id"),
   productName: text("product_name").notNull(),
@@ -243,7 +228,6 @@ export const quoteItems = pgTable("quote_items", {
 export const invoices = pgTable("invoices", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   invoiceNumber: text("invoice_number").notNull(),
   quoteId: uuid("quote_id").notNull(),
   customerId: uuid("customer_id").notNull(),
@@ -258,7 +242,6 @@ export const invoices = pgTable("invoices", {
 export const orders = pgTable("orders", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   orderNumber: text("order_number").notNull(),
   quoteId: uuid("quote_id"),
   invoiceId: uuid("invoice_id"),
@@ -303,7 +286,6 @@ export const productionAssignments = pgTable("production_assignments", {
 export const productionLogs = pgTable("production_logs", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   orderId: uuid("order_id").notNull(),
   stageFrom: text("stage_from"),
   stageTo: text("stage_to").notNull(),
@@ -315,7 +297,6 @@ export const productionLogs = pgTable("production_logs", {
 export const productionPhotos = pgTable("production_photos", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   orderId: uuid("order_id").notNull(),
   stage: text("stage"),
   photoUrl: text("photo_url").notNull(),
@@ -339,7 +320,6 @@ export const qcInspections = pgTable("qc_inspections", {
 export const notificationTemplates = pgTable("notification_templates", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   event: text("event").notNull(),
   channel: text("channel").notNull().default("whatsapp"),
   language: text("language").notNull().default("en"),
@@ -352,7 +332,6 @@ export const notificationTemplates = pgTable("notification_templates", {
 export const notificationLog = pgTable("notification_log", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   event: text("event").notNull(),
   entityType: text("entity_type").notNull(),
   entityId: uuid("entity_id"),
@@ -379,20 +358,11 @@ export const internalNotes = pgTable("internal_notes", {
 export const auditLog = pgTable("audit_log", {
   id: id(),
   tenantId: tenantId(),
-  companyId: companyId(),
   actorId: uuid("actor_id"),
   action: text("action").notNull(),
   entityType: text("entity_type").notNull(),
   entityId: uuid("entity_id"),
   details: jsonb("details").notNull().default({}),
-  createdAt: createdAt(),
-});
-
-// ---------- Tenancy / Companies ----------
-export const companies = pgTable("companies", {
-  id: id(),
-  name: text("name").notNull(),
-  settings: jsonb("settings").notNull().default({}),
   createdAt: createdAt(),
 });
 

@@ -14,7 +14,23 @@ const CreateOrderInput = z.object({
 export const createOrder = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => CreateOrderInput.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { userId } = context;
+
+    // Resolve tenant from the calling user's membership.
+    const { data: membership } = await supabaseAdmin
+      .from("tenant_members")
+      .select("tenant_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!membership?.tenant_id) {
+      throw new Error("Forbidden: no tenant membership for caller");
+    }
+    const tenantId = membership.tenant_id;
+
     // Grab the quote if an ID is provided
     let quote = null;
     if (data.quoteId) {
@@ -36,6 +52,7 @@ export const createOrder = createServerFn({ method: "POST" })
     const { data: order, error } = await supabaseAdmin
       .from("orders")
       .insert({
+        tenant_id: tenantId,
         quote_id: data.quoteId,
         customer_id: data.customerId,
         order_number: plcId,

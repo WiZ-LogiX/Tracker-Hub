@@ -2,20 +2,25 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+/**
+ * Apply the wastage_rules → material_id FK backfill migration.
+ *
+ * Authorization: admin-only, gated via tenant_members.role instead of the
+ * deprecated `public.user_roles` table (Phase 1 migration removed it).
+ */
 export const applyWastageRulesMigration = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { userId, supabase } = context;
+    const { userId, claims } = context;
 
-    // Verify admin role
-    const { data: profile } = await supabaseAdmin
-      .from("user_roles")
+    // Verify the caller is owner/admin in at least one tenant.
+    const { data: memberships } = await supabaseAdmin
+      .from("tenant_members")
       .select("role")
-      .eq("user_id", userId)
-      .single();
-
-    if (profile?.role !== "admin") {
-      throw new Error("Admin only");
+      .eq("user_id", userId);
+    const roles = (memberships ?? []).map((m: { role: string }) => m.role);
+    if (!roles.some((r) => r === "owner" || r === "admin")) {
+      throw new Error("Forbidden: admin role required");
     }
 
     const results: string[] = [];
@@ -57,5 +62,5 @@ export const applyWastageRulesMigration = createServerFn({ method: "POST" })
       results.push("✓ Migration applied (column + FK + index + data backfill)");
     }
 
-    return { success: !migrationError, results, context: !!supabase };
+    return { success: !migrationError, results };
   });

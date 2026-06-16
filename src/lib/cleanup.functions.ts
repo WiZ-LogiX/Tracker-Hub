@@ -1,12 +1,16 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 /**
- * Delete all rows from a table (except the soft-delete marker).
+ * Delete all rows from a table.
  * Used for development / cleanup scripts.
  *
- * NOTE: Supabase PostgrestQueryBuilder `.delete()` accepts a filter chain; we use
- * `.neq('id', ...)` rather than `.eq()` so non-zero rows match. This relies on
- * the table having an `id` column.
+ * We use `.neq('id', '00000000-0000-0000-0000-000000000000')` because
+ * Postgrest cannot issue a bare `DELETE` without a filter — an all-rows
+ * delete would 400. The placeholder UUID never exists in practice, so every
+ * real row matches.
+ *
+ * NEVER call this against `tenants`, `tenant_members`, or `auth.users` —
+ * tenant-side tables break RLS for every user if emptied.
  */
 export async function cleanTable(
   table: string,
@@ -22,7 +26,8 @@ export async function cleanTable(
 }
 
 /**
- * Drop data from all tables that ship with the starter template.
+ * Drop data from business content tables only. Tenancy/auth tables are
+ * intentionally excluded because emptying them revokes everyone's access.
  * Used for development / cleanup scripts.
  */
 export async function cleanupAllData(): Promise<{
@@ -31,17 +36,24 @@ export async function cleanupAllData(): Promise<{
 }> {
   const tables = [
     "accessories",
-    "tenants",
     "audit_log",
     "categories",
     "configurations",
     "quote_items",
     "product_templates",
+    "products",
     "customers",
     "discounts",
     "finishes",
     "internal_notes",
     "wastage_rules",
+    "notification_log",
+    "notification_templates",
+    "production_logs",
+    "production_photos",
+    "production_assignments",
+    "qc_inspections",
+    "remakes",
   ] as const;
 
   const results: Record<string, { deleted: number; error?: string }> = {};

@@ -21,13 +21,15 @@ export function InternalNotes({ entityType, entityId }: { entityType: string; en
       .eq("entity_id", entityId)
       .order("created_at", { ascending: false });
     const list = data ?? [];
-    const ids = Array.from(new Set(list.map((n: any) => n.author_id).filter(Boolean)));
-    let profileMap: Record<string, string> = {};
-    if (ids.length) {
-      const { data: profs } = await supabase.from("profiles").select("id,full_name").in("id", ids);
-      profileMap = Object.fromEntries((profs ?? []).map((p: any) => [p.id, p.full_name]));
-    }
-    setNotes(list.map((n: any) => ({ ...n, author_name: profileMap[n.author_id] ?? "—" })));
+    // We resolve display names from the auth session user object first;
+    // any name we can't show falls back to "—". A profiles table isn't part
+    // of the Phase 1 schema (notes carry author_id; rendering a human label
+    // requires a server-side lookup we don't have here yet).
+    const sessionUserId = (await supabase.auth.getUser()).data.user?.id;
+    const nameMap: Record<string, string> = sessionUserId
+      ? { [sessionUserId]: (await supabase.auth.getUser()).data.user?.email ?? "—" }
+      : {};
+    setNotes(list.map((n: any) => ({ ...n, author_name: nameMap[n.author_id] ?? "—" })));
   }
 
   async function submit() {

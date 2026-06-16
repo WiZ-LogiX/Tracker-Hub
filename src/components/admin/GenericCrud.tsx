@@ -28,7 +28,6 @@ interface CrudRow {
 const KNOWN_CRUD_TABLES = [
   "accessories",
   "categories",
-  "companies",
   "configurations",
   "customers",
   "discounts",

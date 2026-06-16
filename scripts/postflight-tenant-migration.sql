@@ -9,6 +9,14 @@ FROM information_schema.columns
 WHERE table_schema = 'public'
   AND column_name = 'company_id';
 
+-- 1b. Same check, scoped to the orphan `configurations` table specifically.
+-- (Kept as a separate query so it stays loud in CI even if (1) gets adapted.)
+SELECT column_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'configurations'
+  AND column_name = 'company_id';
+
 -- 2. The new tenant-scoped UNIQUE constraint exists and reflects the
 --    expected columns.
 SELECT conname, pg_get_constraintdef(oid)

@@ -15,13 +15,28 @@ export const createInvoiceFromQuote = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { userId } = context;
 
+    // Resolve tenant from the calling user's membership so the new invoice
+    // carries the same tenant_id as the quote it was generated from.
+    const { data: membership } = await supabaseAdmin
+      .from("tenant_members")
+      .select("tenant_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!membership?.tenant_id) {
+      throw new Error("Forbidden: no tenant membership for caller");
+    }
+    const tenantId = membership.tenant_id;
+
     // Get quote with items
     const { data: quote, error: qErr } = await supabaseAdmin
       .from("quotes")
       .select("*, quote_items(*)")
       .eq("id", data.quoteId)
       .single();
-    
+
     if (qErr || !quote) throw new Error("Quote not found");
 
     // Use the unified PLC ID from the quote's quote_number
@@ -32,6 +47,7 @@ export const createInvoiceFromQuote = createServerFn({ method: "POST" })
     const { data: invoice, error: iErr } = await supabaseAdmin
       .from("invoices")
       .insert({
+        tenant_id: tenantId,
         quote_id: quote.id,
         customer_id: data.customerId,
         invoice_number: plcId,
@@ -42,7 +58,7 @@ export const createInvoiceFromQuote = createServerFn({ method: "POST" })
       })
       .select("id")
       .single();
-    
+
     if (iErr || !invoice) throw new Error(iErr?.message ?? "Failed to create invoice");
 
     // Update quote status
