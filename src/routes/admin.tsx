@@ -111,7 +111,16 @@ function SidebarContent() {
 }
 
 function AdminLayout() {
-  const { user, loading, isStaff, memberships } = useAuth();
+  const {
+    user,
+    loading,
+    isStaff,
+    memberships,
+    bootstrapping,
+    bootstrapError,
+    retryBootstrap,
+    signOut: doSignOut,
+  } = useAuth();
   const nav = useNavigate();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
@@ -120,17 +129,14 @@ function AdminLayout() {
     if (!loading && !user) nav({ to: "/auth" });
   }, [loading, user, nav]);
 
-  // Three render branches:
-  //   - loading:           show a spinner.
-  //   - !user:             redirect to /auth (handled by useEffect above).
-  //   - !loading && user && !memberships.length:
-  //                        we're either still bootstrapping this user's team
-  //                        (one-time mutation in flight) or they really have
-  //                        no team. Show a placeholder rather than the
-  //                        access-denied screen because the bootstrap bridge
-  //                        may be a few hundred ms behind.
-  //   - !isStaff:          genuine no-access screen.
-  //   - else:              render the admin shell.
+  // Render branches:
+  //   - loading:                 spinner.
+  //   - !user:                   redirect handled by useEffect above.
+  //   - bootstrapping:           spinner with a hint (one-time mutation).
+  //   - memberships empty, with bootstrapError: error card with retry button.
+  //                              No more infinite spin.
+  //   - !isStaff:                no-access screen.
+  //   - else:                    the admin shell.
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -142,14 +148,47 @@ function AdminLayout() {
     );
   }
 
-  if (!isStaff && memberships.length === 0) {
-    // Bootstrap in flight. Brief loader; the bridge re-renders on completion.
+  if (bootstrapping) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div
-          className="h-6 w-6 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin"
-          aria-label="loading"
-        />
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center space-y-3">
+          <div
+            className="h-6 w-6 mx-auto rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin"
+            aria-label="loading"
+          />
+          <p className="text-sm text-muted-foreground">
+            {t("admin.bootstrapping") ?? "Preparing your workspace…"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isStaff && bootstrapError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="max-w-md text-center space-y-4">
+          <p className="text-sm font-medium text-destructive">
+            {t("admin.bootstrapFailedTitle") ?? "Couldn't prepare your workspace"}
+          </p>
+          <p className="text-xs text-muted-foreground break-words">
+            {bootstrapError}
+          </p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={retryBootstrap}>
+              {t("common.retry") ?? "Retry"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                await doSignOut();
+                nav({ to: "/auth" });
+              }}
+            >
+              {t("common.logout") ?? "Sign out"}
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

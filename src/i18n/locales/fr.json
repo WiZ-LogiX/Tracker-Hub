@@ -36,6 +36,8 @@
   "admin": {
     "panel": "Panneau d'administration",
     "noAccess": "Votre compte n'a pas accès à l'administration.",
+    "bootstrapping": "Préparation de votre espace de travail…",
+    "bootstrapFailedTitle": "Impossible de préparer votre espace de travail",
     "nav": {
       "home": "Tableau de bord",
       "quotes": "Devis",

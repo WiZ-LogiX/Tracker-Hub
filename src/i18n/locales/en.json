@@ -61,6 +61,8 @@
   "admin": {
     "panel": "Admin Panel",
     "noAccess": "Your account does not have admin access.",
+    "bootstrapping": "Preparing your workspace…",
+    "bootstrapFailedTitle": "Couldn't prepare your workspace",
     "nav": {
       "home": "Dashboard",
       "quotes": "Quotes",
