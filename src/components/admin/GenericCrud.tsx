@@ -51,8 +51,6 @@ type CrudTable = (typeof KNOWN_CRUD_TABLES)[number];
 
 const PROTECTED_INSERT_FIELDS = ["id", "tenant_id", "created_at", "updated_at"];
 
-// Tables whose Phase 1 RLS policies don't allow admin reads through PostgREST
-// — they go through service-role server fns.
 const TABLES_WITH_BYPASS = new Set<string>([
   "product_templates", "materials", "suppliers", "finishes", "veneers",
   "accessories", "pricing_factors", "wastage_rules", "pricing_rules",
@@ -62,9 +60,11 @@ const TABLES_WITH_BYPASS = new Set<string>([
 function isKnownTable(name: string): name is CrudTable {
   return (KNOWN_CRUD_TABLES as readonly string[]).includes(name);
 }
+
 function isBypassTable(name: string): boolean {
   return TABLES_WITH_BYPASS.has(name);
 }
+
 function fromTable(client: typeof supabase, name: string) {
   if (isKnownTable(name)) return client.from(name);
   return client.from(name as CrudTable);
@@ -80,40 +80,43 @@ export function GenericCrud({ title, subtitle, table, fields }: {
   const [loading, setLoading] = useState(false);
   const bypass = isBypassTable(table);
 
-  // Only allocate the bypass hooks when actually needed.
-  const listProductTemplatesFn = bypass ? useServerFn(listProductTemplates) : null;
-  const upsertProductTemplateFn = bypass ? useServerFn(upsertProductTemplate) : null;
-  const deleteProductTemplateFn = bypass ? useServerFn(deleteProductTemplate) : null;
-  const listMaterialsServerFn = bypass ? useServerFn(listMaterials) : null;
-  const upsertMaterialServerFn = bypass ? useServerFn(upsertMaterial) : null;
-  const deleteMaterialServerFn = bypass ? useServerFn(deleteMaterial) : null;
-  const listSuppliersFn = bypass ? useServerFn(listSuppliers) : null;
-  const upsertSupplierFn = bypass ? useServerFn(upsertSupplier) : null;
-  const deleteSupplierFn = bypass ? useServerFn(deleteSupplier) : null;
-  const listFinishesFn = bypass ? useServerFn(listFinishes) : null;
-  const upsertFinishFn = bypass ? useServerFn(upsertFinish) : null;
-  const deleteFinishFn = bypass ? useServerFn(deleteFinish) : null;
-  const listVeneersFn = bypass ? useServerFn(listVeneers) : null;
-  const upsertVeneerFn = bypass ? useServerFn(upsertVeneer) : null;
-  const deleteVeneerFn = bypass ? useServerFn(deleteVeneer) : null;
-  const listAccessoriesFn = bypass ? useServerFn(listAccessories) : null;
-  const upsertAccessoryFn = bypass ? useServerFn(upsertAccessory) : null;
-  const deleteAccessoryFn = bypass ? useServerFn(deleteAccessory) : null;
-  const listPricingFactorsFn = bypass ? useServerFn(listPricingFactors) : null;
-  const upsertPricingFactorFn = bypass ? useServerFn(upsertPricingFactor) : null;
-  const deletePricingFactorFn = bypass ? useServerFn(deletePricingFactor) : null;
-  const listWastageRulesFn = bypass ? useServerFn(listWastageRules) : null;
-  const upsertWastageRuleFn = bypass ? useServerFn(upsertWastageRule) : null;
-  const deleteWastageRuleFn = bypass ? useServerFn(deleteWastageRule) : null;
-  const listPricingRulesFn = bypass ? useServerFn(listPricingRules) : null;
-  const upsertPricingRuleFn = bypass ? useServerFn(upsertPricingRule) : null;
-  const deletePricingRuleFn = bypass ? useServerFn(deletePricingRule) : null;
-  const listWorkersFn = bypass ? useServerFn(listWorkers) : null;
-  const upsertWorkerFn = bypass ? useServerFn(upsertWorker) : null;
-  const deleteWorkerFn = bypass ? useServerFn(deleteWorker) : null;
-  const listDiscountsFn = bypass ? useServerFn(listDiscounts) : null;
-  const upsertDiscountFn = bypass ? useServerFn(upsertDiscount) : null;
-  const deleteDiscountFn = bypass ? useServerFn(deleteDiscount) : null;
+  // Allocates ALL bypass hooks unconditionally so React sees a stable hook
+  // count across renders. Earlier versions short-circuited with `?:` which
+  // produces inconsistent hooks order once `bypass` flips during the first
+  // commit — the symptom is "Invalid hook call" right at the Dialog mount.
+  const listProductTemplatesFn = useServerFn(listProductTemplates);
+  const upsertProductTemplateFn = useServerFn(upsertProductTemplate);
+  const deleteProductTemplateFn = useServerFn(deleteProductTemplate);
+  const listMaterialsServerFn = useServerFn(listMaterials);
+  const upsertMaterialServerFn = useServerFn(upsertMaterial);
+  const deleteMaterialServerFn = useServerFn(deleteMaterial);
+  const listSuppliersFn = useServerFn(listSuppliers);
+  const upsertSupplierFn = useServerFn(upsertSupplier);
+  const deleteSupplierFn = useServerFn(deleteSupplier);
+  const listFinishesFn = useServerFn(listFinishes);
+  const upsertFinishFn = useServerFn(upsertFinish);
+  const deleteFinishFn = useServerFn(deleteFinish);
+  const listVeneersFn = useServerFn(listVeneers);
+  const upsertVeneerFn = useServerFn(upsertVeneer);
+  const deleteVeneerFn = useServerFn(deleteVeneer);
+  const listAccessoriesFn = useServerFn(listAccessories);
+  const upsertAccessoryFn = useServerFn(upsertAccessory);
+  const deleteAccessoryFn = useServerFn(deleteAccessory);
+  const listPricingFactorsFn = useServerFn(listPricingFactors);
+  const upsertPricingFactorFn = useServerFn(upsertPricingFactor);
+  const deletePricingFactorFn = useServerFn(deletePricingFactor);
+  const listWastageRulesFn = useServerFn(listWastageRules);
+  const upsertWastageRuleFn = useServerFn(upsertWastageRule);
+  const deleteWastageRuleFn = useServerFn(deleteWastageRule);
+  const listPricingRulesFn = useServerFn(listPricingRules);
+  const upsertPricingRuleFn = useServerFn(upsertPricingRule);
+  const deletePricingRuleFn = useServerFn(deletePricingRule);
+  const listWorkersFn = useServerFn(listWorkers);
+  const upsertWorkerFn = useServerFn(upsertWorker);
+  const deleteWorkerFn = useServerFn(deleteWorker);
+  const listDiscountsFn = useServerFn(listDiscounts);
+  const upsertDiscountFn = useServerFn(upsertDiscount);
+  const deleteDiscountFn = useServerFn(deleteDiscount);
 
   const blank = Object.fromEntries(
     fields.map(f => [f.key, f.default ?? (f.type === 'number' ? 0 : '')])
@@ -130,20 +133,21 @@ export function GenericCrud({ title, subtitle, table, fields }: {
 
   async function load() {
     setLoading(true);
+
     if (bypass) {
       try {
         const fetchers: Record<string, () => Promise<{ items: any[] }>> = {
-          product_templates: () => listProductTemplatesFn!(),
-          materials: () => listMaterialsServerFn!(),
-          suppliers: () => listSuppliersFn!(),
-          finishes: () => listFinishesFn!(),
-          veneers: () => listVeneersFn!(),
-          accessories: () => listAccessoriesFn!(),
-          pricing_factors: () => listPricingFactorsFn!(),
-          wastage_rules: () => listWastageRulesFn!(),
-          pricing_rules: () => listPricingRulesFn!(),
-          workers: () => listWorkersFn!(),
-          discounts: () => listDiscountsFn!(),
+          product_templates: () => listProductTemplatesFn(),
+          materials: () => listMaterialsServerFn(),
+          suppliers: () => listSuppliersFn(),
+          finishes: () => listFinishesFn(),
+          veneers: () => listVeneersFn(),
+          accessories: () => listAccessoriesFn(),
+          pricing_factors: () => listPricingFactorsFn(),
+          wastage_rules: () => listWastageRulesFn(),
+          pricing_rules: () => listPricingRulesFn(),
+          workers: () => listWorkersFn(),
+          discounts: () => listDiscountsFn(),
         };
         const fetcher = fetchers[table];
         if (!fetcher) throw new Error(`No server-fn fetcher registered for ${table}`);
@@ -163,17 +167,24 @@ export function GenericCrud({ title, subtitle, table, fields }: {
       .gt("created_at", "1970-01-01T00:00:00Z")
       .order("created_at", { ascending: false });
     setLoading(false);
-    if (error) { toast.error(error.message); setRows([]); return; }
+    if (error) {
+      toast.error(error.message);
+      setRows([]);
+      return;
+    }
     setRows((data as CrudRow[]) ?? []);
   }
 
   function openNew() { setEditing(null); setForm(blank); setOpen(true); }
+
   function openEdit(r: CrudRow) {
     setEditing(r);
     const next = { ...blank };
     for (const f of fields) {
       const v = r[f.key];
-      if (v !== undefined && v !== null) next[f.key] = typeof v === 'number' ? v : String(v);
+      if (v !== undefined && v !== null) {
+        next[f.key] = typeof v === 'number' ? v : String(v);
+      }
     }
     setForm(next);
   }
@@ -196,17 +207,17 @@ export function GenericCrud({ title, subtitle, table, fields }: {
     if (bypass) {
       try {
         const upserters: Record<string, (input: any) => Promise<any>> = {
-          product_templates: upsertProductTemplateFn!,
-          materials: upsertMaterialServerFn!,
-          suppliers: upsertSupplierFn!,
-          finishes: upsertFinishFn!,
-          veneers: upsertVeneerFn!,
-          accessories: upsertAccessoryFn!,
-          pricing_factors: upsertPricingFactorFn!,
-          wastage_rules: upsertWastageRuleFn!,
-          pricing_rules: upsertPricingRuleFn!,
-          workers: upsertWorkerFn!,
-          discounts: upsertDiscountFn!,
+          product_templates: upsertProductTemplateFn,
+          materials: upsertMaterialServerFn,
+          suppliers: upsertSupplierFn,
+          finishes: upsertFinishFn,
+          veneers: upsertVeneerFn,
+          accessories: upsertAccessoryFn,
+          pricing_factors: upsertPricingFactorFn,
+          wastage_rules: upsertWastageRuleFn,
+          pricing_rules: upsertPricingRuleFn,
+          workers: upsertWorkerFn,
+          discounts: upsertDiscountFn,
         };
         const upsert = upserters[table];
         if (!upsert) throw new Error(`No server-fn upsert registered for ${table}`);
@@ -215,7 +226,9 @@ export function GenericCrud({ title, subtitle, table, fields }: {
         toast.error(e?.message ?? "فشل الحفظ");
         return;
       }
-      toast.success("تم الحفظ"); setOpen(false); load();
+      toast.success("تم الحفظ");
+      setOpen(false);
+      load();
       return;
     }
 
@@ -224,7 +237,9 @@ export function GenericCrud({ title, subtitle, table, fields }: {
       ? await tbl.update(payload).eq("id", editing.id)
       : await tbl.insert(payload);
     if (error) return toast.error(error.message);
-    toast.success("تم الحفظ"); setOpen(false); load();
+    toast.success("تم الحفظ");
+    setOpen(false);
+    load();
   }
 
   async function remove(id: string) {
@@ -234,17 +249,17 @@ export function GenericCrud({ title, subtitle, table, fields }: {
     if (bypass) {
       try {
         const deleters: Record<string, (input: any) => Promise<any>> = {
-          product_templates: deleteProductTemplateFn!,
-          materials: deleteMaterialServerFn!,
-          suppliers: deleteSupplierFn!,
-          finishes: deleteFinishFn!,
-          veneers: deleteVeneerFn!,
-          accessories: deleteAccessoryFn!,
-          pricing_factors: deletePricingFactorFn!,
-          wastage_rules: deleteWastageRuleFn!,
-          pricing_rules: deletePricingRuleFn!,
-          workers: deleteWorkerFn!,
-          discounts: deleteDiscountFn!,
+          product_templates: deleteProductTemplateFn,
+          materials: deleteMaterialServerFn,
+          suppliers: deleteSupplierFn,
+          finishes: deleteFinishFn,
+          veneers: deleteVeneerFn,
+          accessories: deleteAccessoryFn,
+          pricing_factors: deletePricingFactorFn,
+          wastage_rules: deleteWastageRuleFn,
+          pricing_rules: deletePricingRuleFn,
+          workers: deleteWorkerFn,
+          discounts: deleteDiscountFn,
         };
         const del = deleters[table];
         if (!del) throw new Error(`No server-fn deleter registered for ${table}`);
@@ -253,13 +268,15 @@ export function GenericCrud({ title, subtitle, table, fields }: {
         toast.error(e?.message ?? "فشل الحذف");
         return;
       }
-      toast.success("تم الحذف"); load();
+      toast.success("تم الحذف");
+      load();
       return;
     }
 
     const { error } = await fromTable(supabase, table).delete().eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("تم الحذف"); load();
+    toast.success("تم الحذف");
+    load();
   }
 
   const tableFields = fields.filter(f => f.showInTable !== false);
