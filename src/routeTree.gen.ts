@@ -18,6 +18,7 @@ import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 import { Route as AdminWastageRulesRouteImport } from './routes/admin/wastage-rules'
 import { Route as AdminVeneersRouteImport } from './routes/admin/veneers'
 import { Route as AdminTrackRouteImport } from './routes/admin/track'
+import { Route as AdminTeamRouteImport } from './routes/admin/team'
 import { Route as AdminSuppliersRouteImport } from './routes/admin/suppliers'
 import { Route as AdminSeedRouteImport } from './routes/admin/seed'
 import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
@@ -84,6 +85,11 @@ const AdminVeneersRoute = AdminVeneersRouteImport.update({
 const AdminTrackRoute = AdminTrackRouteImport.update({
   id: '/track',
   path: '/track',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTeamRoute = AdminTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSuppliersRoute = AdminSuppliersRouteImport.update({
@@ -219,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
+  '/admin/team': typeof AdminTeamRoute
   '/admin/track': typeof AdminTrackRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
+  '/admin/team': typeof AdminTeamRoute
   '/admin/track': typeof AdminTrackRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
+  '/admin/team': typeof AdminTeamRoute
   '/admin/track': typeof AdminTrackRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
@@ -320,6 +329,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/suppliers'
+    | '/admin/team'
     | '/admin/track'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -352,6 +362,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/suppliers'
+    | '/admin/team'
     | '/admin/track'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -385,6 +396,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/suppliers'
+    | '/admin/team'
     | '/admin/track'
     | '/admin/veneers'
     | '/admin/wastage-rules'
@@ -467,6 +479,13 @@ declare module '@tanstack/react-router' {
       path: '/track'
       fullPath: '/admin/track'
       preLoaderRoute: typeof AdminTrackRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/team': {
+      id: '/admin/team'
+      path: '/team'
+      fullPath: '/admin/team'
+      preLoaderRoute: typeof AdminTeamRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/suppliers': {
@@ -656,6 +675,7 @@ interface AdminRouteChildren {
   AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSeedRoute: typeof AdminSeedRoute
   AdminSuppliersRoute: typeof AdminSuppliersRoute
+  AdminTeamRoute: typeof AdminTeamRoute
   AdminTrackRoute: typeof AdminTrackRoute
   AdminVeneersRoute: typeof AdminVeneersRoute
   AdminWastageRulesRoute: typeof AdminWastageRulesRoute
@@ -685,6 +705,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminRequestsRoute: AdminRequestsRoute,
   AdminSeedRoute: AdminSeedRoute,
   AdminSuppliersRoute: AdminSuppliersRoute,
+  AdminTeamRoute: AdminTeamRoute,
   AdminTrackRoute: AdminTrackRoute,
   AdminVeneersRoute: AdminVeneersRoute,
   AdminWastageRulesRoute: AdminWastageRulesRoute,
