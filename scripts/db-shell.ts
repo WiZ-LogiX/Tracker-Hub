@@ -4,10 +4,12 @@
  * Why this exists:
  *   - The Shell session where db checks happen isn't always logged into the
  *     Supabase dashboard, so `$DATABASE_URL` is often unset.
- *   - We want to call `psql $DATABASE_URL -f supabase/migrations/<X>.sql`
- *     without leaking the password in plaintext through command-line
- *     history. This script reads DATABASE_URL from .env (or process
- *     env), runs the statement(s), and prints a small migration banner.
+ *   - `psql $DATABASE_URL` won't auto-read a `.env` file. The shell expands
+ *     `$DATABASE_URL` before psql runs, and the variable that's in `.env`
+ *     never makes it to the environment. So we have to load `.env` first,
+ *     then drive `pg` from Node directly.
+ *   - The user explicitly added DATABASE_URL to .env already, so this
+ *     becomes the no-paste path forward.
  *
  * Usage:
  *   bun db:check
@@ -18,8 +20,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 function loadEnv() {
+  // Lazy .env loader — no dotenv import to keep the dev dep count low.
   try {
-    // Lazy minimal env loader — we don't want to pull dotenv at build time.
     const text = require("node:fs").readFileSync(".env", "utf8");
     for (const raw of text.split(/\r?\n/)) {
       const line = raw.trim();
@@ -43,14 +45,14 @@ async function main() {
     process.exit(2);
   }
 
-  const argFile = process.argv.find((a) => a === "--file" || a === "-f");
+  const argFile = process.argv.find((a: string) => a === "--file" || a === "-f");
   const cliFile =
     argFile !== undefined
       ? process.argv[process.argv.indexOf(argFile) + 1]
       : undefined;
   const file = cliFile ?? process.env.FILE;
 
-  // Lazy-import so the import doesn't fire if the script is just being typed-tested.
+  // Lazy-import so we don't open a TCP socket during type-check.
   const pg = await import("pg");
 
   const client = new pg.default.Client({
@@ -61,7 +63,7 @@ async function main() {
   try {
     await client.connect();
   } catch (e) {
-    console.error("ERROR: connection failed →", e instanceof Error ? e.message : e);
+    console.error("ERROR: connection failed →", e instanceof Error ? e.message : String(e));
     process.exit(2);
   }
 
@@ -69,7 +71,7 @@ async function main() {
     const { rows } = await client.query(
       "SELECT now() AS now, current_database() AS db, version() AS ver",
     );
-    const r = rows[0];
+    const r = rows[0] as { now: string; db: string; ver: string };
     console.log("✔ Connected.");
     console.log("  database:", r.db);
     console.log("  now:     ", r.now);
@@ -88,17 +90,15 @@ async function main() {
   const sql = await readFile(sqlPath, "utf8");
   console.log(`▶ Applying ${sqlPath}`);
 
-  // Use a transaction so any failure rolls back cleanly.
+  // Single transaction so any failure rolls back cleanly.
   try {
     await client.query("BEGIN");
-    // Single-statement migration — easier than parsing. If the file has
-    // multiple statements, pg's `query` will execute them all.
     await client.query(sql);
     await client.query("COMMIT");
     console.log("✔ Migration applied.");
   } catch (e) {
     await client.query("ROLLBACK").catch(() => undefined);
-    console.error("ERROR: migration failed →", e instanceof Error ? e.message : e);
+    console.error("ERROR: migration failed →", e instanceof Error ? e.message : String(e));
     await client.end();
     process.exit(1);
   }
