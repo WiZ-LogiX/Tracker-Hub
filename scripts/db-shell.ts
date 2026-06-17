@@ -37,8 +37,10 @@ function loadEnv() {
       const k = trimmed.slice(0, eq).trim();
       let v = trimmed.slice(eq + 1).trim();
       // Strip matching surrounding quotes (single or double).
-      if ((v.startsWith('"') && v.endsWith('"')) ||
-          (v.startsWith("'") && v.endsWith("'"))) {
+      if (
+        (v.startsWith('"') && v.endsWith('"')) ||
+        (v.startsWith("'") && v.endsWith("'"))
+      ) {
         v = v.slice(1, -1);
       }
       // Only set if not already provided by the parent process.
@@ -52,7 +54,10 @@ function loadEnv() {
 function normaliseUrl(url: string): { url: string; swapped: boolean } {
   // pg.js wants `postgres://`. Dashboard URL is `postgresql://`. Swap.
   if (url.startsWith("postgresql://")) {
-    return { url: "postgres://" + url.slice("postgresql://".length), swapped: true };
+    return {
+      url: "postgres://" + url.slice("postgresql://".length),
+      swapped: true,
+    };
   }
   return { url, swapped: false };
 }
@@ -90,4 +95,56 @@ async function main() {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("ERROR: connection failed →", msg);
-    console.error("       (Common causes:");\n    console.error("        - port :6543 is the Pooler; DDL needs port :5432 (Direct).");\n    console.error("        - check IP allow-list in Supabase → Settings → Database.)");\n    console.error("        - confirm DATABASE_URL is for THIS project's <ref>.)");\n    process.exit(2);\n  }\n\n  if (process.argv.includes("--check")) {\n    const { rows } = await client.query(\n      "SELECT now() AS now, current_database() AS db, version() AS ver",\n    );\n    const r = rows[0] as { now: string; db: string; ver: string };\n    console.log("✔ Connected.");\n    console.log("  database:", r.db);\n    console.log("  now:     ", r.now);\n    console.log("  version: ", String(r.ver).split(\" \").slice(0, 2).join(\" \"));\n    await client.end();\n    return;\n  }\n\n  if (!file) {\n    console.error("ERROR: pass --file <path> (or set FILE env).\");\n    await client.end();\n    process.exit(2);\n  }\n\n  const sqlPath = resolve(file);\n  const sql = await readFile(sqlPath, \"utf8\");\n  console.log(`▶ Applying ${sqlPath}`);\n\n  // Single transaction so any failure rolls back cleanly.\n  try {\n    await client.query(\"BEGIN\");\n    await client.query(sql);\n    await client.query(\"COMMIT\");\n    console.log(\"✔ Migration applied.\");\n  } catch (e) {\n    await client.query(\"ROLLBACK\").catch(() => undefined);\n    console.error(\"ERROR: migration failed →\", e instanceof Error ? e.message : String(e));\n    await client.end();\n    process.exit(1);\n  }\n\n  await client.end();\n}\n\nmain().catch((e: unknown) => {\n  console.error(e);\n  process.exit(2);\n});\n"}
+    console.error("       (Common causes:");
+    console.error("        - port :6543 is the Pooler; DDL needs port :5432 (Direct).");
+    console.error("        - check IP allow-list in Supabase → Settings → Database.");
+    console.error("        - confirm DATABASE_URL is for THIS project's <ref>.)");
+    process.exit(2);
+  }
+
+  if (process.argv.includes("--check")) {
+    const { rows } = await client.query(
+      "SELECT now() AS now, current_database() AS db, version() AS ver",
+    );
+    const r = rows[0] as { now: string; db: string; ver: string };
+    console.log("✔ Connected.");
+    console.log("  database:", r.db);
+    console.log("  now:     ", r.now);
+    console.log("  version: ", String(r.ver).split(" ").slice(0, 2).join(" "));
+    await client.end();
+    return;
+  }
+
+  if (!file) {
+    console.error("ERROR: pass --file <path> (or set FILE env).");
+    await client.end();
+    process.exit(2);
+  }
+
+  const sqlPath = resolve(file);
+  const sql = await readFile(sqlPath, "utf8");
+  console.log(`▶ Applying ${sqlPath}`);
+
+  // Single transaction so any failure rolls back cleanly.
+  try {
+    await client.query("BEGIN");
+    await client.query(sql);
+    await client.query("COMMIT");
+    console.log("✔ Migration applied.");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error(
+      "ERROR: migration failed →",
+      e instanceof Error ? e.message : String(e),
+    );
+    await client.end();
+    process.exit(1);
+  }
+
+  await client.end();
+}
+
+main().catch((e: unknown) => {
+  console.error(e);
+  process.exit(2);
+});
