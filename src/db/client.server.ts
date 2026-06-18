@@ -1,8 +1,8 @@
-// Portable Postgres client using Neon HTTP driver.
-// Works on Cloudflare Workers without persistent TCP connections.
-// To switch providers, just change the DATABASE_URL.
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+// Portable Postgres client using the `postgres` driver against Supabase's
+// direct connection (port 5432). Renamed from the previous Neon HTTP
+// adapter — Neon is no longer part of the stack.
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema";
 
 function resolveConnectionString(): string {
@@ -19,7 +19,7 @@ let _db: ReturnType<typeof createDb> | undefined;
 
 function createDb() {
   const connectionString = resolveConnectionString();
-  const client = neon(connectionString);
+  const client = postgres(connectionString, { prepare: false });
   return drizzle(client, { schema });
 }
 
