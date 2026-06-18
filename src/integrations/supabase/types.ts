@@ -1,24 +1,17 @@
-// Generated types placeholder.
+// PostgREST-compatible type stub.
 //
-// The previous stub listed each business table explicitly as
-// `{ Row: any; Insert: any; Update: any }`. With that shape PostgREST's
-// query-builder chain still occasionally collapsed to `never` because
-// internal mapped types over record-like Index signatures interacted
-// with `Insert`/`Update` generic constraints in a way TypeScript can't
-// fully satisfy. The result was "Property X does not exist on type
-// 'never'" across every `.from(...).insert(...)`, `.update(...)`, and
-// chained `.select()` row read.
+// Without `npx supabase gen types typescript --linked`, the placeholder
+// type below is structurally correct for PostgREST's inference: every
+// table maps to `{ Row: any; Insert: any; Update: any }`, which stops
+// `.from(...)` chains from collapsing to `never`.
 //
-// Fix: relax `public.Tables` to a single permissive string index that
-// points every table lookup at `any`. PostgREST sees
-// `Schema["Tables"][TableName]` as `any`, the whole query-builder chain
-// flows as `any`, and no row or insert argument is ever typed as
-// `never`. Accesses via `.foo` produce `any` instead of error-out.
-//
-// When `npx supabase gen types typescript --linked` is run, replace this
-// file with the generated Database and the codebase gains full column
-// inference — every server function already casts loosely and will keep
-// working under the stricter types.
+// Generate the real types:
+//   1. npx supabase login
+//   2. npx supabase link --project-ref <your-ref>
+//   3. npx supabase gen types typescript --linked > src/integrations/supabase/types.ts
+//   4. Remove the `// @ts-nocheck` if present.
+//   5. Add `<Database>` back to the createClient() calls in client.ts
+//      and admin.ts
 
 export type Json =
   | string
@@ -30,17 +23,13 @@ export type Json =
 
 export type Database = {
   public: {
-    Tables: { [key: string]: any };
-    Views: { [key: string]: { Row: any } };
-    Functions: {
-      [key: string]: {
-        Args: { [key: string]: any };
-        Returns: any;
-      };
-    };
-    Enums: { [key: string]: string };
-    CompositeTypes: { [key: string]: { [key: string]: any } };
+    Tables: Record<string, { Row: any; Insert: any; Update: any }>;
+    Views: Record<string, { Row: any }>;
+    Functions: Record<
+      string,
+      { Args: Record<string, any>; Returns: any }
+    >;
+    Enums: Record<string, string>;
+    CompositeTypes: Record<string, Record<string, any>>;
   };
 };
-
-export default {} as Database;
