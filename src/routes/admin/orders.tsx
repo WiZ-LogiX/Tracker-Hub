@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation as _useTranslation } from "react-i18next";
+import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +20,8 @@ import { extractR2Key } from "@/lib/r2.utils";
 import { PhotoUploader } from "@/components/photo-uploader";
 import { AttachmentList } from "@/components/attachment-list";
 import { AttachmentUploader } from "@/components/attachment-uploader";
+
+export const Route = createFileRoute("/admin/orders")({ component: OrdersPage });
 
 function OrdersPage() {
   const { t } = _useTranslation();

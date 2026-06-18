@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,12 +19,16 @@ import {
   listFinishes, upsertFinish, deleteFinish,
   listVeneers, upsertVeneer, deleteVeneer,
   listAccessories, upsertAccessory, deleteAccessory,
-  listPricingFactors, upsertPricingFactor, deletePricingFactor,
   listWastageRules, upsertWastageRule, deleteWastageRule,
   listPricingRules, upsertPricingRule, deletePricingRule,
   listWorkers, upsertWorker, deleteWorker,
   listDiscounts, upsertDiscount, deleteDiscount,
 } from "@/lib/catalog.functions";
+import {
+  listPricingFactors,
+  upsertPricingFactor,
+  deletePricingFactor,
+} from "@/lib/pricing-factors.functions";
 
 export interface FieldDef {
   key: string;
