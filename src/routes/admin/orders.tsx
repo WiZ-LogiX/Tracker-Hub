@@ -1,8 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useTranslation as _useTranslation } from "react-i18next";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -13,16 +13,15 @@ import { ORDER_STAGES, STAGE_LABEL_AR, OrderStage, nextStage, stageIndex } from 
 import { formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/useAuth";
-import { useServerFn } from "@tanstack/react-start";
 import { sendNotification } from "@/lib/notifications.functions";
 import { InternalNotes } from "@/components/admin/InternalNotes";
 import { extractR2Key } from "@/lib/r2.utils";
 import { PhotoUploader } from "@/components/photo-uploader";
-
-export const Route = createFileRoute("/admin/orders")({ component: OrdersPage });
+import { AttachmentList } from "@/components/attachment-list";
+import { AttachmentUploader } from "@/components/attachment-uploader";
 
 function OrdersPage() {
-  const { t } = useTranslation();
+  const { t } = _useTranslation();
   const [orders, setOrders] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [logs, setLogs] = useState<any[]>([]);
@@ -32,12 +31,14 @@ function OrdersPage() {
   const [workers, setWorkers] = useState<any[]>([]);
   const [note, setNote] = useState("");
   const [caption, setCaption] = useState("");
+  const [refreshAttach, setRefreshAttach] = useState(0);
   const { user } = useAuth();
   const notify = useServerFn(sendNotification);
 
   useEffect(() => {
     load();
     loadWorkers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function load() {
@@ -138,13 +139,12 @@ function OrdersPage() {
       toast.error(error.message);
       return;
     }
-    // Best-effort: also delete the underlying R2 object (key extraction handled by utils).
     const key = p.photo_url ? extractR2Key(p.photo_url) : null;
     if (key) {
       try {
         await supabase.functions.invoke?.("delete-r2-object", { body: { key } });
       } catch {
-        // Non-fatal: file remains in R2 but is orphaned in DB.
+        /* ignore */
       }
     }
     if (selected) await reloadOrderData(selected.id);
@@ -290,13 +290,11 @@ function OrdersPage() {
           if (ordersInStage.length === 0) return null;
           return (
             <Card key={stage}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center justify-between">
-                  <span>{STAGE_LABEL_AR[stage]}</span>
+              <CardContent className="space-y-2 p-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-medium">{STAGE_LABEL_AR[stage]}</h2>
                   <Badge variant="outline">{ordersInStage.length}</Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
+                </div>
                 {ordersInStage.map(o => (
                   <Dialog key={o.id}>
                     <DialogTrigger asChild>
@@ -335,6 +333,8 @@ function OrdersPage() {
                           onDeleteAssignment={deleteAssignment}
                           onRecordQC={recordQC}
                           t={t}
+                          refreshAttach={refreshAttach}
+                          triggerRefreshAttach={() => setRefreshAttach((n) => n + 1)}
                         />
                       )}
                     </DialogContent>
@@ -348,10 +348,8 @@ function OrdersPage() {
 
       {orders.filter(o => o.current_stage === "completed").length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{t("orders.completed")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 p-3">
+            <h2 className="text-lg font-medium">{t("orders.completed")}</h2>
             {orders
               .filter(o => o.current_stage === "completed")
               .map(o => (
@@ -398,6 +396,8 @@ function OrderDetail({
   onDeleteAssignment,
   onRecordQC,
   t,
+  refreshAttach,
+  triggerRefreshAttach,
 }: any) {
   const idx = stageIndex(o.current_stage);
   const next = nextStage(o.current_stage);
@@ -610,6 +610,23 @@ function OrderDetail({
 
       <div className="pt-2 border-t">
         <InternalNotes entityType="order" entityId={o.id} />
+      </div>
+
+      <div className="pt-2 border-t space-y-2">
+        <div className="text-xs text-muted-foreground">
+          {t("orders.attachments") ?? "المرفقات"}
+        </div>
+        <AttachmentList
+          entityType="order"
+          entityId={o.id}
+          refreshKey={refreshAttach}
+        />
+        <AttachmentUploader
+          entityType="order"
+          entityId={o.id}
+          isPublic={false}
+          onUploaded={() => triggerRefreshAttach()}
+        />
       </div>
 
       <div className="pt-2 border-t space-y-2">
