@@ -3,7 +3,6 @@
 // Use this for admin operations in server functions and server routes only.
 // For user-authenticated queries (with RLS), use the auth middleware instead.
 import { createClient } from '@supabase/supabase-js';
-import type { Database } from './types';
 
 function createSupabaseAdminClient() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -19,7 +18,14 @@ function createSupabaseAdminClient() {
     throw new Error(message);
   }
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  // Note: we deliberately omit the <Database> generic so that PostgREST's chain
+  // methods return permissive types. The <Database> constraint from the placeholder
+  // types.ts collapses every .from('tablename') chain to `never` because the
+  // placeholder shape doesn't match PostgREST's generic resolution requirements.
+  // Once `npx supabase gen types typescript --linked` is run and the real types
+  // replace the stub, add `import type { Database } from './types'` back and
+  // use `createClient<Database>(...)`.
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       storage: undefined,
       persistSession: false,
