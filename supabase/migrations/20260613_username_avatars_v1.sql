@@ -15,8 +15,6 @@ CREATE TABLE IF NOT EXISTS public.app_users (
 
 CREATE UNIQUE INDEX IF NOT EXISTS app_users_username_idx
   ON public.app_users (lower(username));
-CREATE UNIQUE INDEX IF NOT EXISTS app_users_email_proxy_idx
-  ON public.app_users (lower(username) || '@pelecanon.local');
 
 ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
 
