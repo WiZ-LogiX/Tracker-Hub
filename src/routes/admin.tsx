@@ -7,7 +7,7 @@ import {
   LayoutDashboard, FileText, Receipt, ClipboardList,
   Package, Layers3, Palette, Wrench, Ticket, LogOut, Menu,
   Truck, Trees, SlidersHorizontal, GitBranch, Sparkles, Bell,
-  Users, RefreshCcw, BarChart3, UserCircle, Database, UserCog
+  Users, RefreshCcw, BarChart3, UserCircle, Database,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -17,7 +17,7 @@ export const Route = createFileRoute("/admin")({ component: AdminLayout });
 
 const NAV = [
   { to: "/admin", labelKey: "admin.nav.home", icon: LayoutDashboard, exact: true },
-  { to: "/admin/team", labelKey: "admin.nav.team", icon: UserCog },
+  { to: "/admin/team", labelKey: "admin.nav.teamManagement", icon: Users },
   { to: "/admin/quotes", labelKey: "admin.nav.quotes", icon: FileText },
   { to: "/admin/quotes/configurator", labelKey: "admin.nav.configurator", icon: Sparkles },
   { to: "/admin/invoices", labelKey: "admin.nav.invoices", icon: Receipt },

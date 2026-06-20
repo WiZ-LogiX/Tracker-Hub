@@ -13,7 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
-  listProductTemplates, upsertProductTemplate, deleteProductTemplate,
   listMaterials, upsertMaterial, deleteMaterial,
   listSuppliers, upsertSupplier, deleteSupplier,
   listFinishes, upsertFinish, deleteFinish,
@@ -48,7 +47,7 @@ const KNOWN_CRUD_TABLES = [
   "accessories", "categories", "configurations", "customers", "discounts",
   "finishes", "internal_notes", "material_variants", "materials",
   "notification_log", "notification_templates", "pricing_factors",
-  "pricing_rules", "product_templates", "products", "quote_items",
+  "pricing_rules", "products", "quote_items",
   "quote_requests", "remakes", "suppliers", "veneers", "wastage_rules",
   "workers",
 ] as const;
@@ -58,7 +57,7 @@ type CrudTable = (typeof KNOWN_CRUD_TABLES)[number];
 const PROTECTED_INSERT_FIELDS = ["id", "tenant_id", "created_at", "updated_at"];
 
 const TABLES_WITH_BYPASS = new Set<string>([
-  "product_templates", "materials", "suppliers", "finishes", "veneers",
+  "materials", "suppliers", "finishes", "veneers",
   "accessories", "pricing_factors", "wastage_rules", "pricing_rules",
   "workers", "discounts",
 ]);
@@ -90,9 +89,6 @@ export function GenericCrud({ title, subtitle, table, fields }: {
   // count across renders. Earlier versions short-circuited with `?:` which
   // produces inconsistent hooks order once `bypass` flips during the first
   // commit — the symptom is "Invalid hook call" right at the Dialog mount.
-  const listProductTemplatesFn = useServerFn(listProductTemplates);
-  const upsertProductTemplateFn = useServerFn(upsertProductTemplate);
-  const deleteProductTemplateFn = useServerFn(deleteProductTemplate);
   const listMaterialsServerFn = useServerFn(listMaterials);
   const upsertMaterialServerFn = useServerFn(upsertMaterial);
   const deleteMaterialServerFn = useServerFn(deleteMaterial);
@@ -143,7 +139,6 @@ export function GenericCrud({ title, subtitle, table, fields }: {
     if (bypass) {
       try {
         const fetchers: Record<string, () => Promise<{ items: any[] }>> = {
-          product_templates: () => listProductTemplatesFn(),
           materials: () => listMaterialsServerFn(),
           suppliers: () => listSuppliersFn(),
           finishes: () => listFinishesFn(),
@@ -193,6 +188,7 @@ export function GenericCrud({ title, subtitle, table, fields }: {
       }
     }
     setForm(next);
+    setOpen(true);
   }
 
   async function save() {
@@ -213,7 +209,6 @@ export function GenericCrud({ title, subtitle, table, fields }: {
     if (bypass) {
       try {
         const upserters: Record<string, (input: any) => Promise<any>> = {
-          product_templates: upsertProductTemplateFn,
           materials: upsertMaterialServerFn,
           suppliers: upsertSupplierFn,
           finishes: upsertFinishFn,
@@ -227,7 +222,7 @@ export function GenericCrud({ title, subtitle, table, fields }: {
         };
         const upsert = upserters[table];
         if (!upsert) throw new Error(`No server-fn upsert registered for ${table}`);
-        await upsert({ ...payload, id: editing?.id });
+        await upsert({ data: { ...payload, id: editing?.id } });
       } catch (e: any) {
         toast.error(e?.message ?? "فشل الحفظ");
         return;
@@ -255,7 +250,6 @@ export function GenericCrud({ title, subtitle, table, fields }: {
     if (bypass) {
       try {
         const deleters: Record<string, (input: any) => Promise<any>> = {
-          product_templates: deleteProductTemplateFn,
           materials: deleteMaterialServerFn,
           suppliers: deleteSupplierFn,
           finishes: deleteFinishFn,
@@ -269,7 +263,7 @@ export function GenericCrud({ title, subtitle, table, fields }: {
         };
         const del = deleters[table];
         if (!del) throw new Error(`No server-fn deleter registered for ${table}`);
-        await del({ id });
+        await del({ data: { id } });
       } catch (e: any) {
         toast.error(e?.message ?? "فشل الحذف");
         return;

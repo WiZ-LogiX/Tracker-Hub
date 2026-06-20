@@ -101,67 +101,7 @@ const PricingRuleRow = z.object({
   effective_to: z.string().nullable().optional(),
 });
 
-const ProductTemplateRow = z.object({
-  id: z.string().uuid().optional(),
-  category_id: z.string().uuid().nullable().optional(),
-  code: z.string().nullable().optional(),
-  name_ar: z.string().min(1),
-  name_en: z.string().nullable().optional(),
-  description_ar: z.string().nullable().optional(),
-  base_price: z.number(),
-  default_config: z.any().optional(),
-  active: z.boolean(),
-});
-
 const IdInput = z.object({ id: z.string().uuid() });
-
-// ---------------- product_templates ----------------
-
-export const listProductTemplates = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async () => {
-    const { data, error } = await supabaseAdmin
-      .from("product_templates")
-      .select(
-        "id, category_id, code, name_ar, name_en, description_ar, base_price, default_config, active, created_at, tenant_id",
-      )
-      .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return { items: data ?? [] };
-  });
-
-export const upsertProductTemplate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => ProductTemplateRow.parse(d))
-  .handler(async ({ data }) => {
-    if (data.id) {
-      const { error } = await supabaseAdmin
-        .from("product_templates")
-        .update(data)
-        .eq("id", data.id);
-      if (error) throw new Error(error.message);
-      return { id: data.id };
-    }
-    const { data: row, error } = await supabaseAdmin
-      .from("product_templates")
-      .insert(data)
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-    return { id: row?.id ?? null };
-  });
-
-export const deleteProductTemplate = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => IdInput.parse(d))
-  .handler(async ({ data }) => {
-    const { error } = await supabaseAdmin
-      .from("product_templates")
-      .delete()
-      .eq("id", data.id);
-    if (error) throw new Error(error.message);
-    return { ok: true };
-  });
 
 // ---------------- materials ----------------
 
