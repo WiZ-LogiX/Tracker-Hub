@@ -1,8 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { generatePLCId } from "@/lib/numbering";
+import type { TenantContext } from "@/lib/tenant-context";
 
 const CreateOrderInput = z.object({
   quoteId: z.string().uuid().optional().nullable(),
@@ -12,42 +14,43 @@ const CreateOrderInput = z.object({
 });
 
 export const createOrder = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requireTenant])
   .inputValidator((input: unknown) => CreateOrderInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { userId } = context;
+    const ctx = context.tenantContext as TenantContext;
+    const tenantId = ctx.tenantId;
 
-    // Resolve tenant from the calling user's membership.
-    const { data: membership } = await supabaseAdmin
-      .from("tenant_members")
-      .select("tenant_id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (!membership?.tenant_id) {
-      throw new Error("Forbidden: no tenant membership for caller");
-    }
-    const tenantId = membership.tenant_id;
-
-    // Grab the quote if an ID is provided
+    // Grab the quote if an ID is provided and ensure it belongs to the tenant
     let quote = null;
     if (data.quoteId) {
       const { data: q, error } = await supabaseAdmin
         .from("quotes")
-        .select("*")
+        .select("*, tenant_id")
         .eq("id", data.quoteId)
         .single();
       if (error || !q) throw new Error(error?.message ?? "Quote not found");
+      if (q.tenant_id !== tenantId) {
+        throw new Error("Forbidden: quote does not belong to your tenant");
+      }
       quote = q;
     }
 
+    // Ensure the customer belongs to the tenant
+    const { data: customer, error: customerErr } = await supabaseAdmin
+      .from("customers")
+      .select("id, tenant_id")
+      .eq("id", data.customerId)
+      .single();
+    if (customerErr || !customer) throw new Error(customerErr?.message ?? "Customer not found");
+    if (customer.tenant_id !== tenantId) {
+      throw new Error("Forbidden: customer does not belong to your tenant");
+    }
+
     // Use the unified PLC ID passed from the quote, or generate a new one
-    const plcId = data.plcId ?? (quote?.quote_number ?? generatePLCId());
+    const plcId = data.plcId ?? quote?.quote_number ?? generatePLCId();
 
     // Compute deposit amount (50% of total by default)
-    const deposit = quote ? Number(quote.total) * Number(quote.deposit_pct) / 100 : 0;
+    const deposit = quote ? (Number(quote.total) * Number(quote.deposit_pct)) / 100 : 0;
 
     const { data: order, error } = await supabaseAdmin
       .from("orders")
@@ -59,7 +62,9 @@ export const createOrder = createServerFn({ method: "POST" })
         total: quote?.total ?? 0,
         deposit,
         contract_date: new Date().toISOString().slice(0, 10),
-        expected_delivery: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        expected_delivery: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10),
         current_stage: "deposit_received",
       })
       .select("id")

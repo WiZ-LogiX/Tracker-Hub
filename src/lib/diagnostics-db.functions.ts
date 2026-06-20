@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireTenant } from "@/integrations/supabase/tenant-middleware";
+import { requireRole, type TenantContext } from "@/lib/tenant-context";
 
 interface TableRowCount {
   table: string;
@@ -28,8 +31,12 @@ interface AuthUserRow {
   created_at: string | null;
 }
 
-export const getTableCounts = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ rows: TableRowCount[] }> => {
+export const getTableCounts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireRole(ctx, ["owner", "admin"]);
+
     const tables = [
       "customers",
       "quotes",
@@ -78,8 +85,12 @@ export const getTableCounts = createServerFn({ method: "POST" }).handler(
   },
 );
 
-export const getTenants = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ rows: TenantRow[]; error: string | null }> => {
+export const getTenants = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireRole(ctx, ["owner", "admin"]);
+
     try {
       const { data, error } = await supabaseAdmin
         .from("tenants")
@@ -93,8 +104,12 @@ export const getTenants = createServerFn({ method: "POST" }).handler(
   },
 );
 
-export const getAuthUsers = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ rows: AuthUserRow[]; error: string | null }> => {
+export const getAuthUsers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireRole(ctx, ["owner", "admin"]);
+
     try {
       const { data, error } = await supabaseAdmin.auth.admin.listUsers({
         page: 1,
@@ -120,8 +135,12 @@ export const getAuthUsers = createServerFn({ method: "POST" }).handler(
  * the way the previous version tried: PostgREST rejects the FK path with
  * "failed to parse select parameter").
  */
-export const getMemberships = createServerFn({ method: "POST" }).handler(
-  async (): Promise<{ rows: MembershipRow[]; error: string | null }> => {
+export const getMemberships = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireRole(ctx, ["owner", "admin"]);
+
     try {
       const [{ data: memberships, error: mErr }, { data: users, error: uErr }] =
         await Promise.all([

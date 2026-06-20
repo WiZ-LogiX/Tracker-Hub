@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { TenantContext } from "@/lib/tenant-context";
 
 const CreateInvoiceInput = z.object({
   quoteId: z.string().uuid(),
@@ -10,39 +12,39 @@ const CreateInvoiceInput = z.object({
 });
 
 export const createInvoiceFromQuote = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requireTenant])
   .inputValidator((input: unknown) => CreateInvoiceInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { userId } = context;
+    const ctx = context.tenantContext as TenantContext;
+    const tenantId = ctx.tenantId;
 
-    // Resolve tenant from the calling user's membership so the new invoice
-    // carries the same tenant_id as the quote it was generated from.
-    const { data: membership } = await supabaseAdmin
-      .from("tenant_members")
-      .select("tenant_id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (!membership?.tenant_id) {
-      throw new Error("Forbidden: no tenant membership for caller");
-    }
-    const tenantId = membership.tenant_id;
-
-    // Get quote with items
+    // Get quote with items and ensure it belongs to the tenant
     const { data: quote, error: qErr } = await supabaseAdmin
       .from("quotes")
-      .select("*, quote_items(*)")
+      .select("*, quote_items(*), tenant_id")
       .eq("id", data.quoteId)
       .single();
 
     if (qErr || !quote) throw new Error("Quote not found");
+    if (quote.tenant_id !== tenantId) {
+      throw new Error("Forbidden: quote does not belong to your tenant");
+    }
+
+    // Ensure the customer belongs to the tenant
+    const { data: customer, error: customerErr } = await supabaseAdmin
+      .from("customers")
+      .select("id, tenant_id")
+      .eq("id", data.customerId)
+      .single();
+    if (customerErr || !customer) throw new Error(customerErr?.message ?? "Customer not found");
+    if (customer.tenant_id !== tenantId) {
+      throw new Error("Forbidden: customer does not belong to your tenant");
+    }
 
     // Use the unified PLC ID from the quote's quote_number
     const plcId = data.plcId ?? quote.quote_number;
 
-    const depositAmount = Number(quote.total) * Number(quote.deposit_pct) / 100;
+    const depositAmount = (Number(quote.total) * Number(quote.deposit_pct)) / 100;
 
     const { data: invoice, error: iErr } = await supabaseAdmin
       .from("invoices")

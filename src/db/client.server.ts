@@ -1,6 +1,5 @@
 // Portable Postgres client using the `postgres` driver against Supabase's
-// direct connection (port 5432). Renamed from the previous Neon HTTP
-// adapter — Neon is no longer part of the stack.
+// direct connection (port 5432).
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
@@ -9,7 +8,7 @@ function resolveConnectionString(): string {
   const url = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
   if (!url) {
     throw new Error(
-      "No database connection string. Set DATABASE_URL (preferred) or SUPABASE_DB_URL.",
+      "No database connection string. Set DATABASE_URL or SUPABASE_DB_URL.",
     );
   }
   return url;

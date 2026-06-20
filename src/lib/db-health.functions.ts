@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import postgres from "postgres";
 
-export const checkNeonConnection = createServerFn({ method: "GET" }).handler(
+export const checkDbConnection = createServerFn({ method: "GET" }).handler(
   async () => {
     const url = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
     if (!url) return { ok: false, error: "DATABASE_URL not set" };

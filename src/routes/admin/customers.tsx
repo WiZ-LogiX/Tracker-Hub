@@ -30,6 +30,16 @@ function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState<Customer>(blankCustomer);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase.from('tenant_members').select('tenant_id').eq('user_id', user.id).limit(1).maybeSingle()
+          .then(({ data }) => { if (data) setTenantId(data.tenant_id); });
+      }
+    });
+  }, []);
 
   async function load() {
     const { data, error } = await supabase
@@ -44,7 +54,7 @@ function CustomersPage() {
   useEffect(() => {
     const filtered = customers.filter(c =>
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone.includes(searchTerm) ||
+      c.phone?.includes(searchTerm) ||
       c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.governorate?.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -57,10 +67,11 @@ function CustomersPage() {
   async function save() {
     if (!form.name.trim()) return toast.error(t("customers.nameRequired"));
     if (!form.phone.trim()) return toast.error(t("customers.phoneRequired"));
-    const payload = {
+    const payload: Record<string, any> = {
       name: form.name.trim(), phone: form.phone.trim(),
       email: form.email?.trim() || null, governorate: form.governorate?.trim() || null, address: form.address?.trim() || null,
     };
+    if (!editing && tenantId) payload.tenant_id = tenantId;
     try {
       if (editing) {
         const { error } = await supabase.from('customers').update(payload).eq('id', editing.id);
