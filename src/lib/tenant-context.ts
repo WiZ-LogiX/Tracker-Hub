@@ -5,13 +5,12 @@
  * This module provides the canonical types and helpers that every server
  * function in src/lib/*.functions.ts will eventually adopt.
  *
- * Wiring is intentionally lazy: existing server functions still resolve
- * the user's tenant via ad hoc queries against tenant_members. Phase 2
- * swaps them to use these helpers + the request-jwt-claims pattern.
+ * Phase 2 adds permission-based access control via the permissions / role_permissions tables.
+ * Phase 3 makes roles fully dynamic — custom role slugs are allowed.
  */
 
-/** Roles a user can hold within a single tenant. */
-export const TENANT_ROLES = [
+/** The 5 built-in role slugs (cannot be deleted). */
+export const BUILTIN_ROLE_SLUGS = [
   "owner",
   "admin",
   "sales",
@@ -19,7 +18,32 @@ export const TENANT_ROLES = [
   "viewer",
 ] as const;
 
-export type TenantRole = (typeof TENANT_ROLES)[number];
+/** A role is now just a string slug — custom roles are allowed. */
+export type TenantRole = string;
+
+/** All known permission slugs. */
+export const ALL_PERMISSION_SLUGS = [
+  "quotes.view","quotes.create","quotes.edit","quotes.delete","quotes.configurator",
+  "invoices.view","invoices.create","invoices.edit","invoices.delete",
+  "orders.view","orders.create","orders.edit","orders.delete",
+  "customers.view","customers.create","customers.edit","customers.delete",
+  "products.view","products.create","products.edit","products.delete",
+  "materials.view","materials.create","materials.edit","materials.delete",
+  "suppliers.view","suppliers.create","suppliers.edit","suppliers.delete",
+  "finishes.view","finishes.create","finishes.edit","finishes.delete",
+  "veneers.view","veneers.create","veneers.edit","veneers.delete",
+  "accessories.view","accessories.create","accessories.edit","accessories.delete",
+  "pricing.view","pricing.edit",
+  "cost-analysis.view","cost-analysis.edit",
+  "discounts.view","discounts.create","discounts.edit","discounts.delete",
+  "notifications.view","notifications.send",
+  "workers.view","workers.create","workers.edit","workers.delete",
+  "remakes.view","remakes.create","remakes.edit","remakes.delete",
+  "team.view","team.manage",
+  "seed.view","seed.manage",
+] as const;
+
+export type PermissionSlug = (typeof ALL_PERMISSION_SLUGS)[number];
 
 /** Result of resolving the request → tenant binding. */
 export interface TenantContext {
@@ -28,10 +52,24 @@ export interface TenantContext {
   role: TenantRole;
 }
 
+/** A permission set loaded from the role_permissions table. */
+export interface UserPermissions {
+  role: TenantRole;
+  permissions: Set<string>;
+}
+
+/** A tenant role row from the DB. */
+export interface TenantRoleInfo {
+  slug: string;
+  label: string;
+  description: string | null;
+}
+
 /**
  * Decide whether `role` is allowed to perform a write on a tenant table.
  * Owners and admins have free reign; sales can create/edit; workers and
  * viewers are read-only by default. Server functions can override per-table.
+ * Custom roles default to read-only (use permissions for fine-grained control).
  */
 export function canWrite(role: TenantRole): boolean {
   return role === "owner" || role === "admin" || role === "sales";
@@ -49,11 +87,35 @@ export function canDelete(role: TenantRole): boolean {
 /** A guard for places where we expect exactly one canonical role-check. */
 export function requireRole(
   ctx: TenantContext,
-  allowed: readonly TenantRole[],
+  allowed: string[],
 ): void {
   if (!allowed.includes(ctx.role)) {
     throw new Error(
       `Forbidden: role '${ctx.role}' not in [${allowed.join(", ")}]`,
     );
+  }
+}
+
+/**
+ * Check whether a loaded UserPermissions set includes the given slug.
+ * The owner role always has all permissions (bypass check).
+ */
+export function hasPermission(
+  perms: UserPermissions,
+  slug: PermissionSlug | string,
+): boolean {
+  if (perms.role === "owner") return true;
+  return perms.permissions.has(slug);
+}
+
+/**
+ * Guard that throws if the user lacks the given permission.
+ */
+export function requirePermission(
+  perms: UserPermissions,
+  slug: PermissionSlug | string,
+): void {
+  if (!hasPermission(perms, slug)) {
+    throw new Error(`Forbidden: missing permission '${slug}'`);
   }
 }
