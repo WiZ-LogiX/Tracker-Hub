@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { setTenantGuc } from "@/lib/tenant";
+import type { TenantContext } from "@/lib/tenant-context";
 
 const PricingFactorRow = z.object({
   id: z.string().uuid().optional(),
@@ -17,31 +20,37 @@ const PricingFactorRow = z.object({
 const IdInput = z.object({ id: z.string().uuid() });
 
 export const listPricingFactors = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    await setTenantGuc(ctx.tenantId);
     const { data, error } = await supabaseAdmin
       .from("pricing_factors")
       .select("id, key, label_ar, kind, scope, value_pct, value_fixed, active")
+      .eq("tenant_id", ctx.tenantId)
       .order("key");
     if (error) throw new Error(error.message);
     return { items: data ?? [] };
   });
 
 export const upsertPricingFactor = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requireTenant])
   .inputValidator((d) => PricingFactorRow.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    await setTenantGuc(ctx.tenantId);
     if (data.id) {
       const { error } = await supabaseAdmin
         .from("pricing_factors")
         .update(data)
-        .eq("id", data.id);
+        .eq("id", data.id)
+        .eq("tenant_id", ctx.tenantId);
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
     const { data: row, error } = await supabaseAdmin
       .from("pricing_factors")
-      .insert(data)
+      .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -49,13 +58,16 @@ export const upsertPricingFactor = createServerFn({ method: "POST" })
   });
 
 export const deletePricingFactor = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireSupabaseAuth, requireTenant])
   .inputValidator((d) => IdInput.parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    await setTenantGuc(ctx.tenantId);
     const { error } = await supabaseAdmin
       .from("pricing_factors")
       .delete()
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .eq("tenant_id", ctx.tenantId);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
