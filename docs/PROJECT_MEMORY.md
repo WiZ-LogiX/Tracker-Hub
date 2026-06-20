@@ -21,4 +21,4 @@ Quick links:
 - [16 — Future Improvements](./memory/16-future.md)
 - [17 — Conventions & Quirks](./memory/17-conventions.md)
 
-> For **phase progress** and in-flight TODOs, see `.lovable/STATUS.md`. For Neon cutover plan, see `.lovable/neon-migration-plan.md`. For the original multi-tenant SaaS plan, see `.lovable/plan.md`.
+> For the original multi-tenant SaaS plan, see `docs/memory/16-future.md`.

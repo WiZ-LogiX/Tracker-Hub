@@ -6,7 +6,7 @@
 
 - **Frontend**: React 19 + TanStack Start (SSR) + TanStack Router (file-based)
 - **UI**: shadcn/ui + Tailwind v4 + Lucide icons
-- **DB**: Drizzle ORM (provider-agnostic; currently Supabase, planned Neon)
+- **DB**: Drizzle ORM + Supabase PostgreSQL
 - **Auth**: Supabase Auth (email/password)
 - **Storage**: Cloudflare R2 (S3-compatible, presigned uploads)
 - **i18n**: i18next + react-i18next (ar / en / fr)
@@ -45,10 +45,6 @@ src/
   i18n/               i18n config + locales
   styles.css          Tailwind v4 + design tokens
 ```
-
-## Migration plan
-
-See `.lovable/neon-migration-plan.md` for the full scheme (Supabase → Neon + R2 + admin-managed auth).
 
 ## Notes for contributors
 

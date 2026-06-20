@@ -8,7 +8,7 @@
 
 ## 13.2 Cloudflare R2 (S3-compatible)
 
-Primary object store. Bucket: `pelecanon` (eu region per `.lovable/neon-migration-plan.md`).
+Primary object store. Bucket: `pelecanon`.
 
 ### CORS policy
 Config matrix in `docs/R2.md` and `src/lib/r2.config.ts`:

@@ -16,7 +16,7 @@
 10. [Configuration](./10-configuration.md) — env vars, build config, design tokens, i18n.
 11. [Deployment](./11-deployment.md) — Cloudflare Workers pipeline, diagnostics page.
 12. [Operations](./12-operations.md) — testing, migrations, cleanup, observability.
-13. [External Services](./13-integrations.md) — Supabase, R2, n8n, Neon (in-progress).
+13. [External Services](./13-integrations.md) — Supabase, R2, n8n.
 14. [Design Decisions](./14-decisions.md) — why-things-are-the-way-they-are.
 15. [Technical Debt](./15-debt.md) — known issues and where they live.
 16. [Future Improvements](./16-future.md) — shortlist from `.lovable/STATUS.md` + codebase notes.
@@ -28,4 +28,3 @@ The `.lovable/` process docs still carry the **\[]** checklists and in-flight TO
 
 - `.lovable/STATUS.md` — phase-by-phase progress.
 - `.lovable/plan.md` — Phase 2 multi-tenant plan.
-- `.lovable/neon-migration-plan.md` — Neon cutover plan with decision locks.

@@ -6,7 +6,7 @@
 
 | Server fn | File | Auth | Purpose |
 |---|---|---|---|
-| `checkNeonConnection` | `db-health.functions.ts` | — | DB ping (diagnostic) |
+| `checkDbConnection` | `db-health.functions.ts` | — | DB ping (diagnostic) |
 | `applyWastageRulesMigration` | `apply-migration.functions.ts` | requireSupabaseAuth + owner/admin | Apply pending schema fix |
 | `getPublicOrder({orderNumber, phone})` | `tracking.functions.ts` | — | Public tracking lookup (requires phone match) |
 | `getPublicOrdersByPhone({phone})` | `tracking.functions.ts` | — | List orders for last-9 of phone |

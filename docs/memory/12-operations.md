@@ -43,8 +43,7 @@ Returns `0 stale rows` on five checks:
 ## 12.4 Diagnostic paths
 
 - **`/admin/health`** — service-role probes (above).
-- **`/admin/db-check`** — returns PostgreSQL 18.4, db `neondb` — Phase 1 readiness indicator.
-- **`db-health.functions.ts`** — `checkNeonConnection` server fn.
+- **`db-health.functions.ts`** — `checkDbConnection` server fn (DB ping diagnostic).
 
 ## 12.5 Observability gaps
 

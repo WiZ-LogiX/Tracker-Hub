@@ -24,15 +24,13 @@ A unified **`PLC-XXXXX`** ID (5 random alphanumeric chars) ties Quote → Invoic
 
 ## Current architectural posture
 
-Per `.lovable/STATUS.md`:
-
 | Phase | Scope | State |
 |---|---|---|
 | 0 | Bootstrap (Stack + UI + i18n) | ✅ 100% |
 | 1 | Multi-tenant Postgres + RLS | ✅ 100% |
 | 2 | Server-side tenancy (middleware + Drizzle) | 🚧 ~10% (DB wired; app not yet) |
-| 3 | Cloudflare R2 storage | 🔧 ~5% (infra present; no client wiring) |
-| 4 | Data access rewrite (Supabase → Drizzle) | ⏸ 0% |
-| 5 | Data migration + cutover | ⏸ blocked |
+| 3 | Cloudflare R2 storage | ✅ ~90% (server + presigned flows done; CORS pending) |
+| 4 | Quotation Engine | ✅ 100% |
+| 5 | Production Tracking | ✅ 100% |
 
-> The DB layer has been cut to multi-tenant; the application code still leans on Supabase client + `user_roles`-style fragments. Read `.lovable/STATUS.md` for the canonical phase ledger.
+> The DB layer has been cut to multi-tenant; the application code still leans on Supabase client. See `docs/memory/15-debt.md` for known issues.

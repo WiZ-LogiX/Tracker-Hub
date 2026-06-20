@@ -3,7 +3,7 @@
 ## 9.1 Provider
 
 - **Supabase Auth** with email/password only.
-- **Google OAuth is explicitly disabled** per `.lovable/neon-migration-plan.md`.
+- **Google OAuth is explicitly disabled** — username + password only by design.
 - **No self-signup.** Admin creates accounts under `/admin/team`. The username/password model is part of the Phase 7 decision lock.
 
 ## 9.2 Synthetic email pattern

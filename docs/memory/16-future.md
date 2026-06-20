@@ -5,7 +5,7 @@
 1. **Wire tenant middleware** — a single `requireTenant` middleware applied to every server fn that mutates tenant-owned data.
 2. **`app_users(tenant_id, username)` unique constraint** so usernames are unique per-tenant (today the global `username` column allows duplicates across tenants by uniqueness intent only).
 3. **Tighten catalog RLS for admin reads** — once admin roles satisfy PostgREST chains, drop the service-role bypass in `catalog.functions.ts`.
-4. **Phase 7 (Neon)** — run `drizzle-kit pull` against Neon; copy into `src/db/schema.ts`; switch `client.server.ts` to `drizzle-orm/neon-http`; data migration; cut over (writes first, then UI, kill legacy Postgres last).
+
 5. **Test harness in `package.json`** — `bunx vitest run` script + CI hook.
 6. **Tenant branding in UI** — replace hardcoded `"PeleCanon"` in sidebar / notifications footer with `useTenant()`-derived name + logo.
 

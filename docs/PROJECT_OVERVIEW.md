@@ -76,13 +76,6 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 
 ## 🚧 What's In Progress
 
-### Phase 7 — Migration to Neon + Admin Auth (priority)
-- **Status:** Schema migrations prepared, **Phase 1 work remains**.
-- Neon Postgres connection (`@neondatabase/serverless` HTTP driver) designed but not cut over.
-- Admin-managed user/password auth (replacing Supabase email magic links).
-- R2 client setup for direct uploads (presigned FR URLs).
-- Open question: How to handle Postgres → production data migration.
-
 ### Phase 2 — Multi-tenant UI Refinement
 - Tenancy stable in DB; UI components not yet context-aware.
 - Sidebar / header still reference "PeleCanon" brand (no `useTenant()`).
@@ -115,7 +108,7 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 | Forms | React Hook Form + Zod + `@hookform/resolvers` |
 | Server state | TanStack Query v5 (`useQuery`, `useMutation`) |
 | Server fns | `createServerFn` from `@tanstack/react-start` (no separate API layer) |
-| Data | Drizzle ORM (Postgres) + Supabase (Auth/Storage legacy) + planned Neon |
+| Data | Drizzle ORM + Supabase PostgreSQL |
 | Storage | Cloudflare R2 via `@aws-sdk/client-s3` + presigned URLs |
 | Notifications | n8n webhook (deployment-side, not integration) |
 | Deploy | Cloudflare Workers via `@cloudflare/vite-plugin` + Wrangler (`wrangler.jsonc`) |
@@ -144,9 +137,6 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 | Quote builder (legacy) | `src/routes/admin/quotes/new.tsx` |
 | Quote builder (configurator) | `src/routes/admin/quotes/configurator.tsx` |
 | Production stages | `src/lib/stages.ts` |
-| Migration plan (Neon) | `.lovable/neon-migration-plan.md` |
-| SaaS plan (multi-tenant) | `.lovable/plan.md` |
-| Phase status sheet | `.lovable/STATUS.md` |
 | R2 docs | `docs/R2.md` |
 
 ---
@@ -154,18 +144,15 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 ## 🏁 Roadmap (Suggested Order)
 
 1. **Stabilize Phase 2 (multi-tenant UI + sidebar branding)** — already DB-ready.
-2. **Wire tenant ** in every server fn (`tenantDb()` helper pattern from plan).
-3. **Add admin-managed auth (Phase 7 / Neon migration kickoff)**.
-4. **Run `drizzle-kit pull`** against new Neon DB & reconcile.
-5. **Move `genericCrud` from Supabase reads to Drizzle** (catalog tables).
-6. **PDF quotation renders** via react-pdf with tenant logo.
-7. **Realtime on production workflow** (TanStack Realtime / SSE fallback).
+2. **Wire tenant middleware** in every server fn (`tenantDb()` helper pattern).
+3. **Move `genericCrud` from Supabase reads to Drizzle** (catalog tables).
+4. **PDF quotation renders** via react-pdf with tenant logo.
+5. **Realtime on production workflow** (TanStack Realtime / SSE fallback).
 
 ---
 
 ## 💡 Open Questions for the Product Team
 
-- Cutover strategy for Postgres migration: **soft (dual-write, telemetry)** vs. **hard (full export, scheduled outage)**?
 - Initial onboarding wizard in template scope (5-step) or webhook-based invitation?
 - Reskinning per-tenant: capped at brand color + logo, or full theme overrides via CSS variable injection?
 
@@ -175,6 +162,6 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 
 - **Catalog + quoting + production tracking**: ✅ feature-complete.
 - **Multi-tenant DB**: ✅ schema done, ⏳ UI partial.
-- **Admin-managed auth**: ✅ on Supabase path, ⏳ Neon swap pending.
+- **Admin-managed auth**: ✅ complete (Supabase, username + password).
 - **Cloudflare R2**: ✅ server SDK + presigned flows done; ⏳ bucket CORS pending.
-- **Phase 7 priorities**: Neon cutover, tenant-aware server fns, PDF venue.
+- **Next priorities**: Tenant-aware server fns, PDF generation, realtime updates.

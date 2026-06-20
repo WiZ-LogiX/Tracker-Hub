@@ -19,11 +19,11 @@ src/
 │   └── client-theme-init.tsx   # Hydration-safe theme+lang init without FOUC
 │
 ├── db/
-│   ├── client.server.ts    # Postgres client (postgres-js). STATUS.md flags it's still TCP, not neon-http.
-│   ├── schema.ts           # Drizzle `attachments` only (skew — Neon "source of truth" intent)
+│   ├── client.server.ts    # Postgres client (postgres-js) against Supabase.
+│   ├── schema.ts           # Drizzle `attachments` only (incomplete mirror)
 │   └── tenancy-schema.ts   # Drizzle for `tenants`, `tenant_members`
 │
-├── db-health.functions.ts  # `checkNeonConnection` server fn
+├── db-health.functions.ts  # `checkDbConnection` server fn
 │
 ├── i18n/
 │   ├── index.ts             # i18next init: fallbackLng='en' + dir setter
@@ -145,5 +145,5 @@ tests/
 ## 4.4 `.lovable/` process docs
 
 - `STATUS.md` — living phase ledger (single source of truth).
-- `neon-migration-plan.md` — Neon cutover plan, with **decision locks**: admin-created username/password only; no Google OAuth; no self-signup; R2 bucket `pelecanon`.
+
 - `plan.md` — original Phase 2 multi-tenant SaaS plan, paths planned under `/t/$slug/admin/`.

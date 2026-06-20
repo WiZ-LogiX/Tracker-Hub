@@ -1,12 +1,6 @@
 # 15. Technical Debt
 
-## 15.1 Neon cutover lag
-`src/db/client.server.ts` still uses `postgres-js` (raw TCP) against Supabase Postgres — **not** `drizzle-orm/neon-http`.
-> Comment: *"Renamed from the previous Neon HTTP adapter — Neon is no longer part of the stack."*
-
-But `.lovable/neon-migration-plan.md` and `checkNeonConnection` expect a Neon path. Unblocking this takes "swap adapter → push schema → replay data → flip writes" (Phases 4–5).
-
-## 15.2 Tenant leakage in admin pages
+## 15.1 Tenant leakage in admin pages
 Many `supabase.from(...)` calls in `/admin/*` pages bypass explicit `tenant_id` filters. **RLS is the only barrier.**
 - Affected: `internal_notes.tsx`, `customers.tsx`, `notifications.tsx`, `orders.tsx`, etc.
 - Mitigation: a `tenantDb()` helper + tenant middleware (Phase 2 task; see [16-future.md](./16-future.md)).
@@ -49,9 +43,9 @@ No `test` script. Running requires explicit `bunx vitest run tests/rls.test.ts` 
 `tsconfig.json` not visible in context; ESLint config also excluded; conventions inferred from style only. Many components use `any[]`, `any` coercions — strict mode would break.
 
 ## 15.14 `companies` and `configurations` artefacts
-`.lovable/STATUS.md` flags that `companies` may still have references and `configurations` may have a `company_id` column missed during the cascade drop.
+The `companies` table may still have references and `configurations` may have a `company_id` column missed during the cascade drop.
 
-## 15.15 Phase 1 known blockers (from `.lovable/STATUS.md`)
+## 15.15 Phase 1 known blockers
 1. `user_roles` referenced in `useAuth.tsx` but absent from Drizzle schema.
 2. `companies` table artefact (still referenced in places).
 3. `configurations.quote_item_id` / `template_id` etc. missed during Phase 1 — needs a follow-up migration.

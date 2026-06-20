@@ -10,7 +10,7 @@
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY` *(RLS bypass)*
-- `DATABASE_URL` *(Neon, preferred)*
+- `DATABASE_URL` *(Supabase direct connection)*
 - `SUPABASE_DB_URL` *(legacy fallback)*
 - `R2_ACCOUNT_ID`
 - `R2_ACCESS_KEY_ID`
