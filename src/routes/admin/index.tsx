@@ -46,7 +46,6 @@ function DashboardPage() {
         "qc_inspections",
         "remakes",
         "orders",
-        "invoices",
         "quote_items",
         "configurations",
         "quotes",

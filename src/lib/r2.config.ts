@@ -31,8 +31,12 @@ export interface R2Config {
  */
 export const R2_REQUIRED_CORS_POLICY = {
   AllowedOrigins: [
-    "https://your-app-domain.example",
-    "http://localhost:5173",
+    // Listed by pair: every common dev host × every plausible port.
+    // CORS treats `localhost` and `127.0.0.1` as distinct origins, so list both.
+    "http://localhost:8081",
+    "http://localhost:8083",
+    "http://127.0.0.1:8081",
+    "http://127.0.0.1:8083",
   ],
   AllowedMethods: ["PUT", "GET", "HEAD"],
   AllowedHeaders: ["Content-Type", "Authorization"],

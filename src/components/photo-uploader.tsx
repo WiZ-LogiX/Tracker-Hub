@@ -8,6 +8,10 @@ import { Upload, X } from "lucide-react";
 import { getR2BatchUploadUrls } from "@/lib/r2.functions";
 import { getR2PublicUrl } from "@/lib/r2.utils";
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function PhotoUploader({
   entityType,
   entityId,
@@ -15,6 +19,8 @@ export function PhotoUploader({
   caption,
   onCaptionChange,
   maxFiles = 20,
+  label,
+  accept = "image/*",
 }: {
   entityType: "production-photos" | "avatars" | "attachments" | "logos";
   entityId: string;
@@ -22,11 +28,15 @@ export function PhotoUploader({
   caption?: string;
   onCaptionChange?: (value: string) => void;
   maxFiles?: number;
+  label?: string;
+  accept?: string;
 }) {
   const { t } = useTranslation();
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<{ done: number; failed: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{ done: number; failed: number; total: number } | null>(
+    null,
+  );
 
   const getBatchUploadUrls = useServerFn(getR2BatchUploadUrls);
 
@@ -37,44 +47,19 @@ export function PhotoUploader({
   }
 
   function removeAt(i: number) {
-    setFiles(arr => arr.filter((_, idx) => idx !== i));
+    setFiles((arr) => arr.filter((_, idx) => idx !== i));
   }
 
   /**
-   * Sprint 0: real OPTIONS preflight, not HEAD.
-   *
-   * HEAD on a signed-PUT URL is a CORS *simple* request — browsers don't
-   * preflight it and don't send Content-Type/Authorization, so it succeeds
-   * even when the PUT that follows would be blocked. The error trace was
-   * therefore catching the wrong signal.
-   *
-   * OPTIONS with `Access-Control-Request-Method: PUT` and
-   * `Access-Control-Request-Headers: content-type` simulates the preflight
-   * the browser will actually issue for the real upload. If the bucket's
-   * CORS policy rejects it, we get a real status code and a clear error.
+   * Upload directly to R2 via presigned PUT. The browser issues a CORS
+   * preflight automatically (PUT with Content-Type is non-simple). We do NOT
+   * manually probe OPTIONS — every browser fetch with
+   * `Access-Control-Request-*` headers is treated as a preflight, and double-
+   * probing adds nothing beyond what the real PUT already enforces. If the
+   * bucket CORS doesn't allow our origin, the PUT will fail and the rejection
+   * surfaces as a real network error in the catch below.
    */
-  async function probePreflight(uploadUrl: string): Promise<void> {
-    const res = await fetch(uploadUrl, {
-      method: "OPTIONS",
-      headers: {
-        Origin: window.location.origin,
-        "Access-Control-Request-Method": "PUT",
-        "Access-Control-Request-Headers": "content-type",
-      },
-      credentials: "omit",
-    });
-    if (!res.ok) {
-      throw new Error(
-        `CORS preflight failed (HTTP ${res.status}). ` +
-        `Confirm the R2 bucket policy allows PUT/GET/HEAD from ${window.location.origin} ` +
-        `with the Content-Type header — see src/lib/r2.config.ts.`,
-      );
-    }
-  }
-
   async function uploadOne(file: File, uploadUrl: string, key: string, publicUrl: string) {
-    await probePreflight(uploadUrl);
-
     const res = await fetch(uploadUrl, {
       method: "PUT",
       body: file,
@@ -100,7 +85,7 @@ export function PhotoUploader({
 
     let uploads: Array<{ key: string; uploadUrl: string; publicUrl?: string }> = [];
     try {
-      const fileInfos = files.map(f => ({
+      const fileInfos = files.map((f) => ({
         filename: f.name,
         contentType: f.type || "image/jpeg",
       }));
@@ -108,9 +93,8 @@ export function PhotoUploader({
         data: { files: fileInfos, entityType, entityId },
       });
       uploads = res.uploads ?? [];
-    } catch (presignErr: any) {
-      const msg =
-        presignErr?.message ?? String(presignErr) ?? "presign failed";
+    } catch (presignErr: unknown) {
+      const msg = errorMessage(presignErr);
       console.error("[PhotoUploader] presign failed", msg);
       toast.error(t("orders.uploadError") + ": " + msg);
       setProgress(null);
@@ -137,8 +121,8 @@ export function PhotoUploader({
         );
         results.push({ key, publicUrl, caption: caption ?? null });
         done++;
-      } catch (e: any) {
-        console.error("[PhotoUploader] upload failed", file.name, e?.message);
+      } catch (e: unknown) {
+        console.error("[PhotoUploader] upload failed", file.name, errorMessage(e));
         failed++;
       }
       setProgress({ done, failed, total: files.length });
@@ -159,19 +143,22 @@ export function PhotoUploader({
   return (
     <div className="flex flex-col gap-2 p-3 border rounded-md bg-muted/30">
       <label className="text-xs font-medium text-foreground">
-        {t("orders.uploadPhotos")}
+        {label ?? t("orders.uploadPhotos")}
       </label>
       <input
         type="file"
-        accept="image/*"
+        accept={accept}
         multiple
-        onChange={e => handlePick(e.target.files)}
+        onChange={(e) => handlePick(e.target.files)}
         className="text-xs file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-2 file:py-1"
       />
       {files.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {files.map((f, i) => (
-            <span key={i} className="inline-flex items-center gap-1 text-xs bg-background px-2 py-1 rounded border">
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 text-xs bg-background px-2 py-1 rounded border"
+            >
               {f.name}
               <button
                 type="button"
@@ -190,7 +177,7 @@ export function PhotoUploader({
           type="text"
           placeholder={t("orders.photoCaption")}
           value={caption ?? ""}
-          onChange={e => onCaptionChange(e.target.value)}
+          onChange={(e) => onCaptionChange(e.target.value)}
           className="text-xs"
         />
       )}
@@ -207,7 +194,9 @@ export function PhotoUploader({
         className="gap-2"
       >
         <Upload className="h-4 w-4" />
-        {busy ? t("orders.uploading", { n: files.length }) : t("orders.upload", { n: files.length })}
+        {busy
+          ? t("orders.uploading", { n: files.length })
+          : t("orders.upload", { n: files.length })}
       </Button>
     </div>
   );

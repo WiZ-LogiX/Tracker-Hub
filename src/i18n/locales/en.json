@@ -61,7 +61,18 @@
     "searchError": "Search failed",
     "openError": "Failed to open the order",
     "notFound": "Could not find the order",
-    "loading": "Loading"
+    "loading": "Loading",
+    "copyLink": "Copy link",
+    "sendWhatsApp": "Send via WhatsApp",
+    "copied": "Copied!",
+    "copyFailed": "Failed to copy",
+    "sentViaN8n": "Sent via n8n",
+    "sendFailed": "Failed to send",
+    "sendSkipped": "Skipped",
+    "attachments": "Attachments ({n})",
+    "openOrDownload": "Open / Download",
+    "openPdf": "Open PDF",
+    "downloadFile": "Download file"
   },
   "admin": {
     "panel": "Admin Panel",
@@ -69,8 +80,61 @@
     "bootstrapping": "Preparing your workspace...",
     "bootstrapFailedTitle": "Couldn't prepare your workspace",
     "setupWorkspace": "Set up my workspace",
+    "noTeamTitle": "No team set up yet",
+    "noTeamDesc": "Your account is not yet attached to a team. Click 'Set up my workspace' to create one.",
+    "settings": {
+      "companyLogo": "Company Logo",
+      "removeLogo": "Remove logo",
+      "uploadLogo": "Upload company logo",
+      "companyInfo": "Company Info",
+      "companyName": "Company name",
+      "phone": "Phone",
+      "email": "Email",
+      "address": "Address",
+      "taxNumber": "Tax number",
+      "commercialRegistry": "Commercial registry",
+      "primaryColor": "Primary color",
+      "saving": "Saving...",
+      "saveButton": "Save settings",
+      "saved": "Settings saved",
+      "saveFailed": "Failed to save"
+    },
+    "team": {
+      "subtitle": "Add employees and assign their roles",
+      "newUser": "New user",
+      "addUser": "Add user",
+      "username": "Username",
+      "displayName": "Display name",
+      "password": "Password",
+      "role": "Role",
+      "avatar": "Photo",
+      "active": "Active",
+      "disabled": "Disabled",
+      "resetPassword": "Password",
+      "resetPasswordFor": "Reset password for",
+      "newPassword": "New password",
+      "noUsers": "No team yet.",
+      "roles": "Roles",
+      "rolesDescription": "Create custom roles and assign permissions",
+      "newRole": "New role",
+      "createRole": "Create new role",
+      "roleSlug": "Slug",
+      "description": "Description",
+      "type": "Type",
+      "builtin": "Built-in",
+      "custom": "Custom",
+      "editRole": "Edit role",
+      "rolePermissions": "Role Permissions",
+      "rolePermissionsDescription": "Assign permissions to each role — the owner gets all permissions automatically",
+      "selectRole": "Select role",
+      "savePermissions": "Save permissions",
+      "ownerAllPermissions": "The owner gets all permissions automatically — they cannot be modified",
+      "enable": "Enable",
+      "disable": "Disable"
+    },
     "nav": {
       "home": "Dashboard",
+      "team": "Team",
       "teamManagement": "Team Management",
       "quotes": "Quotes",
       "configurator": "Quotation Builder",
@@ -92,6 +156,7 @@
       "workers": "Workers",
       "remakes": "Remakes",
       "seedData": "Database Setup",
+      "settings": "Settings",
       "track": "Track Order"
     }
   },
@@ -163,7 +228,20 @@
     "sendNotification": "Send quote notification",
     "quoteSent": "Quote sent",
     "quoteUpdated": "Status updated",
-    "convertedSuccess": "Quote converted to invoice and production order: {number}"
+    "convertedSuccess": "Quote converted to invoice and production order: {number}",
+    "pdfGenerated": "PDF created",
+    "pdfFailed": "Failed to create PDF",
+    "convertedToOrder": "Quote converted to order: {number}",
+    "updated": "Updated",
+    "updateFailed": "Failed to update",
+    "convertedToInvoiceAndOrder": "Quote converted to invoice and order: {number}",
+    "convertFailed": "Failed to convert",
+    "supplierOrigin": "Supplier / Origin:",
+    "summary": "Summary",
+    "depositSuggested": "Suggested deposit ({pct}%)",
+    "convertToOrder": "Convert to Invoice & Order",
+    "downloadPdf": "Download PDF",
+    "internalNotes": "Internal Notes"
   },
   "quoteBuilder": {
     "title": "Create Quote",
@@ -256,6 +334,8 @@
     "advance": "Advance to: {stage}",
     "advanceGate": "A passing QC inspection is required before advancing.",
     "sendTrackingLink": "Send tracking link via WhatsApp",
+    "shareTrackingLink": "Share tracking link",
+    "shareTrackingLinkHint": "Click WhatsApp to open a ready-to-send message in your WhatsApp app. Click Copy to put the link on your clipboard for SMS, email, or any other channel.",
     "trackingSent": "Tracking link sent",
     "uploadPhotos": "Upload photos",
     "photoCaption": "Common caption (optional)",
@@ -427,6 +507,9 @@
   "notifications": {
     "title": "Notifications",
     "subtitle": "Customer notifications issued via n8n webhook",
+    "tabSend": "Test send",
+    "tabTemplates": "Templates",
+    "tabLog": "Recent log",
     "refresh": "Refresh",
     "testSend": "Test send",
     "phone": "Phone number",
@@ -443,7 +526,50 @@
     "recipient": "Recipient",
     "error": "Error",
     "noNotifications": "No notifications yet.",
-    "webhookHint": "Sends a payload to N8N_NOTIFY_WEBHOOK_URL and logs the result in the table below."
+    "webhookHint": "Sends a payload to N8N_NOTIFY_WEBHOOK_URL and logs the result in the table below.",
+    "templates": {
+      "subtitle": "Edit the messages your n8n workflow can send. Use {{tokens}} to fill in customer, reference, link, stage, date, and total.",
+      "newTemplate": "New template",
+      "noTemplates": "You don't have any templates yet. Click New template to start.",
+      "event": "Event",
+      "channel": "Channel",
+      "language": "Language",
+      "subject": "Subject (optional)",
+      "body": "Message body",
+      "active": "Active",
+      "preview": "Preview",
+      "previewEmpty": "No template yet for this event / channel / language — n8n will skip sending. Save one to preview.",
+      "previewLoading": "Loading preview…",
+      "save": "Save",
+      "saved": "Template saved",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "deleted": "Template deleted",
+      "deleteConfirm": "Delete this template? This cannot be undone.",
+      "loadError": "Failed to load templates",
+      "saveError": "Failed to save template",
+      "deleteError": "Failed to delete template",
+      "previewError": "Failed to render preview",
+      "variables": "Available variables",
+      "tokens": "{{customer_name}} {{reference}} {{link}} {{stage}} {{date}} {{total}} {{extra.anyKey}}",
+      "events": {
+        "quote_sent": "Quote sent",
+        "order_opened": "Order opened",
+        "stage_changed": "Production stage changed",
+        "delivery_scheduled": "Delivery scheduled",
+        "delivered": "Delivered"
+      },
+      "channels": {
+        "whatsapp": "WhatsApp",
+        "email": "Email",
+        "sms": "SMS"
+      },
+      "languages": {
+        "ar": "العربية",
+        "en": "English",
+        "fr": "Français"
+      }
+    }
   },
   "costAnalysis": {
     "title": "Cost Analysis",
@@ -471,5 +597,39 @@
     "created": "created",
     "existing": "already existed",
     "errors": "errors"
+  },
+  "auth": {
+    "title": "Sign In",
+    "subtitle": "Admin Panel — Staff Only",
+    "username": "Username",
+    "password": "Password",
+    "signIn": "Sign in",
+    "defaultCreds": "Default: admin / admin",
+    "loginSuccess": "Signed in successfully"
+  },
+  "landing": {
+    "subtitle": "Pricing & Production System",
+    "trackOrder": "Track Your Order",
+    "adminPanel": "Admin Panel",
+    "badge": "Quality furniture manufacturing for years",
+    "headline1": "Design you deserve",
+    "headline2": "at a fair price",
+    "heroDesc": "Kitchens, wardrobes, bedrooms, and custom furniture built to your measurements. Get a detailed quote within 24–48 hours.",
+    "enterAdmin": "Enter Admin Panel",
+    "featureCatalog": {
+      "title": "Diverse Catalog",
+      "desc": "Kitchens, wardrobes, bedrooms, and tables in classic and modern designs"
+    },
+    "featureQuality": {
+      "title": "Quality Guarantee",
+      "desc": "Certified materials, precise finishing, and quality inspection before delivery"
+    },
+    "featureTracking": {
+      "title": "Production Tracking",
+      "desc": "9 clear stages from deposit to delivery — know where your order stands anytime"
+    },
+    "ctaTitle": "Manage your business from one place",
+    "ctaDesc": "A complete system for pricing, quotes, and production tracking",
+    "copyright": "All rights reserved."
   }
 }

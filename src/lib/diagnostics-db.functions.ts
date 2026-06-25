@@ -57,7 +57,6 @@ export const getTableCounts = createServerFn({ method: "POST" })
       "notification_templates",
       "internal_notes",
       "audit_log",
-      "configurations",
       "production_photos",
       "production_logs",
       "production_assignments",

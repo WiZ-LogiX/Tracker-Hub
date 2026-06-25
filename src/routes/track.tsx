@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ORDER_STAGES, STAGE_LABEL_AR, OrderStage, stageIndex } from "@/lib/stages";
 import { formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { z } from "zod";
 
 export const Route = createFileRoute("/track")({
@@ -23,6 +24,7 @@ export const Route = createFileRoute("/track")({
 });
 
 function TrackPage() {
+  const { t } = useTranslation();
   const fetchOrder = useServerFn(getPublicOrder);
   const fetchByRef = useServerFn(getPublicTrackingByRef);
   const fetchByPhone = useServerFn(getPublicOrdersByPhone);
@@ -42,7 +44,7 @@ function TrackPage() {
         const r = await fetchByRef({ data: { reference: ref } });
         setResult(r);
       } catch (err: any) {
-        toast.error(err?.message || "تعذّر العثور على الأمر");
+        toast.error(err?.message || t("track.notFound"));
       } finally { setLoading(false); }
     })();
   }, [ref]);
@@ -54,7 +56,7 @@ function TrackPage() {
       const r = await fetchOrder({ data: { orderNumber: orderNumber.trim(), phone: phone.trim() } });
       setResult(r);
     } catch (err: any) {
-      toast.error(err?.message || "تعذّر العثور على الأمر");
+      toast.error(err?.message || t("track.notFound"));
       setResult(null);
     } finally {
       setLoading(false);
@@ -68,10 +70,10 @@ function TrackPage() {
     setResult(null);
     try {
       const list = await fetchByPhone({ data: { phone: phoneOnly.trim() } });
-      if (!list.length) toast.error("لا توجد أوامر مرتبطة بهذا الرقم");
+      if (!list.length) toast.error(t("track.noMatches"));
       setMatches(list);
     } catch (err: any) {
-      toast.error(err?.message || "تعذّر البحث");
+      toast.error(err?.message || t("track.searchError"));
     } finally { setLoading(false); }
   }
 
@@ -82,7 +84,7 @@ function TrackPage() {
       setResult(r);
       setMatches(null);
     } catch (err: any) {
-      toast.error(err?.message || "تعذّر فتح الأمر");
+      toast.error(err?.message || t("track.openError"));
     } finally { setLoading(false); }
   }
 
@@ -91,24 +93,24 @@ function TrackPage() {
       <header className="border-b">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="font-serif font-bold text-lg">PeleCanon</Link>
-          <Link to="/"><Button variant="ghost" size="sm">الرئيسية</Button></Link>
+          <Link to="/"><Button variant="ghost" size="sm">{t("common.home")}</Button></Link>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         <div>
-          <h1 className="font-serif text-3xl font-bold">تتبع طلبك</h1>
-          <p className="text-sm text-muted-foreground mt-1">ابحث برقم الهاتف فقط، أو أدخل رقم الأمر للتحقق.</p>
+          <h1 className="font-serif text-3xl font-bold">{t("track.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("track.subtitle")}</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">برقم الهاتف فقط</CardTitle>
+            <CardTitle className="text-base">{t("track.byPhoneTitle")}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={onPhoneSubmit} className="grid sm:grid-cols-3 gap-3 items-end">
               <div className="sm:col-span-2 space-y-1.5">
-                <Label>رقم الهاتف</Label>
+                <Label>{t("track.phone")}</Label>
                 <Input
                   value={phoneOnly}
                   onChange={e => setPhoneOnly(e.target.value.replace(/[^\d+]/g, ''))}
@@ -116,13 +118,13 @@ function TrackPage() {
                   inputMode="tel"
                   required
                 />
-                <p className="text-xs text-muted-foreground">يكفي إدخال رقم الهاتف فقط لاسترجاع كل أوامرك.</p>
+                <p className="text-xs text-muted-foreground">{t("track.phoneHint")}</p>
               </div>
-              <Button type="submit" disabled={loading}>{loading ? "..." : "ابحث"}</Button>
+              <Button type="submit" disabled={loading}>{loading ? "..." : t("track.search")}</Button>
             </form>
             {matches && matches.length > 0 && (
               <div className="mt-4 space-y-2">
-                <div className="text-xs text-muted-foreground">{matches.length} نتيجة</div>
+                <div className="text-xs text-muted-foreground">{t("track.resultsCount", { n: matches.length })}</div>
                 {matches.map((m: any) => (
                   <button key={m.order_number} type="button" onClick={() => openOrderFromList(m.order_number)}
                     className="w-full text-right border rounded-md p-3 hover:bg-accent transition">
@@ -130,32 +132,32 @@ function TrackPage() {
                       <span className="font-mono text-sm">{m.order_number}</span>
                       <span className="text-xs text-muted-foreground">{m.customer_name}</span>
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">المرحلة: {m.current_stage}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{t("track.stage")}: {m.current_stage}</div>
                   </button>
                 ))}
               </div>
             )}
             {matches && matches.length === 0 && (
               <div className="mt-4 text-sm text-muted-foreground text-center py-3 border rounded-md">
-                لم نجد أي أوامر بهذا الرقم. تأكد من الرقم أو جرّب بصيغة دولية.
+                {t("track.noMatches")}
               </div>
             )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">برقم الأمر + الهاتف</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("track.byRefTitle")}</CardTitle></CardHeader>
           <CardContent>
             <form onSubmit={onSubmit} className="grid sm:grid-cols-3 gap-3 items-end">
               <div className="space-y-1.5">
-                <Label>رقم الأمر</Label>
+                <Label>{t("track.orderNumber")}</Label>
                 <Input value={orderNumber} onChange={e => setOrderNumber(e.target.value)} placeholder="ORD-..." required />
               </div>
               <div className="space-y-1.5">
-                <Label>رقم الهاتف</Label>
+                <Label>{t("track.phone")}</Label>
                 <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="01xxxxxxxxx" required />
               </div>
-              <Button type="submit" disabled={loading}>{loading ? "..." : "تتبع"}</Button>
+              <Button type="submit" disabled={loading}>{loading ? "..." : t("track.search")}</Button>
             </form>
           </CardContent>
         </Card>
@@ -167,7 +169,8 @@ function TrackPage() {
 }
 
 function OrderView({ data }: { data: any }) {
-  const { order, logs, photos } = data;
+  const { t } = useTranslation();
+  const { order, logs, photos, attachments = [] } = data;
   const idx = stageIndex(order.current_stage as OrderStage);
   return (
     <div className="space-y-6">
@@ -179,16 +182,16 @@ function OrderView({ data }: { data: any }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid sm:grid-cols-3 gap-4 text-sm">
-          <div><div className="text-xs text-muted-foreground">المرحلة الحالية</div><div className="font-medium">{STAGE_LABEL_AR[order.current_stage as OrderStage]}</div></div>
-          <div><div className="text-xs text-muted-foreground">الإجمالي</div><div>{formatEGP(Number(order.total))}</div></div>
-          <div><div className="text-xs text-muted-foreground">العربون</div><div>{formatEGP(Number(order.deposit))}</div></div>
-          {order.expected_delivery && <div><div className="text-xs text-muted-foreground">التسليم المتوقع</div><div>{new Date(order.expected_delivery).toLocaleDateString('ar-EG')}</div></div>}
-          {order.delivered_at && <div><div className="text-xs text-muted-foreground">تم التسليم</div><div>{new Date(order.delivered_at).toLocaleDateString('ar-EG')}</div></div>}
+          <div><div className="text-xs text-muted-foreground">{t("track.currentStage")}</div><div className="font-medium">{STAGE_LABEL_AR[order.current_stage as OrderStage]}</div></div>
+          <div><div className="text-xs text-muted-foreground">{t("track.total")}</div><div>{formatEGP(Number(order.total))}</div></div>
+          <div><div className="text-xs text-muted-foreground">{t("track.deposit")}</div><div>{formatEGP(Number(order.deposit))}</div></div>
+          {order.expected_delivery && <div><div className="text-xs text-muted-foreground">{t("track.expected")}</div><div>{new Date(order.expected_delivery).toLocaleDateString('ar-EG')}</div></div>}
+          {order.delivered_at && <div><div className="text-xs text-muted-foreground">{t("track.deliveredAt")}</div><div>{new Date(order.delivered_at).toLocaleDateString('ar-EG')}</div></div>}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">تقدم المراحل</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("track.stageProgress")}</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-2">
             {ORDER_STAGES.map((s, i) => (
@@ -210,7 +213,7 @@ function OrderView({ data }: { data: any }) {
         const order = ORDER_STAGES.filter(s => groups[s]);
         return (
           <Card>
-            <CardHeader><CardTitle className="text-base">صور التصنيع</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">{t("track.productionPhotos")}</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {order.map(stage => (
                 <div key={stage} className="space-y-2">
@@ -230,9 +233,76 @@ function OrderView({ data }: { data: any }) {
         );
       })()}
 
+      {attachments.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">{t("track.attachments", { n: attachments.length })}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {attachments.map((a: any) => {
+                const isImage = (a.contentType ?? "").startsWith("image/");
+                const isPdf = a.contentType === "application/pdf";
+                const sizeLabel =
+                  a.sizeBytes < 1024
+                    ? `${a.sizeBytes} B`
+                    : a.sizeBytes < 1024 * 1024
+                    ? `${(a.sizeBytes / 1024).toFixed(1)} KB`
+                    : `${(a.sizeBytes / 1024 / 1024).toFixed(2)} MB`;
+                return (
+                  <div
+                    key={a.id}
+                    className="block border rounded-md overflow-hidden hover:border-secondary transition"
+                  >
+                    {isImage ? (
+                      <a href={a.url} target="_blank" rel="noreferrer">
+                        <img
+                          src={a.url}
+                          alt={a.fileName ?? ""}
+                          className="w-full aspect-square object-cover bg-muted"
+                          loading="lazy"
+                        />
+                      </a>
+                    ) : (
+                      <div className="w-full aspect-square bg-muted flex flex-col items-center justify-center gap-1 text-muted-foreground">
+                        <div className="text-3xl">{isPdf ? "📄" : "📎"}</div>
+                        <div className="text-[10px] uppercase tracking-wider">
+                          {a.contentType?.split("/")[1] ?? ""}
+                        </div>
+                      </div>
+                    )}
+                    <div className="p-2 space-y-1">
+                      <div className="text-xs font-medium truncate" title={a.fileName}>
+                        {a.fileName}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground flex justify-between">
+                        <span>{sizeLabel}</span>
+                        <span>{new Date(a.createdAt).toLocaleDateString("ar-EG")}</span>
+                      </div>
+                      {a.caption && (
+                        <div className="text-[10px] text-muted-foreground line-clamp-2">
+                          {a.caption}
+                        </div>
+                      )}
+                      <a
+                        href={a.url}
+                        download={a.fileName}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-secondary hover:underline w-full justify-center border border-secondary/40 rounded-sm py-1"
+                      >
+                        ⬇ {isImage ? t("track.openOrDownload") : isPdf ? t("track.openPdf") : t("track.downloadFile")}
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {logs.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">سجل المراحل</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("track.stageLog")}</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {logs.map((l: any) => (

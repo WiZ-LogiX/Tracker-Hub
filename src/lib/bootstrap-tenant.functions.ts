@@ -16,9 +16,7 @@ import type { TenantRole } from "@/lib/tenant-context";
  */
 const BootstrapInput = z
   .object({
-    role: z
-      .enum(["owner", "admin", "sales", "worker", "viewer"])
-      .optional(),
+    role: z.enum(["owner", "admin", "sales", "worker", "viewer"]).optional(),
   })
   .optional()
   .default({});
@@ -87,13 +85,11 @@ export const bootstrapMyTenant = createServerFn({ method: "POST" })
 
     if (!existingMembership) {
       // 3. No row \u2192 insert one with the requested role.
-      const { error: insertErr } = await supabaseAdmin
-        .from("tenant_members")
-        .insert({
-          tenant_id: tenantId,
-          user_id: userId,
-          role: requestedRole,
-        });
+      const { error: insertErr } = await supabaseAdmin.from("tenant_members").insert({
+        tenant_id: tenantId,
+        user_id: userId,
+        role: requestedRole,
+      });
       if (insertErr) {
         throw new Error(insertErr.message);
       }
@@ -110,18 +106,20 @@ export const bootstrapMyTenant = createServerFn({ method: "POST" })
       throw new Error(listErr.message);
     }
 
-    const memberships = (allMemberships ?? []).map((m) => ({
-      tenantId: m.tenant_id,
-      tenantSlug: m.tenants?.slug ?? null,
-      tenantName: m.tenants?.name ?? null,
-      role: m.role,
-    }));
+    const memberships = (allMemberships ?? []).map((m) => {
+      const tenant = Array.isArray(m.tenants) ? m.tenants[0] : m.tenants;
+      return {
+        tenantId: m.tenant_id,
+        tenantSlug: tenant?.slug ?? null,
+        tenantName: tenant?.name ?? null,
+        role: m.role,
+      };
+    });
 
     // Pick the primary membership returned by the bootstrap step. If the
     // user has multiple memberships, calling code can switch via the
     // client UI; for now we expose the first as the default.
-    const primary =
-      memberships.find((m) => m.tenantId === tenantId) ?? memberships[0];
+    const primary = memberships.find((m) => m.tenantId === tenantId) ?? memberships[0];
 
     return {
       tenantId: primary?.tenantId ?? tenantId,

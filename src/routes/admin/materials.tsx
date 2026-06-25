@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ const blank: MaterialRow = {
 };
 
 function MaterialsPage() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<MaterialRow[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [open, setOpen] = useState(false);
@@ -60,7 +62,7 @@ function MaterialsPage() {
       setRows((m.items as MaterialRow[]) ?? []);
       setSuppliers((s.items as Supplier[]) ?? []);
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "فشل تحميل البيانات";
+      const message = e instanceof Error ? e.message : t("common.loading");
       toast.error(message);
     }
   }
@@ -70,7 +72,7 @@ function MaterialsPage() {
   function openEdit(r: MaterialRow) { setEditing(r); setForm({ ...blank, ...r }); setOpen(true); }
 
   async function save() {
-    if (!form.name_ar) return toast.error("الاسم بالعربي مطلوب");
+    if (!form.name_ar) return toast.error(t("materials.nameRequired"));
     try {
       await upsertFn({
         data: {
@@ -86,20 +88,21 @@ function MaterialsPage() {
           active: form.active,
         },
       });
-      toast.success("تم الحفظ"); setOpen(false); load();
+      toast.success(t("materials.saved")); setOpen(false); load();
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "فشل الحفظ";
+      const message = e instanceof Error ? e.message : t("common.retry");
       toast.error(message);
     }
   }
 
   async function remove(id: string) {
-    if (!confirm("تأكيد الحذف؟")) return;
+    if (!confirm(t("common.confirmDelete"))) return;
     try {
       await deleteFn({ data: { id } });
+      toast.success(t("materials.deleted"));
       load();
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "فشل الحذف";
+      const message = e instanceof Error ? e.message : t("common.retry");
       toast.error(message);
     }
   }
@@ -113,23 +116,23 @@ function MaterialsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="font-serif text-3xl font-bold">الخامات</h1>
-          <p className="text-sm text-muted-foreground mt-1">الخامة + المورد + بلد المنشأ + السعر — كلها في مكان واحد</p>
+          <h1 className="font-serif text-3xl font-bold">{t("materials.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("materials.subtitle")}</p>
         </div>
-        <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> جديد</Button>
+        <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> {t("common.new")}</Button>
       </div>
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>الاسم</TableHead>
-            <TableHead>النوع</TableHead>
-            <TableHead>المورد</TableHead>
-            <TableHead>بلد المنشأ</TableHead>
-            <TableHead>السعر / الوحدة</TableHead>
+            <TableHead>{t("materials.nameAr")}</TableHead>
+            <TableHead>{t("materials.type")}</TableHead>
+            <TableHead>{t("materials.supplier")}</TableHead>
+            <TableHead>{t("materials.country")}</TableHead>
+            <TableHead>{t("materials.pricePerUnit")}</TableHead>
             <TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {rows.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">لا توجد بيانات.</TableCell></TableRow>}
+            {rows.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("common.noData")}</TableCell></TableRow>}
             {rows.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-medium">{r.name_ar}</TableCell>
@@ -149,29 +152,29 @@ function MaterialsPage() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{editing ? "تعديل خامة" : "إضافة خامة"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t("materials.edit") : t("materials.title")}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>الاسم بالعربي</Label><Input value={form.name_ar} onChange={e => setForm({ ...form, name_ar: e.target.value })} /></div>
-              <div><Label>Name (EN)</Label><Input value={form.name_en} onChange={e => setForm({ ...form, name_en: e.target.value })} /></div>
+              <div><Label>{t("materials.nameAr")}</Label><Input value={form.name_ar} onChange={e => setForm({ ...form, name_ar: e.target.value })} /></div>
+              <div><Label>{t("materials.nameEn")}</Label><Input value={form.name_en} onChange={e => setForm({ ...form, name_en: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>النوع</Label><Input value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="wood / mdf / metal..." /></div>
-              <div><Label>الوحدة</Label><Input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} /></div>
+              <div><Label>{t("materials.type")}</Label><Input value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} placeholder="wood / mdf / metal..." /></div>
+              <div><Label>{t("materials.unit")}</Label><Input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>السعر / الوحدة</Label><Input type="number" step="0.01" value={form.price_per_unit} onChange={e => setForm({ ...form, price_per_unit: Number(e.target.value) })} /></div>
-              <div><Label>نسبة الهدر % (اختياري)</Label><Input type="number" step="0.1" placeholder="مثلاً: 8" value={form.wastage_pct ?? ''} onChange={e => setForm({ ...form, wastage_pct: e.target.value === '' ? null : Number(e.target.value) })} /></div>
+              <div><Label>{t("materials.pricePerUnit")}</Label><Input type="number" step="0.01" value={form.price_per_unit} onChange={e => setForm({ ...form, price_per_unit: Number(e.target.value) })} /></div>
+              <div><Label>{t("materials.wastage")}</Label><Input type="number" step="0.1" placeholder="مثلاً: 8" value={form.wastage_pct ?? ''} onChange={e => setForm({ ...form, wastage_pct: e.target.value === '' ? null : Number(e.target.value) })} /></div>
             </div>
             <div>
-              <Label>المورد</Label>
+              <Label>{t("materials.supplier")}</Label>
               <Select value={form.supplier_id ?? ''} onValueChange={v => setForm({ ...form, supplier_id: v || null })}>
-                <SelectTrigger><SelectValue placeholder="اختياري" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t("common.noData")} /></SelectTrigger>
                 <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>بلد المنشأ</Label><Input value={form.country_of_origin ?? ''} onChange={e => setForm({ ...form, country_of_origin: e.target.value })} placeholder="مثلاً: مصر، تركيا، إيطاليا" /></div>
-            <Button onClick={save} className="w-full">حفظ</Button>
+            <div><Label>{t("materials.country")}</Label><Input value={form.country_of_origin ?? ''} onChange={e => setForm({ ...form, country_of_origin: e.target.value })} placeholder="مثلاً: مصر، تركيا، إيطاليا" /></div>
+            <Button onClick={save} className="w-full">{t("common.save")}</Button>
           </div>
         </DialogContent>
       </Dialog>

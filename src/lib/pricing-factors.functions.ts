@@ -14,7 +14,7 @@ const PricingFactorRow = z.object({
   scope: z.string().optional(),
   value_pct: z.number(),
   value_fixed: z.number().optional(),
-  active: z.boolean(),
+  active: z.boolean().default(true),
 });
 
 const IdInput = z.object({ id: z.string().uuid() });

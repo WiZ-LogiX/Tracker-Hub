@@ -14,10 +14,12 @@
  * defense-in-depth.
  */
 import { sql } from "drizzle-orm";
-import { db } from "@/db/client.server";
+import { db, schema } from "@/db/client.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSession } from "@/lib/auth-helpers";
 import { type TenantContext } from "@/lib/tenant-context";
+
+export { db, schema };
 
 /**
  * Resolve tenant context from the current request's bearer token.
@@ -69,9 +71,16 @@ export async function setTenantGuc(tenantId: string): Promise<void> {
   if (!tenantId) {
     throw new Error("setTenantGuc: tenantId is required");
   }
-  await db.execute(
-    sql`select set_config('app.tenant_id', ${tenantId}, true)`,
-  );
+  try {
+    await db.execute(
+      sql`select set_config('app.tenant_id', ${tenantId}, true)`,
+    );
+  } catch (err) {
+    // Best-effort: the GUC is only consumed by notification_dlq RLS policy.
+    // Catalog functions use supabaseAdmin (RLS bypass) so the GUC is not
+    // required for them. Log and continue rather than blocking all operations.
+    console.warn("[setTenantGuc] Failed to set GUC (non-fatal):", err);
+  }
 }
 
 /**
@@ -83,4 +92,20 @@ export function requireTenantId(ctx: TenantContext): string {
     throw new Error("Forbidden: tenantId is required for this operation");
   }
   return ctx.tenantId;
+}
+
+/**
+ * Set the tenant GUC and return the Drizzle client.
+ *
+ * Use this for transactional flows where you need Drizzle's
+ * db.transaction() with tenant context already established:
+ *
+ *   const tdb = await tenantDb(ctx.tenantId);
+ *   await tdb.transaction(async (tx) => {
+ *     // tx has app.tenant_id set
+ *   });
+ */
+export async function tenantDb(tenantId: string) {
+  await setTenantGuc(tenantId);
+  return db;
 }

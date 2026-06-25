@@ -17,12 +17,20 @@ interface R2Config {
   accountId: string;
 }
 
+function isNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    name?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  return candidate.name === "NotFound" || candidate.$metadata?.httpStatusCode === 404;
+}
+
 function getConfig(): R2Config {
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  const bucketName =
-    process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
+  const bucketName = process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || "pelecanon-assets";
   const publicUrl = process.env.R2_PUBLIC_URL;
 
   if (!accountId || !accessKeyId || !secretAccessKey) {
@@ -48,12 +56,28 @@ function client(): S3Client {
       endpoint,
       region,
       credentials,
-      // Required so the SDK omits signing payload that's not the final hash
-      // (browser-side presigned PUTs hit R2 directly and R2 didn't get pre-calculated checksums).
-      requestHandler: undefined,
+      // Required for R2 compatibility with recent AWS SDK v3 checksum behavior.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
   }
   return _client;
+}
+
+export async function uploadToR2(
+  key: string,
+  body: Buffer | Uint8Array,
+  contentType: string,
+): Promise<string> {
+  await client().send(
+    new PutObjectCommand({
+      Bucket: getConfig().bucketName,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+  return getPublicUrl(key);
 }
 
 export async function getUploadUrl(
@@ -80,12 +104,10 @@ export async function getDownloadUrl(key: string, expiresIn = 1800): Promise<str
 
 export async function deleteObject(key: string): Promise<boolean> {
   try {
-    await client().send(
-      new DeleteObjectCommand({ Bucket: getConfig().bucketName, Key: key }),
-    );
+    await client().send(new DeleteObjectCommand({ Bucket: getConfig().bucketName, Key: key }));
     return true;
-  } catch (err: any) {
-    if (err?.name === "NotFound" || err?.$metadata?.httpStatusCode === 404) {
+  } catch (err: unknown) {
+    if (isNotFoundError(err)) {
       return false;
     }
     throw err;
@@ -94,12 +116,10 @@ export async function deleteObject(key: string): Promise<boolean> {
 
 export async function objectExists(key: string): Promise<boolean> {
   try {
-    await client().send(
-      new HeadObjectCommand({ Bucket: getConfig().bucketName, Key: key }),
-    );
+    await client().send(new HeadObjectCommand({ Bucket: getConfig().bucketName, Key: key }));
     return true;
-  } catch (err: any) {
-    if (err?.name === "NotFound" || err?.$metadata?.httpStatusCode === 404) {
+  } catch (err: unknown) {
+    if (isNotFoundError(err)) {
       return false;
     }
     throw err;

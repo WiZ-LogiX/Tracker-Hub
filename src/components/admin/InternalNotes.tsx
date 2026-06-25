@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,6 +7,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/useAuth";
 
 export function InternalNotes({ entityType, entityId }: { entityType: string; entityId: string }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [notes, setNotes] = useState<any[]>([]);
   const [body, setBody] = useState("");
@@ -45,9 +47,9 @@ export function InternalNotes({ entityType, entityId }: { entityType: string; en
 
   return (
     <div className="space-y-3">
-      <div className="text-xs text-muted-foreground">ملاحظات داخلية ({notes.length})</div>
+      <div className="text-xs text-muted-foreground">{t("quotes.internalNotes")} ({notes.length})</div>
       <div className="space-y-2 max-h-48 overflow-auto">
-        {notes.length === 0 && <div className="text-xs text-muted-foreground">لا ملاحظات بعد.</div>}
+        {notes.length === 0 && <div className="text-xs text-muted-foreground">{t("common.noData")}</div>}
         {notes.map(n => (
           <div key={n.id} className="text-xs border rounded-md p-2 bg-muted/30">
             <div className="whitespace-pre-wrap">{n.body}</div>
@@ -56,7 +58,7 @@ export function InternalNotes({ entityType, entityId }: { entityType: string; en
         ))}
       </div>
       <Textarea rows={2} placeholder="اكتب ملاحظة..." value={body} onChange={e => setBody(e.target.value)} />
-      <Button size="sm" disabled={!body.trim() || busy} onClick={submit}>إضافة ملاحظة</Button>
+      <Button size="sm" disabled={!body.trim() || busy} onClick={submit}>{t("common.add")}</Button>
     </div>
   );
 }

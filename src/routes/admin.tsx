@@ -4,10 +4,10 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard, FileText, Receipt, ClipboardList,
+  LayoutDashboard, FileText, ClipboardList,
   Package, Layers3, Palette, Wrench, Ticket, LogOut, Menu,
   Truck, Trees, SlidersHorizontal, GitBranch, Sparkles, Bell,
-  Users, RefreshCcw, BarChart3, UserCircle, Database,
+  Users, RefreshCcw, BarChart3, UserCircle, Database, Settings,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -20,7 +20,6 @@ const NAV = [
   { to: "/admin/team", labelKey: "admin.nav.teamManagement", icon: Users },
   { to: "/admin/quotes", labelKey: "admin.nav.quotes", icon: FileText },
   { to: "/admin/quotes/configurator", labelKey: "admin.nav.configurator", icon: Sparkles },
-  { to: "/admin/invoices", labelKey: "admin.nav.invoices", icon: Receipt },
   { to: "/admin/orders", labelKey: "admin.nav.orders", icon: ClipboardList },
   { to: "/admin/customers", labelKey: "admin.nav.customers", icon: UserCircle },
   { to: "/admin/products", labelKey: "admin.nav.products", icon: Package },
@@ -38,6 +37,7 @@ const NAV = [
   { to: "/admin/workers", labelKey: "admin.nav.workers", icon: Users },
   { to: "/admin/remakes", labelKey: "admin.nav.remakes", icon: RefreshCcw },
   { to: "/admin/seed", labelKey: "admin.nav.seedData", icon: Database },
+  { to: "/admin/settings", labelKey: "admin.nav.settings", icon: Settings },
 ];
 
 function SidebarContent() {

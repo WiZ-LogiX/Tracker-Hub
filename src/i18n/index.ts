@@ -30,7 +30,11 @@ if (!i18n.isInitialized) {
       fallbackLng: "en",
       supportedLngs: SUPPORTED_LANGS as unknown as string[],
       load: "languageOnly",
-      interpolation: { escapeValue: false },
+      interpolation: {
+        escapeValue: false,
+        prefix: "{",
+        suffix: "}",
+      },
       detection: {
         order: ["localStorage", "navigator"],
         lookupLocalStorage: "pelecanon-lang",

@@ -107,6 +107,6 @@ export function formatEGP(n: number): string {
   return new Intl.NumberFormat('ar-EG', {
     style: 'currency',
     currency: 'EGP',
-    maximumFractionDigits: 2,
-  }).format(n || 0);
+    maximumFractionDigits: 0,
+  }).format(Math.round(n || 0));
 }

@@ -17,9 +17,9 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 import { Route as AdminWastageRulesRouteImport } from './routes/admin/wastage-rules'
 import { Route as AdminVeneersRouteImport } from './routes/admin/veneers'
-import { Route as AdminTrackRouteImport } from './routes/admin/track'
 import { Route as AdminTeamRouteImport } from './routes/admin/team'
 import { Route as AdminSuppliersRouteImport } from './routes/admin/suppliers'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSeedRouteImport } from './routes/admin/seed'
 import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
 import { Route as AdminRemakesRouteImport } from './routes/admin/remakes'
@@ -29,7 +29,6 @@ import { Route as AdminPricingFactorsRouteImport } from './routes/admin/pricing-
 import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
 import { Route as AdminMaterialsRouteImport } from './routes/admin/materials'
-import { Route as AdminInvoicesRouteImport } from './routes/admin/invoices'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminFinishesRouteImport } from './routes/admin/finishes'
 import { Route as AdminDiscountsRouteImport } from './routes/admin/discounts'
@@ -40,7 +39,6 @@ import { Route as AdminQuotesIndexRouteImport } from './routes/admin/quotes/inde
 import { Route as AdminQuotesNewRouteImport } from './routes/admin/quotes/new'
 import { Route as AdminQuotesConfiguratorRouteImport } from './routes/admin/quotes/configurator'
 import { Route as AdminQuotesIdRouteImport } from './routes/admin/quotes/$id'
-import { Route as AdminInvoicesIdRouteImport } from './routes/admin/invoices.$id'
 
 const TrackRoute = TrackRouteImport.update({
   id: '/track',
@@ -82,11 +80,6 @@ const AdminVeneersRoute = AdminVeneersRouteImport.update({
   path: '/veneers',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminTrackRoute = AdminTrackRouteImport.update({
-  id: '/track',
-  path: '/track',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminTeamRoute = AdminTeamRouteImport.update({
   id: '/team',
   path: '/team',
@@ -95,6 +88,11 @@ const AdminTeamRoute = AdminTeamRouteImport.update({
 const AdminSuppliersRoute = AdminSuppliersRouteImport.update({
   id: '/suppliers',
   path: '/suppliers',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSeedRoute = AdminSeedRouteImport.update({
@@ -140,11 +138,6 @@ const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
 const AdminMaterialsRoute = AdminMaterialsRouteImport.update({
   id: '/materials',
   path: '/materials',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminInvoicesRoute = AdminInvoicesRouteImport.update({
-  id: '/invoices',
-  path: '/invoices',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminHealthRoute = AdminHealthRouteImport.update({
@@ -197,11 +190,6 @@ const AdminQuotesIdRoute = AdminQuotesIdRouteImport.update({
   path: '/quotes/$id',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminInvoicesIdRoute = AdminInvoicesIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AdminInvoicesRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -214,7 +202,6 @@ export interface FileRoutesByFullPath {
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
   '/admin/health': typeof AdminHealthRoute
-  '/admin/invoices': typeof AdminInvoicesRouteWithChildren
   '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -224,14 +211,13 @@ export interface FileRoutesByFullPath {
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/team': typeof AdminTeamRoute
-  '/admin/track': typeof AdminTrackRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
-  '/admin/invoices/$id': typeof AdminInvoicesIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
   '/admin/quotes/new': typeof AdminQuotesNewRoute
@@ -247,7 +233,6 @@ export interface FileRoutesByTo {
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
   '/admin/health': typeof AdminHealthRoute
-  '/admin/invoices': typeof AdminInvoicesRouteWithChildren
   '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -257,14 +242,13 @@ export interface FileRoutesByTo {
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/team': typeof AdminTeamRoute
-  '/admin/track': typeof AdminTrackRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin': typeof AdminIndexRoute
-  '/admin/invoices/$id': typeof AdminInvoicesIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
   '/admin/quotes/new': typeof AdminQuotesNewRoute
@@ -282,7 +266,6 @@ export interface FileRoutesById {
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/finishes': typeof AdminFinishesRoute
   '/admin/health': typeof AdminHealthRoute
-  '/admin/invoices': typeof AdminInvoicesRouteWithChildren
   '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
@@ -292,14 +275,13 @@ export interface FileRoutesById {
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/team': typeof AdminTeamRoute
-  '/admin/track': typeof AdminTrackRoute
   '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
-  '/admin/invoices/$id': typeof AdminInvoicesIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
   '/admin/quotes/new': typeof AdminQuotesNewRoute
@@ -318,7 +300,6 @@ export interface FileRouteTypes {
     | '/admin/discounts'
     | '/admin/finishes'
     | '/admin/health'
-    | '/admin/invoices'
     | '/admin/materials'
     | '/admin/notifications'
     | '/admin/orders'
@@ -328,14 +309,13 @@ export interface FileRouteTypes {
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/seed'
+    | '/admin/settings'
     | '/admin/suppliers'
     | '/admin/team'
-    | '/admin/track'
     | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
     | '/admin/'
-    | '/admin/invoices/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
     | '/admin/quotes/new'
@@ -351,7 +331,6 @@ export interface FileRouteTypes {
     | '/admin/discounts'
     | '/admin/finishes'
     | '/admin/health'
-    | '/admin/invoices'
     | '/admin/materials'
     | '/admin/notifications'
     | '/admin/orders'
@@ -361,14 +340,13 @@ export interface FileRouteTypes {
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/seed'
+    | '/admin/settings'
     | '/admin/suppliers'
     | '/admin/team'
-    | '/admin/track'
     | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
     | '/admin'
-    | '/admin/invoices/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
     | '/admin/quotes/new'
@@ -385,7 +363,6 @@ export interface FileRouteTypes {
     | '/admin/discounts'
     | '/admin/finishes'
     | '/admin/health'
-    | '/admin/invoices'
     | '/admin/materials'
     | '/admin/notifications'
     | '/admin/orders'
@@ -395,14 +372,13 @@ export interface FileRouteTypes {
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/seed'
+    | '/admin/settings'
     | '/admin/suppliers'
     | '/admin/team'
-    | '/admin/track'
     | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
     | '/admin/'
-    | '/admin/invoices/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
     | '/admin/quotes/new'
@@ -474,13 +450,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminVeneersRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/track': {
-      id: '/admin/track'
-      path: '/track'
-      fullPath: '/admin/track'
-      preLoaderRoute: typeof AdminTrackRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/team': {
       id: '/admin/team'
       path: '/team'
@@ -493,6 +462,13 @@ declare module '@tanstack/react-router' {
       path: '/suppliers'
       fullPath: '/admin/suppliers'
       preLoaderRoute: typeof AdminSuppliersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/seed': {
@@ -556,13 +532,6 @@ declare module '@tanstack/react-router' {
       path: '/materials'
       fullPath: '/admin/materials'
       preLoaderRoute: typeof AdminMaterialsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/invoices': {
-      id: '/admin/invoices'
-      path: '/invoices'
-      fullPath: '/admin/invoices'
-      preLoaderRoute: typeof AdminInvoicesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/health': {
@@ -635,27 +604,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminQuotesIdRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/invoices/$id': {
-      id: '/admin/invoices/$id'
-      path: '/$id'
-      fullPath: '/admin/invoices/$id'
-      preLoaderRoute: typeof AdminInvoicesIdRouteImport
-      parentRoute: typeof AdminInvoicesRoute
-    }
   }
 }
-
-interface AdminInvoicesRouteChildren {
-  AdminInvoicesIdRoute: typeof AdminInvoicesIdRoute
-}
-
-const AdminInvoicesRouteChildren: AdminInvoicesRouteChildren = {
-  AdminInvoicesIdRoute: AdminInvoicesIdRoute,
-}
-
-const AdminInvoicesRouteWithChildren = AdminInvoicesRoute._addFileChildren(
-  AdminInvoicesRouteChildren,
-)
 
 interface AdminRouteChildren {
   AdminAccessoriesRoute: typeof AdminAccessoriesRoute
@@ -664,7 +614,6 @@ interface AdminRouteChildren {
   AdminDiscountsRoute: typeof AdminDiscountsRoute
   AdminFinishesRoute: typeof AdminFinishesRoute
   AdminHealthRoute: typeof AdminHealthRoute
-  AdminInvoicesRoute: typeof AdminInvoicesRouteWithChildren
   AdminMaterialsRoute: typeof AdminMaterialsRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
@@ -674,9 +623,9 @@ interface AdminRouteChildren {
   AdminRemakesRoute: typeof AdminRemakesRoute
   AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSeedRoute: typeof AdminSeedRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSuppliersRoute: typeof AdminSuppliersRoute
   AdminTeamRoute: typeof AdminTeamRoute
-  AdminTrackRoute: typeof AdminTrackRoute
   AdminVeneersRoute: typeof AdminVeneersRoute
   AdminWastageRulesRoute: typeof AdminWastageRulesRoute
   AdminWorkersRoute: typeof AdminWorkersRoute
@@ -694,7 +643,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminDiscountsRoute: AdminDiscountsRoute,
   AdminFinishesRoute: AdminFinishesRoute,
   AdminHealthRoute: AdminHealthRoute,
-  AdminInvoicesRoute: AdminInvoicesRouteWithChildren,
   AdminMaterialsRoute: AdminMaterialsRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminOrdersRoute: AdminOrdersRoute,
@@ -704,9 +652,9 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminRemakesRoute: AdminRemakesRoute,
   AdminRequestsRoute: AdminRequestsRoute,
   AdminSeedRoute: AdminSeedRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminSuppliersRoute: AdminSuppliersRoute,
   AdminTeamRoute: AdminTeamRoute,
-  AdminTrackRoute: AdminTrackRoute,
   AdminVeneersRoute: AdminVeneersRoute,
   AdminWastageRulesRoute: AdminWastageRulesRoute,
   AdminWorkersRoute: AdminWorkersRoute,

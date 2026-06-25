@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/useAuth";
@@ -32,8 +33,8 @@ import {
 export interface FieldDef {
   key: string;
   label: string;
-  type?: 'text' | 'number';
-  default?: string | number;
+  type?: 'text' | 'number' | 'boolean';
+  default?: string | number | boolean;
   showInTable?: boolean;
 }
 
@@ -79,6 +80,7 @@ export function GenericCrud({ title, subtitle, table, fields }: {
   title: string; subtitle?: string; table: string; fields: FieldDef[];
 }) {
   const { currentTenantId, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
   const [rows, setRows] = useState<CrudRow[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CrudRow | null>(null);
@@ -121,10 +123,10 @@ export function GenericCrud({ title, subtitle, table, fields }: {
   const deleteDiscountFn = useServerFn(deleteDiscount);
 
   const blank = Object.fromEntries(
-    fields.map(f => [f.key, f.default ?? (f.type === 'number' ? 0 : '')])
-  ) as Record<string, string | number>;
+    fields.map(f => [f.key, f.default ?? (f.type === 'number' ? 0 : f.type === 'boolean' ? true : '')])
+  ) as Record<string, string | number | boolean>;
 
-  const [form, setForm] = useState<Record<string, string | number>>(blank);
+  const [form, setForm] = useState<Record<string, string | number | boolean>>(blank);
 
   useEffect(() => {
     if (authLoading) return;
@@ -155,7 +157,7 @@ export function GenericCrud({ title, subtitle, table, fields }: {
         const result = await fetcher();
         setRows((result.items as CrudRow[]) ?? []);
       } catch (e: any) {
-        toast.error(e?.message ?? "فشل التحميل");
+        toast.error(e?.message ?? t("common.loading"));
         setRows([]);
       }
       setLoading(false);
@@ -184,7 +186,13 @@ export function GenericCrud({ title, subtitle, table, fields }: {
     for (const f of fields) {
       const v = r[f.key];
       if (v !== undefined && v !== null) {
-        next[f.key] = typeof v === 'number' ? v : String(v);
+        if (f.type === 'boolean') {
+          next[f.key] = Boolean(v);
+        } else if (f.type === 'number') {
+          next[f.key] = Number(v);
+        } else {
+          next[f.key] = String(v);
+        }
       }
     }
     setForm(next);
@@ -200,10 +208,17 @@ export function GenericCrud({ title, subtitle, table, fields }: {
       toast.error("Table not allowed for direct admin CRUD");
       return;
     }
-    const payload: Record<string, string | number> = {};
+    const payload: Record<string, string | number | boolean> = {};
     for (const f of fields) {
       if (PROTECTED_INSERT_FIELDS.includes(f.key)) continue;
-      payload[f.key] = form[f.key] ?? (f.type === 'number' ? 0 : "");
+      const val = form[f.key];
+      if (f.type === 'boolean') {
+        payload[f.key] = val === true || val === 'true';
+      } else if (f.type === 'number') {
+        payload[f.key] = Number(val) || 0;
+      } else {
+        payload[f.key] = (val as string) ?? '';
+      }
     }
 
     if (bypass) {
@@ -224,10 +239,10 @@ export function GenericCrud({ title, subtitle, table, fields }: {
         if (!upsert) throw new Error(`No server-fn upsert registered for ${table}`);
         await upsert({ data: { ...payload, id: editing?.id } });
       } catch (e: any) {
-        toast.error(e?.message ?? "فشل الحفظ");
+        toast.error(e?.message ?? t("common.retry"));
         return;
       }
-      toast.success("تم الحفظ");
+      toast.success(t("common.save"));
       setOpen(false);
       load();
       return;
@@ -238,13 +253,13 @@ export function GenericCrud({ title, subtitle, table, fields }: {
       ? await tbl.update(payload).eq("id", editing.id)
       : await tbl.insert(payload);
     if (error) return toast.error(error.message);
-    toast.success("تم الحفظ");
+    toast.success(t("common.save"));
     setOpen(false);
     load();
   }
 
   async function remove(id: string) {
-    if (!confirm("تأكيد الحذف؟")) return;
+    if (!confirm(t("common.confirmDelete"))) return;
     if (!isKnownTable(table)) return;
 
     if (bypass) {
@@ -265,17 +280,17 @@ export function GenericCrud({ title, subtitle, table, fields }: {
         if (!del) throw new Error(`No server-fn deleter registered for ${table}`);
         await del({ data: { id } });
       } catch (e: any) {
-        toast.error(e?.message ?? "فشل الحذف");
+        toast.error(e?.message ?? t("common.retry"));
         return;
       }
-      toast.success("تم الحذف");
+      toast.success(t("common.delete"));
       load();
       return;
     }
 
     const { error } = await fromTable(supabase, table).delete().eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success("تم الحذف");
+    toast.success(t("common.delete"));
     load();
   }
 
@@ -284,7 +299,7 @@ export function GenericCrud({ title, subtitle, table, fields }: {
   if (authLoading) {
     return (
       <Card><CardContent className="p-8 text-center text-muted-foreground">
-        ...جاري التحقق من الجلسة
+        ...{t("common.loading")}
       </CardContent></Card>
     );
   }
@@ -303,7 +318,7 @@ export function GenericCrud({ title, subtitle, table, fields }: {
           <h1 className="font-serif text-3xl font-bold">{title}</h1>
           {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
         </div>
-        <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> جديد</Button>
+        <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> {t("common.new")}</Button>
       </div>
       <Card><CardContent className="p-0">
         <Table>
@@ -312,11 +327,15 @@ export function GenericCrud({ title, subtitle, table, fields }: {
             <TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {loading && <TableRow><TableCell colSpan={tableFields.length + 1} className="text-center py-8 text-muted-foreground">...جاري التحميل</TableCell></TableRow>}
-            {!loading && rows.length === 0 && <TableRow><TableCell colSpan={tableFields.length + 1} className="text-center py-8 text-muted-foreground">لا توجد بيانات.</TableCell></TableRow>}
+            {loading && <TableRow><TableCell colSpan={tableFields.length + 1} className="text-center py-8 text-muted-foreground">...{t("common.loading")}</TableCell></TableRow>}
+            {!loading && rows.length === 0 && <TableRow><TableCell colSpan={tableFields.length + 1} className="text-center py-8 text-muted-foreground">{t("common.noData")}</TableCell></TableRow>}
             {!loading && rows.map(r => (
               <TableRow key={r.id}>
-                {tableFields.map(f => <TableCell key={f.key}>{String(r[f.key] ?? '—')}</TableCell>)}
+                {tableFields.map(f => (
+                  <TableCell key={f.key}>
+                    {f.type === 'boolean' ? (r[f.key] ? '✓' : '✗') : String(r[f.key] ?? '—')}
+                  </TableCell>
+                ))}
                 <TableCell className="flex gap-1 justify-end">
                   <Button size="icon" variant="ghost" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
                   <Button size="icon" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -329,21 +348,33 @@ export function GenericCrud({ title, subtitle, table, fields }: {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? "تعديل" : "إضافة جديد"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t("common.edit") : t("common.add")}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             {fields
               .filter(f => !PROTECTED_INSERT_FIELDS.includes(f.key))
               .map(f => (
                 <div key={f.key}>
                   <Label>{f.label}</Label>
-                  <Input
-                    type={f.type === 'number' ? 'number' : 'text'}
-                    value={form[f.key] ?? ''}
-                    onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                  />
+                  {f.type === 'boolean' ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="checkbox"
+                        checked={!!form[f.key]}
+                        onChange={e => setForm({ ...form, [f.key]: e.target.checked })}
+                        className="h-4 w-4"
+                      />
+                      <span className="text-sm text-muted-foreground">{form[f.key] ? 'نشط' : 'غير نشط'}</span>
+                    </div>
+                  ) : (
+                    <Input
+                      type={f.type === 'number' ? 'number' : 'text'}
+                      value={String(form[f.key] ?? '')}
+                      onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                    />
+                  )}
                 </div>
               ))}
-            <Button onClick={save} className="w-full">حفظ</Button>
+            <Button onClick={save} className="w-full">{t("common.save")}</Button>
           </div>
         </DialogContent>
       </Dialog>

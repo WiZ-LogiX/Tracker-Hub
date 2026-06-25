@@ -67,6 +67,7 @@ function CustomersPage() {
   async function save() {
     if (!form.name.trim()) return toast.error(t("customers.nameRequired"));
     if (!form.phone.trim()) return toast.error(t("customers.phoneRequired"));
+    if (!editing && !tenantId) return toast.error("Loading tenant, please try again");
     const payload: Record<string, any> = {
       name: form.name.trim(), phone: form.phone.trim(),
       email: form.email?.trim() || null, governorate: form.governorate?.trim() || null, address: form.address?.trim() || null,

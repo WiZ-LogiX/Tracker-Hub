@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import {
   listDiscounts,
   upsertDiscount,
@@ -18,6 +19,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/admin/discounts")({ component: DiscountsPage });
 
 function DiscountsPage() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -33,7 +35,7 @@ function DiscountsPage() {
       const r = await listFn();
       setRows(r.items ?? []);
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load");
+      toast.error(e?.message ?? t("common.loading"));
     }
   }
   useEffect(() => { load(); }, []);
@@ -64,19 +66,19 @@ function DiscountsPage() {
         active: form.active,
       };
       await upsertFn({ data: payload });
-      toast.success("تم الحفظ"); setOpen(false); load();
+      toast.success(t("common.save")); setOpen(false); load();
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed");
+      toast.error(e?.message ?? t("common.retry"));
     }
   }
 
   async function remove(id: string) {
-    if (!confirm("تأكيد الحذف؟")) return;
+    if (!confirm(t("common.confirmDelete"))) return;
     try {
       await deleteFn({ data: { id } });
-      toast.success("تم الحذف"); load();
+      toast.success(t("common.delete")); load();
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed");
+      toast.error(e?.message ?? t("common.retry"));
     }
   }
 
@@ -84,23 +86,23 @@ function DiscountsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="font-serif text-3xl font-bold">الخصومات</h1>
-          <p className="text-sm text-muted-foreground mt-1">كوبونات الخصم</p>
+          <h1 className="font-serif text-3xl font-bold">{t("discounts.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{t("discounts.subtitle")}</p>
         </div>
-        <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> جديد</Button>
+        <Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" /> {t("common.new")}</Button>
       </div>
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>الكود</TableHead>
-            <TableHead>النوع</TableHead>
-            <TableHead>القيمة</TableHead>
-            <TableHead>الحد الأقصى</TableHead>
-            <TableHead>أقصى استخدام</TableHead>
+            <TableHead>{t("discounts.code")}</TableHead>
+            <TableHead>{t("discounts.type")}</TableHead>
+            <TableHead>{t("discounts.value")}</TableHead>
+            <TableHead>{t("discounts.maxValue")}</TableHead>
+            <TableHead>{t("discounts.maxUses")}</TableHead>
             <TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {rows.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">لا توجد بيانات.</TableCell></TableRow>}
+            {rows.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("common.noData")}</TableCell></TableRow>}
             {rows.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-mono">{r.code}</TableCell>
@@ -120,15 +122,15 @@ function DiscountsPage() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{editing ? "تعديل خصم" : "إضافة خصم"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t("common.edit") : t("common.add")}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label>الكود</Label><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} /></div>
-            <div><Label>النوع (percentage / fixed)</Label><Input value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} /></div>
-            <div><Label>القيمة</Label><Input type="number" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} /></div>
-            <div><Label>الحد الأقصى</Label><Input type="number" value={form.max_value} onChange={e => setForm({ ...form, max_value: e.target.value })} /></div>
-            <div><Label>أقصى استخدام</Label><Input type="number" value={form.max_uses} onChange={e => setForm({ ...form, max_uses: e.target.value })} /></div>
-            <div className="flex items-center gap-2"><input type="checkbox" id="active" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} className="rounded border-gray-300" /><Label htmlFor="active">نشط</Label></div>
-            <Button onClick={save} className="w-full">حفظ</Button>
+            <div><Label>{t("discounts.code")}</Label><Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} /></div>
+            <div><Label>{t("discounts.type")}</Label><Input value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} /></div>
+            <div><Label>{t("discounts.value")}</Label><Input type="number" value={form.value} onChange={e => setForm({ ...form, value: e.target.value })} /></div>
+            <div><Label>{t("discounts.maxValue")}</Label><Input type="number" value={form.max_value} onChange={e => setForm({ ...form, max_value: e.target.value })} /></div>
+            <div><Label>{t("discounts.maxUses")}</Label><Input type="number" value={form.max_uses} onChange={e => setForm({ ...form, max_uses: e.target.value })} /></div>
+            <div className="flex items-center gap-2"><input type="checkbox" id="active" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} className="rounded border-gray-300" /><Label htmlFor="active">{t("materials.active")}</Label></div>
+            <Button onClick={save} className="w-full">{t("common.save")}</Button>
           </div>
         </DialogContent>
       </Dialog>

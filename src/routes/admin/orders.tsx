@@ -2,24 +2,44 @@ import { useEffect, useState } from "react";
 import { useTranslation as _useTranslation } from "react-i18next";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { ChevronDown, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ORDER_STAGES, STAGE_LABEL_AR, OrderStage, nextStage, stageIndex } from "@/lib/stages";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ORDER_STAGES, STAGE_LABEL_AR, OrderStage, nextStage, stageIndex, getStageLabelAr } from "@/lib/stages";
 import { formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/useAuth";
 import { sendNotification } from "@/lib/notifications.functions";
 import { InternalNotes } from "@/components/admin/InternalNotes";
-import { extractR2Key } from "@/lib/r2.utils";
 import { PhotoUploader } from "@/components/photo-uploader";
 import { AttachmentList } from "@/components/attachment-list";
 import { AttachmentUploader } from "@/components/attachment-uploader";
+import { ShareTrackingLink } from "@/components/share-tracking-link";
+import { buildTrackingUrl } from "@/lib/tracking-url";
+import { sendTrackingWhatsapp } from "@/lib/whatsapp-share.functions";
+import { OrderView, type OrderSummary, type OrderViewData } from "@/components/order-view";
+import {
+  uploadProductionPhoto,
+  deleteProductionPhoto,
+  logStageTransition,
+  updateOrderStage,
+  assignProductionWorker,
+  updateProductionAssignment,
+  deleteProductionAssignment,
+  recordQCInspection,
+  recordRemake,
+  getPublicOrder,
+  getPublicTrackingByRef,
+  getPublicOrdersByPhone,
+} from "@/lib/tracking.functions";
 
 export const Route = createFileRoute("/admin/orders")({ component: OrdersPage });
 
@@ -37,6 +57,26 @@ function OrdersPage() {
   const [refreshAttach, setRefreshAttach] = useState(0);
   const { user } = useAuth();
   const notify = useServerFn(sendNotification);
+  const updateStageFn = useServerFn(updateOrderStage);
+  const assignWorkerFn = useServerFn(assignProductionWorker);
+  const updateAssignmentFn = useServerFn(updateProductionAssignment);
+  const deleteAssignmentFn = useServerFn(deleteProductionAssignment);
+  const recordQCFn = useServerFn(recordQCInspection);
+  const recordRemakeFn = useServerFn(recordRemake);
+  const deletePhotoFn = useServerFn(deleteProductionPhoto);
+  const fetchPublicOrder = useServerFn(getPublicOrder);
+  const fetchByRef = useServerFn(getPublicTrackingByRef);
+  const fetchByPhone = useServerFn(getPublicOrdersByPhone);
+  const sendTrackingFn = useServerFn(sendTrackingWhatsapp);
+  const [sendingTrackingId, setSendingTrackingId] = useState<string | null>(null);
+
+  const [trackerOpen, setTrackerOpen] = useState(false);
+  const [trackPhoneOnly, setTrackPhoneOnly] = useState("");
+  const [trackOrderNumber, setTrackOrderNumber] = useState("");
+  const [trackPhone, setTrackPhone] = useState("");
+  const [trackMatches, setTrackMatches] = useState<OrderSummary[] | null>(null);
+  const [trackResult, setTrackResult] = useState<OrderViewData | null>(null);
+  const [trackLoading, setTrackLoading] = useState(false);
 
   useEffect(() => {
     load();
@@ -59,6 +99,53 @@ function OrdersPage() {
       .eq("active", true)
       .order("name");
     setWorkers(data ?? []);
+  }
+
+  async function onTrackPhoneSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setTrackLoading(true);
+    setTrackMatches(null);
+    setTrackResult(null);
+    try {
+      const list: any = await fetchByPhone({ data: { phone: trackPhoneOnly.trim() } });
+      const filtered = (list ?? []).filter((m: any) => m.order_number);
+      if (!filtered.length) toast.error(t("track.noMatches"));
+      setTrackMatches(filtered as OrderSummary[]);
+    } catch (err: any) {
+      toast.error(err?.message || t("track.searchError"));
+    } finally {
+      setTrackLoading(false);
+    }
+  }
+
+  async function onTrackRefSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setTrackLoading(true);
+    try {
+      const r: any = await fetchPublicOrder({
+        data: { orderNumber: trackOrderNumber.trim(), phone: trackPhone.trim() },
+      });
+      setTrackResult(r as OrderViewData);
+      setTrackMatches(null);
+    } catch (err: any) {
+      toast.error(err?.message || t("track.notFound"));
+      setTrackResult(null);
+    } finally {
+      setTrackLoading(false);
+    }
+  }
+
+  async function openTrackOrderFromList(orderNumber: string) {
+    setTrackLoading(true);
+    try {
+      const r: any = await fetchByRef({ data: { reference: orderNumber } });
+      setTrackResult(r as OrderViewData);
+      setTrackMatches(null);
+    } catch (err: any) {
+      toast.error(err?.message || t("track.openError"));
+    } finally {
+      setTrackLoading(false);
+    }
   }
 
   async function openOrder(o: any) {
@@ -122,6 +209,7 @@ function OrdersPage() {
     if (!selected || results.length === 0) return;
     const rows = results.map(r => ({
       order_id: selected.id,
+      tenant_id: selected.tenant_id,
       stage: selected.current_stage,
       photo_url: r.publicUrl || (r.key as string),
       caption: r.caption || caption || null,
@@ -137,72 +225,101 @@ function OrdersPage() {
   }
 
   async function deletePhoto(p: any) {
-    const { error } = await supabase.from("production_photos").delete().eq("id", p.id);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await deletePhotoFn({ data: { photoId: p.id } });
+      if (selected) await reloadOrderData(selected.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? t("common.error"));
     }
-    const key = p.photo_url ? extractR2Key(p.photo_url) : null;
-    if (key) {
-      try {
-        await supabase.functions.invoke?.("delete-r2-object", { body: { key } });
-      } catch {
-        /* ignore */
+  }
+
+  async function onSendTracking(idOrNumber: string) {
+    setSendingTrackingId(idOrNumber);
+    try {
+      // If it looks like a UUID, pass orderId; otherwise pass orderNumber
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrNumber);
+      const params = isUuid
+        ? { orderId: idOrNumber }
+        : { orderNumber: idOrNumber };
+      const result: any = await sendTrackingFn({ data: params });
+      if (result?.status === "sent") {
+        toast.success(t("track.sentViaN8n") ?? "تم الإرسال عبر n8n");
+      } else if (result?.status === "skipped") {
+        toast.info(t("track.sendSkipped") ?? "تم التخطي: " + (result.reason ?? ""));
+      } else {
+        toast.error(t("track.sendFailed") ?? "فشل الإرسال");
       }
+    } catch (e: any) {
+      toast.error(e?.message || (t("track.sendFailed") ?? "فشل الإرسال"));
+    } finally {
+      setSendingTrackingId(null);
     }
-    if (selected) await reloadOrderData(selected.id);
   }
 
   async function assignWorker(stage: OrderStage, workerId: string) {
     if (!selected || !workerId) return;
-    const { error } = await supabase
-      .from("production_assignments")
-      .insert({
-        order_id: selected.id,
-        stage: stage as any,
-        worker_id: workerId,
-        status: "pending",
+    try {
+      await assignWorkerFn({
+        data: {
+          orderId: selected.id,
+          stage: stage as string,
+          workerId,
+          status: "pending",
+        },
       });
-    if (error) return toast.error(error.message);
-    toast.success(t("common.save"));
-    await reloadOrderData(selected.id);
+      toast.success(t("common.save"));
+      await reloadOrderData(selected.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? t("common.error"));
+    }
   }
 
   async function updateAssignment(a: any, patch: any) {
-    const { error } = await supabase
-      .from("production_assignments")
-      .update(patch)
-      .eq("id", a.id);
-    if (error) return toast.error(error.message);
-    await reloadOrderData(selected.id);
+    try {
+      await updateAssignmentFn({ data: { id: a.id, patch } });
+      await reloadOrderData(selected.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? t("common.error"));
+    }
   }
 
   async function deleteAssignment(a: any) {
     if (!confirm(t("common.confirmDelete"))) return;
-    await supabase.from("production_assignments").delete().eq("id", a.id);
-    await reloadOrderData(selected.id);
+    try {
+      await deleteAssignmentFn({ data: { id: a.id } });
+      await reloadOrderData(selected.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? t("common.error"));
+    }
   }
 
   async function recordQC(stage: OrderStage, passed: boolean, qcNotes: string) {
     if (!selected) return;
-    const { error } = await supabase.from("qc_inspections").insert({
-      order_id: selected.id,
-      stage: stage as any,
-      passed,
-      notes: qcNotes || null,
-      inspector_id: user?.id,
-    } as any);
-    if (error) return toast.error(error.message);
-    if (!passed) {
-      await supabase.from("remakes").insert({
-        order_id: selected.id,
-        reason: qcNotes || `QC failed: ${stage}`,
-        status: "open",
-        created_by: user?.id,
-      } as any);
-      toast.warning(t("orders.qcFail"));
-    } else toast.success(t("orders.qcPass"));
-    await reloadOrderData(selected.id);
+    try {
+      await recordQCFn({
+        data: {
+          orderId: selected.id,
+          stage: stage as string,
+          passed,
+          notes: qcNotes || null,
+          inspectorId: user?.id ?? null,
+        },
+      });
+      if (!passed) {
+        await recordRemakeFn({
+          data: {
+            orderId: selected.id,
+            reason: qcNotes || `QC failed: ${stage}`,
+            status: "open",
+            createdBy: user?.id ?? null,
+          },
+        });
+        toast.warning(t("orders.qcFail"));
+      } else toast.success(t("orders.qcPass"));
+      await reloadOrderData(selected.id);
+    } catch (e: any) {
+      toast.error(e?.message ?? t("common.error"));
+    }
   }
 
   function canAdvance(o: any): { ok: boolean; reason?: string } {
@@ -219,21 +336,30 @@ function OrdersPage() {
     if (!next) return toast.info(t("orders.completed"));
     const gate = canAdvance(o);
     if (!gate.ok) return toast.error(gate.reason!);
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        current_stage: next as any,
-        ...(next === "delivered" ? { delivered_at: new Date().toISOString() } : {}),
-      })
-      .eq("id", o.id);
-    if (error) return toast.error(error.message);
-    await supabase.from("production_logs").insert({
-      order_id: o.id,
-      stage_from: o.current_stage as any,
-      stage_to: next as any,
-      transitioned_by: user?.id,
-      notes: note || null,
-    } as any);
+    try {
+      await updateStageFn({
+        data: {
+          orderId: o.id,
+          nextStage: next as string,
+          markDelivered: next === "delivered",
+        },
+      });
+    } catch (e: any) {
+      return toast.error(e?.message ?? t("common.error"));
+    }
+    try {
+      await logStageTransition({
+        data: {
+          orderId: o.id,
+          stageFrom: o.current_stage as string,
+          stageTo: next as string,
+          notes: note || null,
+        },
+      });
+    } catch (e: any) {
+      // Log-only stage shouldn't block UI progression
+      console.warn("logStageTransition failed:", e?.message ?? e);
+    }
     try {
       const event =
         next === "delivered"
@@ -262,30 +388,203 @@ function OrdersPage() {
     }
   }
 
-  async function sendTrackingLink(o: any) {
-    try {
-      const r: any = await notify({
-        data: {
-          event: "stage_changed",
-          entityType: "order",
-          entityId: o.id,
-          extra: { stage: String(o.current_stage) },
-        },
-      });
-      if (r?.status === "sent") toast.success(t("orders.trackingSent"));
-      else if (r?.status === "skipped") toast.info(t("notifications.skipped", { reason: r?.reason ?? "" }));
-      else toast.error(t("notifications.failed", { error: r?.http ?? "" }));
-    } catch (err: any) {
-      toast.error(err?.message ?? "Failed");
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-serif text-3xl font-bold">{t("orders.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t("orders.subtitle")}</p>
       </div>
+
+      <Collapsible
+        open={trackerOpen}
+        onOpenChange={setTrackerOpen}
+        className="border rounded-lg bg-muted/20"
+      >
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="w-full flex items-center justify-between px-4 py-3 text-right hover:bg-muted/40 transition rounded-lg"
+            aria-expanded={trackerOpen}
+          >
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium text-sm">
+                {t("track.title")}
+              </span>
+              <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                — {t("track.subtitle")}
+              </span>
+            </div>
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform ${
+                trackerOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="px-4 pb-4 space-y-4">
+          <div className="grid lg:grid-cols-2 gap-4 pt-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">{t("track.byPhoneTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <form
+                  onSubmit={onTrackPhoneSubmit}
+                  className="grid sm:grid-cols-3 gap-2 items-end"
+                >
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-xs">{t("track.phone")}</Label>
+                    <Input
+                      size={1}
+                      value={trackPhoneOnly}
+                      onChange={e =>
+                        setTrackPhoneOnly(e.target.value.replace(/[^\d+]/g, ""))
+                      }
+                      placeholder="01xxxxxxxxx"
+                      inputMode="tel"
+                      className="h-8 text-sm"
+                      required
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="h-8"
+                    disabled={trackLoading}
+                  >
+                    {trackLoading ? "..." : t("track.search")}
+                  </Button>
+                </form>
+                <p className="text-[10px] text-muted-foreground">
+                  {t("track.phoneHint")}
+                </p>
+
+                {trackMatches && trackMatches.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="text-[10px] text-muted-foreground">
+                      {t("track.resultsCount", { n: trackMatches.length })}
+                    </div>
+                    {trackMatches.map((m) => (
+                      <div
+                        key={m.order_number ?? Math.random().toString()}
+                        className="border rounded-md p-2 hover:bg-accent transition space-y-1.5"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => m.order_number && openTrackOrderFromList(m.order_number)}
+                          className="w-full text-right"
+                        >
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-mono">{m.order_number}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {m.customer_name}
+                            </span>
+                          </div>
+                          {m.current_stage && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              {t("track.stage")}: {getStageLabelAr(m.current_stage as any)}
+                            </div>
+                          )}
+                        </button>
+                        <div className="flex items-center justify-between gap-2 pt-1 border-t">
+                          <a
+                            href={buildTrackingUrl(m.order_number)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] font-mono text-muted-foreground truncate hover:text-secondary flex-1 text-left"
+                            title={buildTrackingUrl(m.order_number)}
+                            dir="ltr"
+                          >
+                            {buildTrackingUrl(m.order_number)}
+                          </a>
+                          <ShareTrackingLink
+                            url={buildTrackingUrl(m.order_number)}
+                            ref={m.order_number}
+                            recipientPhone={m.customer_phone ?? null}
+                            customerName={m.customer_name ?? null}
+                            onWhatsAppSend={() => m.order_number && onSendTracking(m.order_number)}
+                            whatsappLoading={sendingTrackingId === m.order_number}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {trackMatches && trackMatches.length === 0 && (
+                  <div className="mt-2 text-xs text-muted-foreground text-center py-2 border rounded-md">
+                    {t("track.noMatches")}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">{t("track.byRefTitle")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form
+                  onSubmit={onTrackRefSubmit}
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end"
+                >
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t("track.orderNumber")}</Label>
+                    <Input
+                      size={1}
+                      value={trackOrderNumber}
+                      onChange={e => setTrackOrderNumber(e.target.value)}
+                      placeholder="ORD-..."
+                      className="h-8 text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{t("track.phone")}</Label>
+                    <Input
+                      size={1}
+                      value={trackPhone}
+                      onChange={e => setTrackPhone(e.target.value)}
+                      placeholder="01xxxxxxxxx"
+                      className="h-8 text-sm"
+                      required
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="h-8"
+                    disabled={trackLoading}
+                  >
+                    {trackLoading ? "..." : t("track.track")}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+
+          {trackResult && (
+            <div className="pt-2">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium">
+                  {t("track.title")}
+                </h3>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setTrackResult(null)}
+                >
+                  ✕ {t("common.cancel")}
+                </Button>
+              </div>
+              <OrderView data={trackResult} />
+            </div>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
 
       <div className="grid lg:grid-cols-3 gap-4">
         {ORDER_STAGES.slice(0, -1).map(stage => {
@@ -328,13 +627,14 @@ function OrdersPage() {
                           caption={caption}
                           setCaption={setCaption}
                           onAdvance={() => advance(selected)}
-                          onSendLink={() => sendTrackingLink(selected)}
                           onPhotosUploaded={handlePhotosUploaded}
                           onDeletePhoto={deletePhoto}
                           onAssign={assignWorker}
                           onUpdateAssignment={updateAssignment}
                           onDeleteAssignment={deleteAssignment}
                           onRecordQC={recordQC}
+                          onSendTracking={onSendTracking}
+                          sendingTrackingId={sendingTrackingId}
                           t={t}
                           refreshAttach={refreshAttach}
                           triggerRefreshAttach={() => setRefreshAttach((n) => n + 1)}
@@ -391,13 +691,14 @@ function OrderDetail({
   caption,
   setCaption,
   onAdvance,
-  onSendLink,
   onPhotosUploaded,
   onDeletePhoto,
   onAssign,
   onUpdateAssignment,
   onDeleteAssignment,
   onRecordQC,
+  onSendTracking,
+  sendingTrackingId,
   t,
   refreshAttach,
   triggerRefreshAttach,
@@ -589,10 +890,13 @@ function OrderDetail({
                           />
                           <button
                             type="button"
-                            onClick={() => onDeletePhoto(p)}
-                            className="absolute top-1 left-1 bg-black/60 text-white text-[10px] rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100"
+                            onClick={() => {
+                              if (confirm(t("common.confirmDelete"))) onDeletePhoto(p);
+                            }}
+                            className="absolute top-1 left-1 bg-destructive text-destructive-foreground text-[10px] rounded px-1.5 py-0.5 opacity-90 hover:opacity-100 shadow"
+                            aria-label={t("orders.delete")}
                           >
-                            {t("orders.delete")}
+                            ✕
                           </button>
                         </div>
                       ))}
@@ -634,11 +938,20 @@ function OrderDetail({
 
       <div className="pt-2 border-t space-y-2">
         <div className="text-xs text-muted-foreground">
-          {t("orders.sendTrackingLink")}
+          {t("orders.shareTrackingLink") ?? t("orders.sendTrackingLink")}
         </div>
-        <Button type="button" variant="outline" className="w-full" onClick={onSendLink}>
-          {t("orders.sendTrackingLink")}
-        </Button>
+        <ShareTrackingLink
+          url={buildTrackingUrl(o.order_number)}
+          ref={o.order_number}
+          recipientPhone={o.customers?.phone ?? null}
+          customerName={o.customers?.name ?? null}
+          variant="block"
+          onWhatsAppSend={() => onSendTracking(o.id)}
+          whatsappLoading={sendingTrackingId === o.id}
+        />
+        <p className="text-[10px] text-muted-foreground">
+          {t("orders.shareTrackingLinkHint")}
+        </p>
       </div>
 
       {next && (

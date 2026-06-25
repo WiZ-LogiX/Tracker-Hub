@@ -1,5 +1,5 @@
 // Portable Postgres client using the `postgres` driver against Supabase's
-// direct connection (port 5432).
+// connection pooler (session mode, port 5432).
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";

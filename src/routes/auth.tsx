@@ -9,10 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ArrowRight, UserCircle2 } from "lucide-react";
 import { ensureBootstrapAdmin, login as loginFn } from "@/lib/auth.functions";
+import { useTranslation } from "react-i18next";
 
 export const Route = createFileRoute("/auth")({ component: AuthPage });
 
 function AuthPage() {
+  const { t } = useTranslation();
   const nav = useNavigate();
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState("");
@@ -76,7 +78,7 @@ function AuthPage() {
         );
       }
 
-      toast.success("تم تسجيل الدخول");
+      toast.success(t("auth.loginSuccess"));
       nav({ to: "/admin" });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -95,13 +97,13 @@ function AuthPage() {
         </Link>
         <Card>
           <CardHeader>
-            <CardTitle className="text-center font-serif">تسجيل الدخول</CardTitle>
-            <p className="text-sm text-muted-foreground text-center mt-1">لوحة الإدارة - للموظفين فقط</p>
+            <CardTitle className="text-center font-serif">{t("auth.title")}</CardTitle>
+            <p className="text-sm text-muted-foreground text-center mt-1">{t("auth.subtitle")}</p>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSignIn} className="space-y-4 mt-4">
               <div>
-                <Label>اسم المستخدم</Label>
+                <Label>{t("auth.username")}</Label>
                 <Input
                   autoComplete="username"
                   value={username}
@@ -112,7 +114,7 @@ function AuthPage() {
                 />
               </div>
               <div>
-                <Label>كلمة المرور</Label>
+                <Label>{t("auth.password")}</Label>
                 <Input
                   type="password"
                   autoComplete="current-password"
@@ -124,11 +126,8 @@ function AuthPage() {
               </div>
               <Button type="submit" disabled={loading || bootstrapping} className="w-full gap-2">
                 <UserCircle2 className="h-4 w-4" />
-                {loading ? "..." : "دخول"} <ArrowRight className="h-4 w-4 rtl-flip" />
+                {loading ? "..." : t("auth.signIn")} <ArrowRight className="h-4 w-4 rtl-flip" />
               </Button>
-              <p className="mt-4 text-xs text-muted-foreground text-center">
-                اسم المستخدم الافتراضي: <span className="font-mono">admin</span> • كلمة المرور: <span className="font-mono">admin</span>
-              </p>
             </form>
           </CardContent>
         </Card>

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useTranslation } from "react-i18next";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -38,6 +39,7 @@ interface RoleRow { slug: string; label: string; description: string | null; bui
 interface PermRow { slug: string; label: string; category: string; }
 
 function TeamPage() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState("users");
   return (
     <div className="space-y-6">
@@ -64,6 +66,7 @@ function TeamPage() {
 /* ── Users Tab ─────────────────────────────────────────────────── */
 
 function UsersTab() {
+  const { t } = useTranslation();
   const [rows, setRows] = useState<Row[]>([]);
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -123,23 +126,23 @@ function UsersTab() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-lg">الفريق</CardTitle>
-          <CardDescription>أضف موظفين وعيّن أدوارهم</CardDescription>
+          <CardTitle className="text-lg">{t("common.add")}</CardTitle>
+          <CardDescription>{t("admin.team.subtitle")}</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button onClick={() => { setForm({ username: "", displayName: "", password: "", role: "viewer" }); }} className="gap-2">
-              <Plus className="h-4 w-4" /> مستخدم جديد
+              <Plus className="h-4 w-4" /> {t("admin.team.newUser")}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
-            <DialogHeader><DialogTitle>إضافة مستخدم</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t("admin.team.addUser")}</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div><Label>اسم المستخدم</Label><Input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} dir="ltr" /></div>
-              <div><Label>الاسم المعروض</Label><Input value={form.displayName} onChange={e => setForm({ ...form, displayName: e.target.value })} /></div>
-              <div><Label>كلمة المرور</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} dir="ltr" /></div>
+              <div><Label>{t("admin.team.username")}</Label><Input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} dir="ltr" /></div>
+              <div><Label>{t("admin.team.displayName")}</Label><Input value={form.displayName} onChange={e => setForm({ ...form, displayName: e.target.value })} /></div>
+              <div><Label>{t("admin.team.password")}</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} dir="ltr" /></div>
               <div>
-                <Label>الدور</Label>
+                <Label>{t("admin.team.role")}</Label>
                 <Select value={form.role} onValueChange={v => setForm({ ...form, role: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -148,7 +151,7 @@ function UsersTab() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={save} className="w-full">حفظ</Button>
+              <Button onClick={save} className="w-full">{t("common.save")}</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -156,20 +159,20 @@ function UsersTab() {
       <CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>الصورة</TableHead><TableHead>المستخدم</TableHead><TableHead>الاسم</TableHead><TableHead>الحالة</TableHead><TableHead></TableHead>
+            <TableHead>{t("admin.team.avatar")}</TableHead><TableHead>{t("admin.team.username")}</TableHead><TableHead>{t("admin.team.displayName")}</TableHead><TableHead>{t("common.status")}</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {loading && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">...جاري التحميل</TableCell></TableRow>}
-            {!loading && rows.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">لا يوجد فريق بعد.</TableCell></TableRow>}
+            {loading && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>}
+            {!loading && rows.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("admin.team.noUsers")}</TableCell></TableRow>}
             {!loading && rows.map(r => (
               <TableRow key={r.id}>
                 <TableCell><AvatarUploader userId={r.id} currentKey={r.avatar_key} size={48} onUpdated={() => load()} /></TableCell>
                 <TableCell className="font-mono">{r.username}</TableCell>
                 <TableCell>{r.display_name}</TableCell>
-                <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status === "active" ? "نشط" : "معطل"}</Badge></TableCell>
+                <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status === "active" ? t("admin.team.active") : t("admin.team.disabled")}</Badge></TableCell>
                 <TableCell className="flex gap-1 justify-end">
-                  <Button size="sm" variant="outline" onClick={() => { setResetFor(r); setNewPassword(""); }} className="gap-1"><Lock className="h-3.5 w-3.5" /> كلمة المرور</Button>
-                  <Button size="sm" variant={r.status === "active" ? "outline" : "secondary"} onClick={() => toggleStatus(r)} className="gap-1"><Power className="h-3.5 w-3.5" /> {r.status === "active" ? "تعطيل" : "تفعيل"}</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setResetFor(r); setNewPassword(""); }} className="gap-1"><Lock className="h-3.5 w-3.5" /> {t("admin.team.resetPassword")}</Button>
+                  <Button size="sm" variant={r.status === "active" ? "outline" : "secondary"} onClick={() => toggleStatus(r)} className="gap-1"><Power className="h-3.5 w-3.5" /> {r.status === "active" ? t("admin.team.disable") : t("admin.team.enable")}</Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -178,10 +181,10 @@ function UsersTab() {
       </CardContent>
       <Dialog open={!!resetFor} onOpenChange={o => !o && setResetFor(null)}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>إعادة تعيين كلمة المرور لـ {resetFor?.username}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("admin.team.resetPasswordFor")} {resetFor?.username}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label>كلمة المرور الجديدة</Label><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} dir="ltr" /></div>
-            <Button onClick={resetPwd} className="w-full">حفظ</Button>
+            <div><Label>{t("admin.team.newPassword")}</Label><Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} dir="ltr" /></div>
+            <Button onClick={resetPwd} className="w-full">{t("common.save")}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -192,6 +195,7 @@ function UsersTab() {
 /* ── Roles Tab ─────────────────────────────────────────────────── */
 
 function RolesTab() {
+  const { t } = useTranslation();
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -247,20 +251,20 @@ function RolesTab() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-lg">الأدوار</CardTitle>
-          <CardDescription>أنشئ أدواراً مخصصة وعيّن صلاحياتها</CardDescription>
+          <CardTitle className="text-lg">{t("admin.team.roles")}</CardTitle>
+          <CardDescription>{t("admin.team.rolesDescription")}</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" /> دور جديد</Button>
+            <Button className="gap-2"><Plus className="h-4 w-4" /> {t("admin.team.newRole")}</Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
-            <DialogHeader><DialogTitle>إنشاء دور جديد</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{t("admin.team.createRole")}</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <div><Label>الرمز (slug)</Label><Input value={formSlug} onChange={e => setFormSlug(e.target.value)} dir="ltr" placeholder="مثلاً: quality_checker" /></div>
-              <div><Label>الاسم المعروض</Label><Input value={formLabel} onChange={e => setFormLabel(e.target.value)} placeholder="مثلاً: مفتاح الجودة" /></div>
-              <div><Label>الوصف (اختياري)</Label><Input value={formDesc} onChange={e => setFormDesc(e.target.value)} /></div>
-              <Button onClick={save} className="w-full">إنشاء</Button>
+              <div><Label>{t("admin.team.roleSlug")}</Label><Input value={formSlug} onChange={e => setFormSlug(e.target.value)} dir="ltr" placeholder="مثلاً: quality_checker" /></div>
+              <div><Label>{t("admin.team.displayName")}</Label><Input value={formLabel} onChange={e => setFormLabel(e.target.value)} placeholder="مثلاً: مفتاح الجودة" /></div>
+              <div><Label>{t("admin.team.description")}</Label><Input value={formDesc} onChange={e => setFormDesc(e.target.value)} /></div>
+              <Button onClick={save} className="w-full">{t("common.add")}</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -268,10 +272,10 @@ function RolesTab() {
       <CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>الرمز</TableHead><TableHead>الاسم</TableHead><TableHead>الوصف</TableHead><TableHead>النوع</TableHead><TableHead></TableHead>
+            <TableHead>{t("admin.team.roleSlug")}</TableHead><TableHead>{t("admin.team.displayName")}</TableHead><TableHead>{t("admin.team.description")}</TableHead><TableHead>{t("admin.team.type")}</TableHead><TableHead></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {loading && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">...جاري التحميل</TableCell></TableRow>}
+            {loading && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t("common.loading")}</TableCell></TableRow>}
             {!loading && roles.map(r => (
               <TableRow key={r.slug}>
                 <TableCell className="font-mono">{r.slug}</TableCell>
@@ -279,7 +283,7 @@ function RolesTab() {
                 <TableCell className="text-muted-foreground">{r.description || "—"}</TableCell>
                 <TableCell>
                   <Badge variant={builtins.includes(r.slug) ? "secondary" : "outline"}>
-                    {builtins.includes(r.slug) ? "مدمج" : "مخصص"}
+                    {builtins.includes(r.slug) ? t("admin.team.builtin") : t("admin.team.custom")}
                   </Badge>
                 </TableCell>
                 <TableCell className="flex gap-1 justify-end">
@@ -300,11 +304,11 @@ function RolesTab() {
 
       <Dialog open={!!editFor} onOpenChange={o => !o && setEditFor(null)}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>تعديل الدور: {editFor?.slug}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t("admin.team.editRole")}: {editFor?.slug}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label>الاسم المعروض</Label><Input value={formLabel} onChange={e => setFormLabel(e.target.value)} /></div>
-            <div><Label>الوصف</Label><Input value={formDesc} onChange={e => setFormDesc(e.target.value)} /></div>
-            <Button onClick={saveEdit} className="w-full">حفظ</Button>
+            <div><Label>{t("admin.team.displayName")}</Label><Input value={formLabel} onChange={e => setFormLabel(e.target.value)} /></div>
+            <div><Label>{t("admin.team.description")}</Label><Input value={formDesc} onChange={e => setFormDesc(e.target.value)} /></div>
+            <Button onClick={saveEdit} className="w-full">{t("common.save")}</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -315,6 +319,7 @@ function RolesTab() {
 /* ── Permissions Tab ───────────────────────────────────────────── */
 
 function PermissionsTab() {
+  const { t } = useTranslation();
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [allPerms, setAllPerms] = useState<PermRow[]>([]);
   const [selectedRole, setSelectedRole] = useState("");
@@ -366,12 +371,12 @@ function PermissionsTab() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">صلاحيات الأدوار</CardTitle>
-        <CardDescription>عيّن الصلاحيات لكل دور — المالك (owner) يحصل على كل الصلاحيات تلقائياً</CardDescription>
+        <CardTitle className="text-lg">{t("admin.team.rolePermissions")}</CardTitle>
+        <CardDescription>{t("admin.team.rolePermissionsDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
-          <Label>اختر الدور</Label>
+          <Label>{t("admin.team.selectRole")}</Label>
           <Select value={selectedRole} onValueChange={loadRolePerms}>
             <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>
@@ -395,11 +400,11 @@ function PermissionsTab() {
                 </div>
               </div>
             ))}
-            <Button onClick={savePerms} disabled={saving} className="w-full">{saving ? "...جاري الحفظ" : "حفظ الصلاحيات"}</Button>
+            <Button onClick={savePerms} disabled={saving} className="w-full">{saving ? t("admin.settings.saving") : t("admin.team.savePermissions")}</Button>
           </>
         )}
         {selectedRole === "owner" && (
-          <p className="text-sm text-muted-foreground text-center py-4">المالك (owner) يحصل على كل الصلاحيات تلقائياً — لا يمكن تعديلها</p>
+          <p className="text-sm text-muted-foreground text-center py-4">{t("admin.team.ownerAllPermissions")}</p>
         )}
       </CardContent>
     </Card>

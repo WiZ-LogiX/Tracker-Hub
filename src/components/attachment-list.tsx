@@ -87,7 +87,7 @@ export function AttachmentList({
     return <div className="text-xs text-muted-foreground">...جاري تحميل المرفقات</div>;
   }
   if (items.length === 0) {
-    return <div className="text-xs text-muted-foreground">لا توجد مرفقات بعد.</div>;
+    return <div className="text-xs text-muted-foreground">{t("common.noData")}</div>;
   }
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -137,7 +137,7 @@ export function AttachmentList({
                 size="icon"
                 variant="ghost"
                 onClick={() => remove(att)}
-                aria-label="حذف"
+                aria-label={t("common.delete")}
               >
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>

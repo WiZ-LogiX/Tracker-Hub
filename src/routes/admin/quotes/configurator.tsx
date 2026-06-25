@@ -3,7 +3,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { createQuote } from "@/lib/quote.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +46,7 @@ const blankItem = (): Item => ({
 function ConfiguratorBuilder() {
   const { t } = useTranslation();
   const nav = useNavigate();
+  const createQuoteFn = useServerFn(createQuote);
   const [templates, setTemplates] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
@@ -163,64 +166,69 @@ function ConfiguratorBuilder() {
   }), [computed]);
 
   async function saveQuote(status: 'draft' | 'sent') {
-    if (!customerId) return toast.error("اختر عميلاً");
+    if (!customerId) return toast.error(t("quoteBuilder.selectCustomerFirst"));
     setSaving(true);
-    const { data: quote, error } = await supabase.from('quotes').insert({
-      customer_id: customerId,
-      quote_number: plcId,
-      status,
-      subtotal: totals.subtotal,
-      discount_amount: 0,
-      vat_pct: 14, vat_amount: totals.vatAmount,
-      total: totals.total,
-      notes: notes || null,
-      snapshot: { rule_version: activeRule?.version, items: computed.map(c => ({
-        name: c.template?.name_ar ?? c.it.custom_name ?? 'منتج حر',
-        material: c.material?.name_ar,
-        supplier_name: c.supplier?.name ?? null,
-        supplier_country: c.material?.country_of_origin ?? null,
-        breakdown: c.breakdown,
-      })) } as any,
-    }).select('id').single();
-    if (error || !quote) { setSaving(false); return toast.error(error?.message ?? "خطأ"); }
+    try {
+      const itemsToInsert = computed.map(c => ({
+        product_id: null,
+        product_name: c.template?.name_ar ?? (c.it.custom_name || t("configurator.freeProduct")),
+        material_id: c.material?.id ?? null,
+        material_name: c.material?.name_ar ?? null,
+        finish_id: c.finish?.id ?? null,
+        finish_name: c.finish?.name_ar ?? null,
+        dimension_value: c.it.dimension_value,
+        qty: c.it.qty,
+        accessories: c.accSelected.map(a => ({ id: a.id, name: a.name_ar, price: a.unit_price })),
+        unit_price: c.breakdown.unitPrice,
+        line_total: c.breakdown.lineTotal,
+        breakdown: c.breakdown as any,
+      }));
 
-    const itemsToInsert = computed.map(c => ({
-      quote_id: quote.id,
-      product_id: null,
-      product_name: c.template?.name_ar ?? (c.it.custom_name || 'منتج حر'),
-      material_id: c.material?.id ?? null,
-      material_name: c.material?.name_ar ?? null,
-      finish_id: c.finish?.id ?? null,
-      finish_name: c.finish?.name_ar ?? null,
-      dimension_value: c.it.dimension_value,
-      qty: c.it.qty,
-      accessories: c.accSelected.map(a => ({ id: a.id, name: a.name_ar, price: a.unit_price })),
-      unit_price: c.breakdown.unitPrice,
-      line_total: c.breakdown.lineTotal,
-      breakdown: c.breakdown as any,
-    }));
-    const { data: insertedItems } = await supabase.from('quote_items').insert(itemsToInsert as any).select('id');
-
-    if (insertedItems) {
-      const configs = insertedItems.map((qi, i) => ({
-        quote_item_id: qi.id,
-        template_id: computed[i].template?.id ?? null,
+      const configurations = computed.map(c => ({
+        template_id: c.template?.id ?? null,
         selections: {
-          supplier_id: computed[i].material?.supplier_id ?? null,
-          supplier_country: computed[i].material?.country_of_origin ?? null,
-          finish_id: computed[i].finish?.id, veneer_id: computed[i].veneer?.id,
-          accessories: computed[i].accSelected.map(a => a.id), overrides: computed[i].it.overrides,
+          supplier_id: c.material?.supplier_id ?? null,
+          supplier_country: c.material?.country_of_origin ?? null,
+          finish_id: c.finish?.id,
+          veneer_id: c.veneer?.id,
+          accessories: c.accSelected.map(a => a.id),
+          overrides: c.it.overrides,
         },
-        dimensions: { value: computed[i].it.dimension_value },
-        computed_breakdown: computed[i].breakdown as any,
+        dimensions: { value: c.it.dimension_value },
+        computed_breakdown: c.breakdown as any,
         pricing_rule_version: activeRule?.version ?? 1,
       }));
-      await supabase.from('configurations').insert(configs as any);
-    }
 
-    setSaving(false);
-    toast.success(status === 'draft' ? "تم الحفظ كمسودة" : "تم إرسال العرض");
-    nav({ to: '/admin/quotes/$id', params: { id: quote.id } });
+      const { quoteId } = await createQuoteFn({
+        data: {
+          customer_id: customerId,
+          status,
+          quote_number: plcId,
+          subtotal: totals.subtotal,
+          discount_amount: 0,
+          vat_pct: 14,
+          vat_amount: totals.vatAmount,
+          total: totals.total,
+          notes: notes || null,
+          snapshot: { rule_version: activeRule?.version, items: computed.map(c => ({
+            name: c.template?.name_ar ?? c.it.custom_name ?? t("configurator.freeProduct"),
+            material: c.material?.name_ar,
+            supplier_name: c.supplier?.name ?? null,
+            supplier_country: c.material?.country_of_origin ?? null,
+            breakdown: c.breakdown,
+          })) },
+          items: itemsToInsert,
+          configurations,
+        },
+      });
+
+      setSaving(false);
+      toast.success(status === 'draft' ? t("quoteBuilder.saved") : t("quoteBuilder.sent"));
+      nav({ to: '/admin/quotes/$id', params: { id: quoteId } });
+    } catch (e: any) {
+      setSaving(false);
+      toast.error(e?.message ?? t("errors.somethingWrong"));
+    }
   }
 
   if (loading) {
@@ -242,19 +250,19 @@ function ConfiguratorBuilder() {
         <div>
           <h1 className="font-serif text-3xl font-bold flex items-center gap-2"><Sparkles className="h-6 w-6 text-primary" /> {t("admin.nav.configurator")}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            ابني العرض من الصفر — المعرف الموحد: <span className="font-mono font-bold text-primary">{plcId}</span>
+            {t("configurator.subtitle", { id: "—" })}
           </p>
         </div>
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">العميل</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-lg">{t("quotes.customer")}</CardTitle></CardHeader>
         <CardContent>
-          <Label>اختر العميل</Label>
+          <Label>{t("configurator.materialSelect")}</Label>
           <Select value={customerId || (customers.length ? "" : "none")} onValueChange={v => v !== "none" && setCustomerId(v)}>
             <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
             <SelectContent>
-              {customers.length === 0 && <SelectItem value="none" disabled>لا يوجد عملاء بعد</SelectItem>}
+              {customers.length === 0 && <SelectItem value="none" disabled>{t("common.noData")}</SelectItem>}
               {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name} • {c.phone}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -263,8 +271,8 @@ function ConfiguratorBuilder() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">بنود العرض</CardTitle>
-          <Button size="sm" variant="outline" onClick={addItem} className="gap-1"><Plus className="h-4 w-4" /> إضافة بند</Button>
+          <CardTitle className="text-lg">{t("quotes.items")}</CardTitle>
+          <Button size="sm" variant="outline" onClick={addItem} className="gap-1"><Plus className="h-4 w-4" /> {t("quoteBuilder.addItem")}</Button>
         </CardHeader>
         <CardContent className="space-y-4">
           {computed.map((ci, idx) => {
@@ -272,38 +280,38 @@ function ConfiguratorBuilder() {
             return (
               <div key={idx} className="border rounded-lg p-4 space-y-3 bg-muted/30">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">بند #{idx + 1}</div>
+                  <div className="font-medium text-sm">{t("quoteBuilder.itemNumber", { n: idx + 1 })}</div>
                   {items.length > 1 && <Button size="icon" variant="ghost" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
-                    <Label>قالب جاهز (اختياري)</Label>
+                    <Label>{t("configurator.template")}</Label>
                     <Select value={it.template_id ?? (templates.length ? "" : "none")} onValueChange={v => v !== "none" && updateItem(idx, { template_id: v || null })}>
-                      <SelectTrigger><SelectValue placeholder="منتج حر" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder={t("configurator.freeProduct")} /></SelectTrigger>
                       <SelectContent>
-                        {templates.length === 0 && <SelectItem value="none" disabled>لا توجد قوالب بعد</SelectItem>}
+                        {templates.length === 0 && <SelectItem value="none" disabled>{t("common.noData")}</SelectItem>}
                         {templates.map(t => <SelectItem key={t.id} value={t.id}>{t.name_ar}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>اسم البند (للمنتج الحر)</Label>
-                    <Input value={it.custom_name} onChange={e => updateItem(idx, { custom_name: e.target.value })} placeholder="مثلاً: دريسنج فاخر" />
+                    <Label>{t("configurator.customName")}</Label>
+                    <Input value={it.custom_name} onChange={e => updateItem(idx, { custom_name: e.target.value })} placeholder={t("configurator.customName")} />
                   </div>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-3">
                   <div>
-                    <Label>الخامة</Label>
+                    <Label>{t("quoteBuilder.material")}</Label>
                     <Select value={it.material_id ?? (materials.length ? "" : "none")} onValueChange={v => v !== "none" && updateItem(idx, { material_id: v, variant_id: null })}>
                       <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
                       <SelectContent>
-                        {materials.length === 0 && <SelectItem value="none" disabled>لا توجد خامات بعد</SelectItem>}
+                        {materials.length === 0 && <SelectItem value="none" disabled>{t("common.noData")}</SelectItem>}
                         {materials.map(m => (
                           <SelectItem key={m.id} value={m.id}>
                             {m.name_ar} • {formatEGP(Number(m.price_per_unit))}/{m.unit}
-                            {(wastageMap[m.id] != null || m.wastage_pct) && ` • هدر: ${wastageMap[m.id] ?? m.wastage_pct}%`}
+                            {(wastageMap[m.id] != null || m.wastage_pct) && ` • ${t("configurator.wastage")}: ${wastageMap[m.id] ?? m.wastage_pct}%`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -312,45 +320,45 @@ function ConfiguratorBuilder() {
                       <div className="mt-1 text-[11px] text-muted-foreground">
                         {ci.supplier?.name ?? '—'} • {ci.material.country_of_origin ?? '—'}
                         {(wastageMap[ci.material.id] != null || ci.material.wastage_pct) && (
-                          <span className="text-gold mr-2">هدر: {wastageMap[ci.material.id] ?? ci.material.wastage_pct}%</span>
+                          <span className="text-gold mr-2">{t("configurator.wastage")}: {wastageMap[ci.material.id] ?? ci.material.wastage_pct}%</span>
                         )}
                       </div>
                     )}
                   </div>
                   <div>
-                    <Label>التشطيب</Label>
+                    <Label>{t("quoteBuilder.finish")}</Label>
                     <Select value={it.finish_id ?? (finishes.length ? "" : "none")} onValueChange={v => v !== "none" && updateItem(idx, { finish_id: v })}>
                       <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
                       <SelectContent>
-                        {finishes.length === 0 && <SelectItem value="none" disabled>لا توجد تشطيبات بعد</SelectItem>}
+                        {finishes.length === 0 && <SelectItem value="none" disabled>{t("common.noData")}</SelectItem>}
                         {finishes.map(f => <SelectItem key={f.id} value={f.id}>{f.name_ar}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>القشرة (Veneer)</Label>
+                    <Label>{t("configurator.veneer")}</Label>
                     <Select value={it.veneer_id ?? (veneers.length ? "" : "none")} onValueChange={v => v !== "none" && updateItem(idx, { veneer_id: v })}>
                       <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent>
-                        {veneers.length === 0 && <SelectItem value="none" disabled>لا توجد قشرة بعد</SelectItem>}
+                        {veneers.length === 0 && <SelectItem value="none" disabled>{t("common.noData")}</SelectItem>}
                         {veneers.map(v => <SelectItem key={v.id} value={v.id}>{v.name_ar} • {formatEGP(Number(v.price_per_m2))}/م²</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label>القياس (م² / متر)</Label>
+                    <Label>{t("quoteBuilder.dimension")}</Label>
                     <Input type="number" step="0.01" value={it.dimension_value} onChange={e => updateItem(idx, { dimension_value: Number(e.target.value) })} />
                   </div>
                   <div>
-                    <Label>العدد</Label>
+                    <Label>{t("quoteBuilder.qty")}</Label>
                     <Input type="number" min={1} value={it.qty} onChange={e => updateItem(idx, { qty: Number(e.target.value) })} />
                   </div>
                 </div>
 
                 <div>
-                  <Label>الإكسسوارات</Label>
+                  <Label>{t("quoteBuilder.accessories")}</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {accessories.length === 0 && <span className="text-xs text-muted-foreground">لا توجد إكسسوارات بعد</span>}
+                    {accessories.length === 0 && <span className="text-xs text-muted-foreground">{t("common.noData")}</span>}
                     {accessories.map(a => {
                       const checked = it.accessories.includes(a.id);
                       return (
@@ -366,11 +374,11 @@ function ConfiguratorBuilder() {
                 </div>
 
                 <div>
-                  <Label>عوامل اختيارية</Label>
+                  <Label>{t("configurator.overrides")}</Label>
                   <div className="grid grid-cols-4 gap-2 mt-2">
                     <div>
                       <div className="text-xs text-muted-foreground mb-1">
-                        هدر % {ci.autoWastage != null && it.overrides.wastage == null && <span className="text-gold">(تلقائي: {ci.autoWastage}%)</span>}
+                        {t("configurator.wastage")} {ci.autoWastage != null && it.overrides.wastage == null && <span className="text-gold">({"("}{ci.autoWastage}%)</span>}
                       </div>
                       <Input type="number" placeholder={ci.autoWastage != null ? String(ci.autoWastage) : '0'}
                         value={it.overrides.wastage ?? ''}
@@ -379,7 +387,7 @@ function ConfiguratorBuilder() {
                     {(['luxury', 'complexity', 'rush'] as const).map(k => (
                       <div key={k}>
                         <div className="text-xs text-muted-foreground mb-1">
-                          {k === 'luxury' ? 'فخامة %' : k === 'complexity' ? 'تعقيد %' : 'استعجال %'}
+                          {t(`configurator.${k}`)}
                         </div>
                         <Input type="number" value={it.overrides[k] ?? 0} onChange={e => updateItem(idx, { overrides: { ...it.overrides, [k]: Number(e.target.value) } })} />
                       </div>
@@ -392,8 +400,8 @@ function ConfiguratorBuilder() {
                     <div key={i} className="flex justify-between text-muted-foreground"><span>{l.label}</span><span>{formatEGP(l.amount)}</span></div>
                   ))}
                   <Separator />
-                  <div className="flex justify-between"><span>سعر الوحدة</span><span>{formatEGP(ci.breakdown.unitPrice)}</span></div>
-                  <div className="flex justify-between font-bold text-primary"><span>إجمالي البند</span><span>{formatEGP(ci.breakdown.lineTotal)}</span></div>
+                  <div className="flex justify-between"><span>{t("quoteBuilder.unitPrice")}</span><span>{formatEGP(ci.breakdown.unitPrice)}</span></div>
+                  <div className="flex justify-between font-bold text-primary"><span>{t("quoteBuilder.lineTotal")}</span><span>{formatEGP(ci.breakdown.lineTotal)}</span></div>
                 </div>
               </div>
             );
@@ -402,19 +410,19 @@ function ConfiguratorBuilder() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-lg">الإجمالي</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-lg">{t("quotes.grandTotal")}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div><Label>ملاحظات</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} /></div>
+          <div><Label>{t("quotes.notes")}</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} /></div>
           <Separator />
           <div className="space-y-1 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">المجموع الفرعي</span><span>{formatEGP(totals.subtotal)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">ضريبة القيمة المضافة (14%)</span><span>{formatEGP(totals.vatAmount)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">{t("quotes.subtotal")}</span><span>{formatEGP(totals.subtotal)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">{t("quotes.vat")}</span><span>{formatEGP(totals.vatAmount)}</span></div>
             <Separator />
-            <div className="flex justify-between font-serif text-2xl font-bold text-primary"><span>الإجمالي</span><span>{formatEGP(totals.total)}</span></div>
+            <div className="flex justify-between font-serif text-2xl font-bold text-primary"><span>{t("quotes.grandTotal")}</span><span>{formatEGP(totals.total)}</span></div>
           </div>
           <div className="flex gap-2 pt-3">
-            <Button variant="outline" disabled={saving} onClick={() => saveQuote('draft')}>حفظ كمسودة</Button>
-            <Button disabled={saving} onClick={() => saveQuote('sent')}>إرسال العرض</Button>
+            <Button variant="outline" disabled={saving} onClick={() => saveQuote('draft')}>{t("configurator.saveAsDraft")}</Button>
+            <Button disabled={saving} onClick={() => saveQuote('sent')}>{t("configurator.sendQuote")}</Button>
           </div>
         </CardContent>
       </Card>

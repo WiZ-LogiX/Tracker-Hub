@@ -4,7 +4,6 @@ import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { Database } from "@/integrations/supabase/types";
 
 /**
  * Sprint 0.3: signed-URL endpoint for the photo grid.
@@ -66,7 +65,7 @@ async function resolveTenant(): Promise<string | null> {
   const token = auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
   if (!token) return null;
 
-  const supabaseAdmin = createClient<Database>(
+  const supabaseAdmin = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { storage: undefined, persistSession: false, autoRefreshToken: false } },
@@ -82,7 +81,7 @@ async function resolveTenant(): Promise<string | null> {
     .limit(1)
     .maybeSingle();
 
-  return member?.tenant_id ?? null;
+  return typeof member?.tenant_id === "string" ? member.tenant_id : null;
 }
 
 export const getR2ViewUrls = createServerFn({ method: "POST" })

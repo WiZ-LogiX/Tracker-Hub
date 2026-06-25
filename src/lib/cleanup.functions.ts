@@ -38,7 +38,6 @@ export async function cleanupAllData(): Promise<{
     "accessories",
     "audit_log",
     "categories",
-    "configurations",
     "quote_items",
     "product_templates",
     "products",

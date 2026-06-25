@@ -17,22 +17,25 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { Database } from "@/integrations/supabase/types";
 
-const EntityTypeSchema = z.enum([
-  "production-photos",
-  "avatars",
-  "attachments",
-  "logos",
-]);
+const EntityTypeSchema = z.enum(["production-photos", "avatars", "attachments", "logos"]);
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 const UploadUrlInput = z.object({
   filename: z.string().min(1).max(255),
   contentType: z.string().min(1).max(128),
   entityType: EntityTypeSchema,
-  entityId: z.string().uuid(),
+  entityId: z.string().min(1).max(255),
 });
 
 const BatchUploadInput = z.object({
@@ -46,7 +49,7 @@ const BatchUploadInput = z.object({
     .min(1)
     .max(20),
   entityType: EntityTypeSchema,
-  entityId: z.string().uuid(),
+  entityId: z.string().min(1).max(255),
 });
 
 const DownloadUrlInput = z.object({ key: z.string().min(1).max(512) });
@@ -68,13 +71,15 @@ async function sessionFromRequest(): Promise<SessionInfo> {
 
   if (!token) {
     const cookieHeader = headers?.get("cookie") ?? headers?.get("Cookie") ?? "";
-    const m = cookieHeader.match(/(?:^|;\s*)(?:sb-access-token|supabase-auth-token|access_token)=([^;]+)/);
+    const m = cookieHeader.match(
+      /(?:^|;\s*)(?:sb-access-token|supabase-auth-token|access_token)=([^;]+)/,
+    );
     if (m) token = decodeURIComponent(m[1]);
   }
 
   if (!token) throw new Error("Unauthorized");
 
-  const supabaseAdmin = createClient<Database>(
+  const supabaseAdmin = createClient(
     process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
@@ -99,7 +104,7 @@ async function sessionFromRequest(): Promise<SessionInfo> {
   return {
     userId: data.user.id,
     email: data.user.email ?? null,
-    tenantId: member?.tenant_id ?? null,
+    tenantId: typeof member?.tenant_id === "string" ? member.tenant_id : null,
   };
 }
 
@@ -123,7 +128,7 @@ function requireEnvConfig(): void {
   if (missing.length) {
     throw new Error(
       `Missing required R2 env vars: ${missing.join(", ")}. ` +
-      `R2_PUBLIC_URL must point at the public bucket or custom CDN domain.`,
+        `R2_PUBLIC_URL must point at the public bucket or custom CDN domain.`,
     );
   }
 }
@@ -166,9 +171,7 @@ function generateObjectKey(
   originalFilename: string,
 ): string {
   const ext =
-    (originalFilename.split(".").pop() || "bin")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "") || "bin";
+    (originalFilename.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
   const hash = `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
   return `${tenantId}/${entityType}/${entityId}/${hash}.${ext}`;
 }
@@ -209,9 +212,10 @@ export const getR2BatchUploadUrls = createServerFn({ method: "POST" })
           );
           const uploadUrl = await signPutUrl(key, f.contentType);
           return { key, uploadUrl, publicUrl: getPublicUrl(key) };
-        } catch (e: any) {
-          console.error("[r2.functions] upload-url failed for", f.filename, e?.message);
-          throw new Error(`presign failed for ${f.filename}: ${e?.message ?? "unknown"}`);
+        } catch (e: unknown) {
+          const message = errorMessage(e);
+          console.error("[r2.functions] upload-url failed for", f.filename, message);
+          throw new Error(`presign failed for ${f.filename}: ${message}`);
         }
       }),
     );
@@ -246,8 +250,6 @@ export const deleteR2Object = createServerFn({ method: "POST" })
     }
     requireEnvConfig();
 
-    await getR2Client().send(
-      new DeleteObjectCommand({ Bucket: getBucketName(), Key: data.key }),
-    );
+    await getR2Client().send(new DeleteObjectCommand({ Bucket: getBucketName(), Key: data.key }));
     return { deleted: true };
   });
