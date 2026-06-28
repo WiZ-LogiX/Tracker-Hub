@@ -40,7 +40,7 @@ export function round2(n: number): number {
 
 export interface ComponentInput {
   id: string;
-  kind: "material" | "hardware" | "accessory" | "manufacturing";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
   catalogId: string | null;
   qty: number;
   unitOfMeasure: string;

@@ -57,8 +57,8 @@ describe("hierarchy.functions.ts", () => {
     expect(src).toContain("requireSupabaseAuth");
     expect(src).toContain("requireTenant");
 
-    // Must use supabaseAdmin for writes
-    expect(src).toContain("supabaseAdmin");
+    // Must use RLS-enforcing context.supabase for writes
+    expect(src).toContain("(context as any).supabase");
 
     // Must filter by tenant_id on all operations
     const tenantFilters = src.match(/\.eq\("tenant_id"/g);

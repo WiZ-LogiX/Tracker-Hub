@@ -20,6 +20,7 @@ import {
   type FinishCode,
   type UnitTypeSlug,
 } from "@/lib/import/rateCard";
+import { recordPriceChange } from "./priceHistory";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -431,15 +432,19 @@ async function commitWrites(
         .update({ price_per_unit: rec.price })
         .eq("id", existing.id)
         .eq("tenant_id", tenantId);
+      await recordPriceChange(client, tenantId, "material", existing.id, rec.price);
     } else {
-      await client.from("catalog_materials").insert({
+      const { data: inserted } = await client.from("catalog_materials").insert({
         tenant_id: tenantId,
         name: variantKey,
         type: "board",
         unit: "m²",
         price_per_unit: rec.price,
         active: true,
-      });
+      }).select("id").maybeSingle();
+      if (inserted) {
+        await recordPriceChange(client, tenantId, "material", inserted.id, rec.price);
+      }
     }
     pricesWritten++;
   }
@@ -466,6 +471,11 @@ async function commitWrites(
         .update({ [priceCol]: addon.price })
         .eq("id", existing.id)
         .eq("tenant_id", tenantId);
+      await recordPriceChange(
+        client, tenantId,
+        addon.category === "hardware" ? "hardware" : "accessory",
+        existing.id, addon.price,
+      );
     } else {
       const insert: Record<string, any> = {
         tenant_id: tenantId,
@@ -473,7 +483,14 @@ async function commitWrites(
         active: true,
       };
       insert[priceCol] = addon.price;
-      await client.from(table).insert(insert);
+      const { data: inserted } = await client.from(table).insert(insert).select("id").maybeSingle();
+      if (inserted) {
+        await recordPriceChange(
+          client, tenantId,
+          addon.category === "hardware" ? "hardware" : "accessory",
+          inserted.id, addon.price,
+        );
+      }
     }
     addonsWritten++;
   }

@@ -29,7 +29,6 @@ import {
 } from "@react-pdf/renderer";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { TenantContext } from "@/lib/tenant-context";
@@ -277,8 +276,8 @@ interface TenantInfo {
   primaryColor: string | null;
 }
 
-async function fetchTenantInfo(tenantId: string): Promise<TenantInfo> {
-  const { data: tenant } = await supabaseAdmin
+async function fetchTenantInfo(tenantId: string, client: any): Promise<TenantInfo> {
+  const { data: tenant } = await client
     .from("tenants")
     .select("name, logo_url, phone, email, address, tax_number, commercial_registry, primary_color")
     .eq("id", tenantId)
@@ -797,10 +796,11 @@ export const generatePdf = createServerFn({ method: "POST" })
   .inputValidator((d) => PdfInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    const client = (context as any).supabase;
     const start = Date.now();
 
     // Fetch tenant info (name, logo, tax details)
-    const tenantInfo = await fetchTenantInfo(ctx.tenantId);
+    const tenantInfo = await fetchTenantInfo(ctx.tenantId, client);
 
     // Fetch logo if available
     let logoDataUri: string | null = null;
@@ -810,7 +810,7 @@ export const generatePdf = createServerFn({ method: "POST" })
 
     if (data.entityType === "quote") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: quote, error } = await supabaseAdmin
+      const { data: quote, error } = await client
         .from("quotes")
         .select(
           `
@@ -842,7 +842,7 @@ export const generatePdf = createServerFn({ method: "POST" })
 
       if (!isDraft) {
         // Fetch latest snapshot for this quote + state
-        const { data: snapRow } = await supabaseAdmin
+        const { data: snapRow } = await client
           .from("quote_snapshots")
           .select("breakdown_json, tree_json")
           .eq("quotation_id", data.entityId)
@@ -907,7 +907,7 @@ export const generatePdf = createServerFn({ method: "POST" })
 
     // --- Invoice ---
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: inv, error } = await supabaseAdmin
+    const { data: inv, error } = await client
       .from("invoices")
       .select(
         `
@@ -923,7 +923,7 @@ export const generatePdf = createServerFn({ method: "POST" })
     }
 
     // Get quote items via the invoice's quote
-    const { data: quoteRow } = await supabaseAdmin
+    const { data: quoteRow } = await client
       .from("quotes")
       .select("id")
       .eq("invoice_id", data.entityId)
@@ -931,7 +931,7 @@ export const generatePdf = createServerFn({ method: "POST" })
 
     let quoteItems: InvoiceData["quote_items"] = [];
     if (quoteRow) {
-      const { data: items } = await supabaseAdmin
+      const { data: items } = await client
         .from("quote_items")
         .select(
           "product_name, material_name, finish_name, dimension_value, qty, unit_price, line_total, accessories",

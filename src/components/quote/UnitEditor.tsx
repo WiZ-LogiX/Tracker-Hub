@@ -28,10 +28,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { AlertTriangle, Check, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { AlertTriangle, Check, Plus, Trash2, ArrowUp, ArrowDown, Ruler } from "lucide-react";
 import { resolveBomFn, listUnitTypes } from "@/lib/unitTypes.functions";
 import { listFinishes } from "@/lib/catalog-v2.functions";
 import { formatEGP } from "@/lib/pricing";
+import { checkShelfSpan, getMaxSpanMm } from "@/lib/pricing/spanCheck";
 import type { ComponentDescriptor } from "@/lib/pricing/bom";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ export type WidthTier = "narrow" | "standard" | "wide" | "extra_wide";
 export interface UnitEditorComponent {
   /** Temporary id for tracking during autofill. */
   _bomId?: string;
-  kind: "material" | "hardware" | "accessory" | "manufacturing";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
   catalogId: string | null;
   qty: number;
   unitOfMeasure: string;
@@ -281,6 +282,15 @@ export function UnitEditor({
   }, [value, validate, errors]);
 
   const selectedUnitType = unitTypes.find((ut) => ut.id === value.unitTypeId);
+
+  // Shelf deflection check — only relevant when shelf component is present
+  const hasShelfComponent = value.components.some(
+    (c) => c.areaFunctionKey === "shelf" && c.qty > 0,
+  );
+  const spanMm = value.widthMm; // shelf span = unit width
+  const shelfCheck = hasShelfComponent
+    ? checkShelfSpan({ spanMm, widthMm: value.depthMm })
+    : null;
 
   return (
     <div className={`space-y-4 ${className ?? ""}`} data-testid="unit-editor">
@@ -538,7 +548,7 @@ export function UnitEditor({
             {/* Add blank component buttons */}
             {value.components.length > 0 && (
               <div className="flex flex-wrap gap-1 pt-1">
-                {(["material", "hardware", "accessory", "manufacturing"] as const).map(
+                {(["material", "hardware", "accessory", "manufacturing", "edge_band"] as const).map(
                   (kind) => (
                     <Button
                       key={kind}
@@ -555,6 +565,27 @@ export function UnitEditor({
             )}
           </div>
         </>
+      )}
+
+      {/* ── Shelf deflection warning ──────────────────────────────── */}
+      {shelfCheck && shelfCheck.severity !== "ok" && (
+        <div
+          className={`flex items-center gap-2 text-xs p-2 rounded ${
+            shelfCheck.severity === "fail"
+              ? "text-red-700 bg-red-50"
+              : "text-amber-700 bg-amber-50"
+          }`}
+        >
+          <Ruler className="h-3 w-3 shrink-0" />
+          <span>
+            {t(shelfCheck.messageKey, {
+              deflection: shelfCheck.deflectionMm,
+              max: shelfCheck.maxDeflectionMm,
+              span: spanMm,
+              maxSpan: getMaxSpanMm(),
+            })}
+          </span>
+        </div>
       )}
 
       {/* ── Missing BOM warning ──────────────────────────────────────── */}

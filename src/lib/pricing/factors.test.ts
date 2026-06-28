@@ -13,7 +13,7 @@ import {
 // ── FACTOR_ORDER invariance ─────────────────────────────────────────────────
 
 describe("FACTOR_ORDER", () => {
-  it("contains exactly the 7 required keys in locked order", () => {
+  it("contains exactly the 8 required keys in locked order", () => {
     expect(FACTOR_ORDER).toEqual([
       "subtotal",
       "labor",
@@ -22,6 +22,7 @@ describe("FACTOR_ORDER", () => {
       "rush",
       "margin",
       "luxury",
+      "packaging",
     ]);
   });
 
@@ -119,6 +120,7 @@ describe("applyUnitFactors", () => {
 
     // Lines should appear in FACTOR_ORDER, skipping "subtotal" (not in tenant)
     const lineKeys = result.lines.map((l) => l.factorKey);
+    // packaging is not in allFactors → skipped (0%), so 6 lines
     expect(lineKeys).toEqual(["labor", "overhead", "complexity", "rush", "margin", "luxury"]);
   });
 });

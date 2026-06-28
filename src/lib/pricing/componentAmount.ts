@@ -12,7 +12,7 @@ import { getArea } from "./areaFunctions";
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface ComponentLike {
-  kind: "material" | "hardware" | "accessory" | "manufacturing";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
   qty: number;
   unitOfMeasure: string;
   areaFunctionKey?: string | null;
@@ -198,6 +198,38 @@ function priceManufacturing(
   }
 }
 
+function priceEdgeBand(
+  comp: ComponentLike,
+  entity: CatalogEntityLike,
+  dims: { w: number; h: number; d: number },
+  wastageLookup: WastageLookup,
+): number {
+  const price = entity.pricePerUnit;
+
+  if (price == null || !Number.isFinite(price) || price < 0) {
+    throw new Error(
+      `Edge band catalog ${comp.areaFunctionKey ?? "entity"} is missing pricePerUnit (price per linear metre).`,
+    );
+  }
+
+  if (!comp.areaFunctionKey) {
+    throw new Error(
+      "Edge band component requires an areaFunctionKey to compute linear metres.",
+    );
+  }
+
+  // edge_band area function returns linear metres (perimeter)
+  const linearMetres = getArea(comp.areaFunctionKey, dims);
+  const raw = comp.qty * linearMetres * price;
+
+  // Resolve wastage
+  let wastagePct = entity.defaultWastagePct ?? 0;
+  const rule = wastageLookup("material", comp.areaFunctionKey);
+  if (rule) wastagePct = rule.pct;
+
+  return applyWastage(raw, wastagePct);
+}
+
 // ── Main entry point ───────────────────────────────────────────────────────
 
 /**
@@ -229,6 +261,8 @@ export function componentAmount(
       return priceAccessory(comp, entity);
     case "manufacturing":
       return priceManufacturing(comp, entity, dims);
+    case "edge_band":
+      return priceEdgeBand(comp, entity, dims, wastageLookup);
     default:
       throw new Error(`Unknown component kind: "${comp.kind}".`);
   }

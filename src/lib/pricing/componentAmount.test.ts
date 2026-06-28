@@ -403,7 +403,112 @@ describe("missing price → throws", () => {
   });
 });
 
-// ── 14. Edge cases ─────────────────────────────────────────────────────────
+// ── 14. Edge banding — linear metres pricing ────────────────────────────────
+
+describe("edge_band — linear metres pricing", () => {
+  it("perimeter × qty × price with no wastage", () => {
+    const comp: ComponentLike = {
+      kind: "edge_band",
+      qty: 1,
+      unitOfMeasure: "m",
+      areaFunctionKey: "edge_band",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m",
+      pricePerUnit: 25,
+      defaultWastagePct: 0,
+    };
+    // 600×720: perimeter = 2 × (0.6 + 0.72) = 2.64 m
+    const result = componentAmount(comp, entity, DIMS_600_720_600, NO_W);
+    expect(result).toBeCloseTo(66, 6); // 2.64 × 1 × 25
+  });
+
+  it("perimeter × qty × price with wastage", () => {
+    const comp: ComponentLike = {
+      kind: "edge_band",
+      qty: 1,
+      unitOfMeasure: "m",
+      areaFunctionKey: "edge_band",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m",
+      pricePerUnit: 25,
+      defaultWastagePct: 10,
+    };
+    const result = componentAmount(comp, entity, DIMS_600_720_600, NO_W);
+    expect(result).toBeCloseTo(72.6, 6); // 2.64 × 25 × 1.10
+  });
+
+  it("qty > 1 multiplies linear metres", () => {
+    const comp: ComponentLike = {
+      kind: "edge_band",
+      qty: 3,
+      unitOfMeasure: "m",
+      areaFunctionKey: "edge_band",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m",
+      pricePerUnit: 20,
+      defaultWastagePct: 0,
+    };
+    // 2.64 × 3 × 20 = 158.4
+    const result = componentAmount(comp, entity, DIMS_600_720_600, NO_W);
+    expect(result).toBeCloseTo(158.4, 6);
+  });
+
+  it("wastage lookup overrides catalog default", () => {
+    const comp: ComponentLike = {
+      kind: "edge_band",
+      qty: 1,
+      unitOfMeasure: "m",
+      areaFunctionKey: "edge_band",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m",
+      pricePerUnit: 25,
+      defaultWastagePct: 5,
+    };
+    const lookup: WastageLookup = () => ({ pct: 15 });
+    const result = componentAmount(comp, entity, DIMS_600_720_600, lookup);
+    // 2.64 × 25 = 66; × 1.15 = 75.9
+    expect(result).toBeCloseTo(75.9, 6);
+  });
+});
+
+// ── 15. Edge banding — error cases ──────────────────────────────────────────
+
+describe("edge_band — error cases", () => {
+  it("missing pricePerUnit throws", () => {
+    const comp: ComponentLike = {
+      kind: "edge_band",
+      qty: 1,
+      unitOfMeasure: "m",
+      areaFunctionKey: "edge_band",
+    };
+    const entity: CatalogEntityLike = { pricingUnit: "m", defaultWastagePct: 0 };
+    expect(() =>
+      componentAmount(comp, entity, DIMS_600_720_600, NO_W),
+    ).toThrow(/missing pricePerUnit/i);
+  });
+
+  it("missing areaFunctionKey throws", () => {
+    const comp: ComponentLike = {
+      kind: "edge_band",
+      qty: 1,
+      unitOfMeasure: "m",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m",
+      pricePerUnit: 25,
+      defaultWastagePct: 0,
+    };
+    expect(() =>
+      componentAmount(comp, entity, DIMS_600_720_600, NO_W),
+    ).toThrow(/requires an areaFunctionKey/i);
+  });
+});
+
+// ── 18. Edge cases ─────────────────────────────────────────────────────────
 
 describe("edge cases", () => {
   it("qty = 0 returns 0", () => {
@@ -453,16 +558,19 @@ describe("edge cases", () => {
   });
 });
 
-// ── 15. Full integration: base cabinet components ──────────────────────────
+// ── 17. Full integration: base cabinet components ──────────────────────────
 
-describe("full integration: base cabinet 600×720×600", () => {
-  it("prices all 6 panels with area functions", () => {
-    const entity = mat({ pricingUnit: "m2", pricePerUnit: 150, defaultWastagePct: 5 });
+describe("full integration: base cabinet 600×720×600 with edge banding", () => {
+  it("prices all panels + edge banding", () => {
+    const matEntity = mat({ pricingUnit: "m2", pricePerUnit: 150, defaultWastagePct: 5 });
+    const edgeEntity: CatalogEntityLike = {
+      pricingUnit: "m",
+      pricePerUnit: 25,
+      defaultWastagePct: 0,
+    };
 
-    const components: Array<{
-      areaFn: string;
-      expectedArea: number;
-    }> = [
+    // Panel components (m2)
+    const panels: Array<{ areaFn: string; expectedArea: number }> = [
       { areaFn: "cabinet_side", expectedArea: 0.432 },
       { areaFn: "cabinet_side", expectedArea: 0.432 },
       { areaFn: "cabinet_top", expectedArea: 0.36 },
@@ -472,18 +580,30 @@ describe("full integration: base cabinet 600×720×600", () => {
     ];
 
     let totalArea = 0;
-    for (const { areaFn, expectedArea } of components) {
+    for (const { areaFn, expectedArea } of panels) {
       const comp: ComponentLike = {
         kind: "material",
         qty: 1,
         unitOfMeasure: "m2",
         areaFunctionKey: areaFn,
       };
-      const amount = componentAmount(comp, entity, DIMS_600_720_600, NO_W);
+      const amount = componentAmount(comp, matEntity, DIMS_600_720_600, NO_W);
       expect(amount).toBeCloseTo(expectedArea * 150 * 1.05, 2);
       totalArea += expectedArea;
     }
-
     expect(totalArea).toBeCloseTo(2.376, 6);
+
+    // Edge banding: perimeter of the cabinet panel = 2 × (0.6 + 0.72) = 2.64 m
+    // In practice, the BOM would define edge banding per component (sides, top, shelf)
+    // with qty representing the linear metres of that specific edge.
+    // Here we test one full perimeter as a single edge_band component.
+    const edgeComp: ComponentLike = {
+      kind: "edge_band",
+      qty: 1,
+      unitOfMeasure: "m",
+      areaFunctionKey: "edge_band",
+    };
+    const edgeAmount = componentAmount(edgeComp, edgeEntity, DIMS_600_720_600, NO_W);
+    expect(edgeAmount).toBeCloseTo(66, 2); // 2.64 × 1 × 25
   });
 });

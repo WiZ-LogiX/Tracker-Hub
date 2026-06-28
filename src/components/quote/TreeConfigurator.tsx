@@ -72,7 +72,7 @@ import type { BreakdownTree } from "@/components/quote/BreakdownPanel";
 interface ComponentNode {
   id: string;
   unit_id: string;
-  kind: "material" | "hardware" | "accessory" | "manufacturing";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
   catalog_id: string | null;
   qty: number;
   unit_of_measure: string;

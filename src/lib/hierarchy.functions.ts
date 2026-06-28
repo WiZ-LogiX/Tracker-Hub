@@ -2,14 +2,13 @@
  * Hierarchy CRUD server functions — tenant-scoped.
  *
  * Handles the Quotation → Product → Section → Unit → Component tree.
- * Uses supabaseAdmin (service-role) gated by auth + tenant middleware.
+ * Uses context.supabase (RLS-enforcing client) for all reads/writes.
  * FK cascade handles parent deletes (DB level).
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { TenantContext } from "@/lib/tenant-context";
 
 // ── Input schemas ──────────────────────────────────────────────────────────
@@ -104,23 +103,23 @@ export const loadHierarchy = createServerFn({ method: "POST" })
 
     // Load all 4 levels in parallel
     const [productsRes, sectionsRes, unitsRes, componentsRes] = await Promise.all([
-      supabaseAdmin
+      (context as any).supabase
         .from("quotation_products")
         .select("id, quotation_id, product_type_code, label, position")
         .eq("quotation_id", qid)
         .eq("tenant_id", tid)
         .order("position"),
-      supabaseAdmin
+      (context as any).supabase
         .from("sections")
         .select("id, quotation_product_id, label, position")
         .eq("tenant_id", tid)
         .order("position"),
-      supabaseAdmin
+      (context as any).supabase
         .from("units")
         .select("id, section_id, unit_type_id, width_mm, height_mm, depth_mm, qty, finish_id, width_tier, override_factor_keys, position")
         .eq("tenant_id", tid)
         .order("position"),
-      supabaseAdmin
+      (context as any).supabase
         .from("components")
         .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, position")
         .eq("tenant_id", tid)
@@ -155,18 +154,19 @@ export const loadHierarchy = createServerFn({ method: "POST" })
     }
 
     // Assemble tree
-    const tree = (productsRes.data ?? []).map((p) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tree = (productsRes.data ?? []).map((p: any) => ({
       ...p,
       sections: (sectionsByProduct.get(p.id) ?? [])
-        .sort((a, b) => a.position - b.position)
-        .map((s) => ({
+        .sort((a: any, b: any) => a.position - b.position)
+        .map((s: any) => ({
           ...s,
           units: (unitsBySection.get(s.id) ?? [])
-            .sort((a, b) => a.position - b.position)
-            .map((u) => ({
+            .sort((a: any, b: any) => a.position - b.position)
+            .map((u: any) => ({
               ...u,
               components: (componentsByUnit.get(u.id) ?? [])
-                .sort((a, b) => a.position - b.position),
+                .sort((a: any, b: any) => a.position - b.position),
             })),
         })),
     }));
@@ -181,7 +181,7 @@ export const addProduct = createServerFn({ method: "POST" })
   .inputValidator((d) => productInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("quotation_products")
       .insert({
         quotation_id: data.quotationId,
@@ -208,7 +208,7 @@ export const updateProduct = createServerFn({ method: "POST" })
     if (patch.position !== undefined) updates.position = patch.position;
     if (patch.productTypeCode !== undefined) updates.product_type_code = patch.productTypeCode;
 
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("quotation_products")
       .update(updates)
       .eq("id", id)
@@ -223,7 +223,7 @@ export const deleteProduct = createServerFn({ method: "POST" })
   .inputValidator((d) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("quotation_products")
       .delete()
       .eq("id", data.id)
@@ -240,7 +240,7 @@ export const reorderProducts = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     // Update each product's position in order
     const updates = data.ids.map((id, i) =>
-      supabaseAdmin
+      (context as any).supabase
         .from("quotation_products")
         .update({ position: i, updated_at: new Date().toISOString() })
         .eq("id", id)
@@ -259,7 +259,7 @@ export const addSection = createServerFn({ method: "POST" })
   .inputValidator((d) => sectionInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("sections")
       .insert({
         quotation_product_id: data.quotationProductId,
@@ -284,7 +284,7 @@ export const updateSection = createServerFn({ method: "POST" })
     if (patch.label !== undefined) updates.label = patch.label;
     if (patch.position !== undefined) updates.position = patch.position;
 
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("sections")
       .update(updates)
       .eq("id", id)
@@ -299,7 +299,7 @@ export const deleteSection = createServerFn({ method: "POST" })
   .inputValidator((d) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("sections")
       .delete()
       .eq("id", data.id)
@@ -315,7 +315,7 @@ export const reorderSections = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     const updates = data.ids.map((id, i) =>
-      supabaseAdmin
+      (context as any).supabase
         .from("sections")
         .update({ position: i, updated_at: new Date().toISOString() })
         .eq("id", id)
@@ -334,7 +334,7 @@ export const addUnit = createServerFn({ method: "POST" })
   .inputValidator((d) => unitInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("units")
       .insert({
         section_id: data.sectionId,
@@ -373,7 +373,7 @@ export const updateUnit = createServerFn({ method: "POST" })
     if (patch.position !== undefined) updates.position = patch.position;
     if (patch.overrideFactorKeys !== undefined) updates.override_factor_keys = patch.overrideFactorKeys;
 
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("units")
       .update(updates)
       .eq("id", id)
@@ -388,7 +388,7 @@ export const deleteUnit = createServerFn({ method: "POST" })
   .inputValidator((d) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("units")
       .delete()
       .eq("id", data.id)
@@ -404,7 +404,7 @@ export const reorderUnits = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     const updates = data.ids.map((id, i) =>
-      supabaseAdmin
+      (context as any).supabase
         .from("units")
         .update({ position: i, updated_at: new Date().toISOString() })
         .eq("id", id)
@@ -423,7 +423,7 @@ export const addComponent = createServerFn({ method: "POST" })
   .inputValidator((d) => componentInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("components")
       .insert({
         unit_id: data.unitId,
@@ -454,7 +454,7 @@ export const updateComponent = createServerFn({ method: "POST" })
     if (patch.unitOfMeasure !== undefined) updates.unit_of_measure = patch.unitOfMeasure;
     if (patch.position !== undefined) updates.position = patch.position;
 
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("components")
       .update(updates)
       .eq("id", id)
@@ -469,7 +469,7 @@ export const deleteComponent = createServerFn({ method: "POST" })
   .inputValidator((d) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("components")
       .delete()
       .eq("id", data.id)
@@ -485,7 +485,7 @@ export const reorderComponents = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     const updates = data.ids.map((id, i) =>
-      supabaseAdmin
+      (context as any).supabase
         .from("components")
         .update({ position: i, updated_at: new Date().toISOString() })
         .eq("id", id)

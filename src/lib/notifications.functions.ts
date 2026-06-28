@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { TenantContext } from "@/lib/tenant-context";
 import { log } from "@/lib/log";
 import { deliverToN8n, type NotifyPayload } from "@/lib/whatsapp-share.functions";
@@ -44,9 +43,9 @@ export const sendTestNotification = createServerFn({ method: "POST" })
     return deliverToN8n(ctx, payload);
   });
 
-async function loadEntity(entityType: string, entityId: string, tenantId: string) {
+async function loadEntity(entityType: string, entityId: string, tenantId: string, client: any) {
   if (entityType === "quote") {
-    const { data } = await supabaseAdmin
+    const { data } = await client
       .from("quotes")
       .select("id, quote_number, total, customer_id, customers(name, phone, email), tenant_id")
       .eq("id", entityId)
@@ -59,7 +58,7 @@ async function loadEntity(entityType: string, entityId: string, tenantId: string
     };
   }
   if (entityType === "order") {
-    const { data } = await supabaseAdmin
+    const { data } = await client
       .from("orders")
       .select(
         "id, order_number, current_stage, expected_delivery, customer_id, customers(name, phone, email), tenant_id",
@@ -79,7 +78,7 @@ async function loadEntity(entityType: string, entityId: string, tenantId: string
     };
   }
   if (entityType === "invoice") {
-    const { data } = await supabaseAdmin
+    const { data } = await client
       .from("invoices")
       .select("id, invoice_number, total, customer_id, customers(name, phone, email), tenant_id")
       .eq("id", entityId)
@@ -103,7 +102,8 @@ export const sendNotification = createServerFn({ method: "POST" })
       throw new Error("Forbidden: insufficient role");
     }
 
-    const entity = await loadEntity(data.entityType, data.entityId, ctx.tenantId);
+    const client = (context as any).supabase;
+    const entity = await loadEntity(data.entityType, data.entityId, ctx.tenantId, client);
     if (!entity || !entity.customer) {
       return { status: "skipped", reason: "entity_or_customer_missing" };
     }
@@ -111,7 +111,7 @@ export const sendNotification = createServerFn({ method: "POST" })
     const channel = "whatsapp";
 
     // Load template (fallback to en)
-    let { data: tpl } = await supabaseAdmin
+    let { data: tpl } = await client
       .from("notification_templates")
       .select("subject, body")
       .eq("event", data.event)
@@ -121,7 +121,7 @@ export const sendNotification = createServerFn({ method: "POST" })
       .eq("active", true)
       .maybeSingle();
     if (!tpl) {
-      const { data: fallback } = await supabaseAdmin
+      const { data: fallback } = await client
         .from("notification_templates")
         .select("subject, body")
         .eq("event", data.event)
@@ -180,7 +180,7 @@ export const replayFromDLQ = createServerFn({ method: "POST" })
     }
 
     // Fetch DLQ entry
-    const { data: dlqEntry, error } = await supabaseAdmin
+    const { data: dlqEntry, error } = await (context as any).supabase
       .from("notification_dlq")
       .select("*")
       .eq("id", data.dlqId)
@@ -202,7 +202,7 @@ export const replayFromDLQ = createServerFn({ method: "POST" })
 
     // On success, mark as replayed
     if (result.status === "sent") {
-      await supabaseAdmin
+      await (context as any).supabase
         .from("notification_dlq")
         .update({ replayedAt: new Date().toISOString() })
         .eq("id", data.dlqId);
@@ -265,7 +265,7 @@ export const listNotificationTemplates = createServerFn({ method: "POST" })
       throw new Error("Forbidden: insufficient role");
     }
 
-    let q = supabaseAdmin
+    let q = (context as any).supabase
       .from("notification_templates")
       .select("id, event, channel, language, subject, body, active, tenant_id, created_at")
       .eq("tenant_id", ctx.tenantId)
@@ -328,7 +328,7 @@ export const upsertNotificationTemplate = createServerFn({ method: "POST" })
     let error: any = null;
 
     if (data.id) {
-      const r = await supabaseAdmin
+      const r = await (context as any).supabase
         .from("notification_templates")
         .update(payload)
         .eq("id", data.id)
@@ -338,7 +338,7 @@ export const upsertNotificationTemplate = createServerFn({ method: "POST" })
       row = r.data;
       error = r.error;
     } else {
-      const r = await supabaseAdmin
+      const r = await (context as any).supabase
         .from("notification_templates")
         .insert(payload)
         .select("*")
@@ -378,7 +378,7 @@ export const deleteNotificationTemplate = createServerFn({ method: "POST" })
     if (!["owner", "admin"].includes(ctx.role)) {
       throw new Error("Forbidden: insufficient role");
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("notification_templates")
       .select("id, tenant_id")
       .eq("id", data.id)
@@ -387,7 +387,7 @@ export const deleteNotificationTemplate = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Template not found");
 
-    const { error: delErr } = await supabaseAdmin
+    const { error: delErr } = await (context as any).supabase
       .from("notification_templates")
       .delete()
       .eq("id", data.id)
@@ -422,7 +422,7 @@ export const previewNotificationTemplate = createServerFn({ method: "POST" })
       throw new Error("Forbidden: insufficient role");
     }
 
-    let { data: tpl } = await supabaseAdmin
+    let { data: tpl } = await (context as any).supabase
       .from("notification_templates")
       .select("subject, body")
       .eq("event", data.event)
@@ -432,7 +432,7 @@ export const previewNotificationTemplate = createServerFn({ method: "POST" })
       .eq("active", true)
       .maybeSingle();
     if (!tpl) {
-      const { data: fallback } = await supabaseAdmin
+      const { data: fallback } = await (context as any).supabase
         .from("notification_templates")
         .select("subject, body")
         .eq("event", data.event)

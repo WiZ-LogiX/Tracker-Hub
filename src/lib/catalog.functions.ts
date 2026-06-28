@@ -2,22 +2,18 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { setTenantGuc } from "@/lib/tenant";
 import type { TenantContext } from "@/lib/tenant-context";
 
 /**
- * Catalog CRUD — tenant-scoped via requireTenant middleware + explicit
- * .eq('tenant_id') filters on every query.
+ * Catalog CRUD — tenant-scoped via requireTenant middleware + RLS-enforcing
+ * context.supabase client. App-layer .eq('tenant_id') filter is the
+ * primary tenant isolation guard; RLS provides defense-in-depth.
  *
  * Every handler:
  *   1. Extracts ctx from context.tenantContext
  *   2. Calls setTenantGuc(ctx.tenantId) for RLS GUC setup
  *   3. Filters all queries by tenant_id
- *
- * supabaseAdmin is used because RLS policies on catalog tables are
- * restrictive for admin roles through PostgREST. The app-layer
- * .eq('tenant_id') filter is the primary tenant isolation guard.
  */
 
 const MaterialRow = z.object({
@@ -115,7 +111,7 @@ export const listMaterials = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("materials")
       .select(
         "id, name_ar, name_en, type, unit, price_per_unit, wastage_pct, supplier_id, country_of_origin, active, created_at, tenant_id",
@@ -133,7 +129,7 @@ export const upsertMaterial = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("materials")
         .update(data)
         .eq("id", data.id)
@@ -141,7 +137,7 @@ export const upsertMaterial = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("materials")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -156,7 +152,7 @@ export const deleteMaterial = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("materials")
       .delete()
       .eq("id", data.id)
@@ -172,7 +168,7 @@ export const listSuppliers = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("suppliers")
       .select("id, name, country, notes, active")
       .eq("tenant_id", ctx.tenantId)
@@ -188,7 +184,7 @@ export const upsertSupplier = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("suppliers")
         .update(data)
         .eq("id", data.id)
@@ -196,7 +192,7 @@ export const upsertSupplier = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("suppliers")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -211,7 +207,7 @@ export const deleteSupplier = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("suppliers")
       .delete()
       .eq("id", data.id)
@@ -227,7 +223,7 @@ export const listFinishes = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("finishes")
       .select(
         "id, name_ar, name_en, price_modifier_pct, price_modifier_fixed, active",
@@ -245,7 +241,7 @@ export const upsertFinish = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("finishes")
         .update(data)
         .eq("id", data.id)
@@ -253,7 +249,7 @@ export const upsertFinish = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("finishes")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -268,7 +264,7 @@ export const deleteFinish = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("finishes")
       .delete()
       .eq("id", data.id)
@@ -284,7 +280,7 @@ export const listVeneers = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("veneers")
       .select("id, name_ar, name_en, price_per_m2")
       .eq("tenant_id", ctx.tenantId)
@@ -300,7 +296,7 @@ export const upsertVeneer = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("veneers")
         .update(data)
         .eq("id", data.id)
@@ -308,7 +304,7 @@ export const upsertVeneer = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("veneers")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -323,7 +319,7 @@ export const deleteVeneer = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("veneers")
       .delete()
       .eq("id", data.id)
@@ -339,7 +335,7 @@ export const listAccessories = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("accessories")
       .select("id, name_ar, name_en, unit_price, active")
       .eq("tenant_id", ctx.tenantId)
@@ -355,7 +351,7 @@ export const upsertAccessory = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("accessories")
         .update(data)
         .eq("id", data.id)
@@ -363,7 +359,7 @@ export const upsertAccessory = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("accessories")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -378,7 +374,7 @@ export const deleteAccessory = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("accessories")
       .delete()
       .eq("id", data.id)
@@ -394,7 +390,7 @@ export const listDiscounts = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("discounts")
       .select(
         "id, code, type, value, max_value, valid_from, valid_to, usage_count, max_uses, active, created_at",
@@ -412,7 +408,7 @@ export const upsertDiscount = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("discounts")
         .update(data)
         .eq("id", data.id)
@@ -420,7 +416,7 @@ export const upsertDiscount = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("discounts")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -435,7 +431,7 @@ export const deleteDiscount = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("discounts")
       .delete()
       .eq("id", data.id)
@@ -451,7 +447,7 @@ export const listWorkers = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("workers")
       .select("id, name, role, phone, active, created_at")
       .eq("tenant_id", ctx.tenantId)
@@ -467,7 +463,7 @@ export const upsertWorker = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("workers")
         .update(data)
         .eq("id", data.id)
@@ -475,7 +471,7 @@ export const upsertWorker = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("workers")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -490,7 +486,7 @@ export const deleteWorker = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("workers")
       .delete()
       .eq("id", data.id)
@@ -506,7 +502,7 @@ export const listWastageRules = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("wastage_rules")
       .select(
         "id, material_id, material_type, min_dimension, max_dimension, wastage_pct, active",
@@ -524,7 +520,7 @@ export const upsertWastageRule = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("wastage_rules")
         .update(data)
         .eq("id", data.id)
@@ -532,7 +528,7 @@ export const upsertWastageRule = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("wastage_rules")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -547,7 +543,7 @@ export const deleteWastageRule = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("wastage_rules")
       .delete()
       .eq("id", data.id)
@@ -563,7 +559,7 @@ export const listPricingRules = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await (context as any).supabase
       .from("pricing_rules")
       .select(
         "id, name, version, status, formula, effective_from, effective_to",
@@ -581,7 +577,7 @@ export const upsertPricingRule = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
-      const { error } = await supabaseAdmin
+      const { error } = await (context as any).supabase
         .from("pricing_rules")
         .update(data)
         .eq("id", data.id)
@@ -589,7 +585,7 @@ export const upsertPricingRule = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
-    const { data: row, error } = await supabaseAdmin
+    const { data: row, error } = await (context as any).supabase
       .from("pricing_rules")
       .insert({ ...data, tenant_id: ctx.tenantId })
       .select("id")
@@ -604,7 +600,7 @@ export const deletePricingRule = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    const { error } = await supabaseAdmin
+    const { error } = await (context as any).supabase
       .from("pricing_rules")
       .delete()
       .eq("id", data.id)
@@ -627,6 +623,7 @@ export const deletePricingRule = createServerFn({ method: "POST" })
 // NOT on the legacy tables above.
 
 import { canWrite } from "@/lib/tenant-context";
+import { recordPriceChangeIfDifferent } from "./priceHistory";
 
 function requireWriteRole(ctx: TenantContext) {
   if (!canWrite(ctx.role)) {
@@ -880,6 +877,15 @@ export const updateCatalogMaterial = createServerFn({ method: "POST" })
       .select("id, code, label_i18n_key, pricing_unit, price_per_unit, default_wastage_pct, supplier_id, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
+
+    // Record price change if price_per_unit was updated
+    if (fields.pricePerUnit !== undefined && row) {
+      await recordPriceChangeIfDifferent(
+        client, ctx.tenantId, "material", id,
+        "catalog_materials", "price_per_unit", fields.pricePerUnit,
+      );
+    }
+
     return row;
   });
 
@@ -958,6 +964,15 @@ export const updateCatalogFinish = createServerFn({ method: "POST" })
       .select("id, code, modifier_type, modifier_value, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
+
+    // Record price change if modifier_value was updated
+    if (fields.modifierValue !== undefined && row) {
+      await recordPriceChangeIfDifferent(
+        client, ctx.tenantId, "finish", id,
+        "catalog_finishes", "modifier_value", fields.modifierValue,
+      );
+    }
+
     return row;
   });
 
@@ -1034,6 +1049,15 @@ export const updateCatalogVeneer = createServerFn({ method: "POST" })
       .select("id, code, price_per_m2, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
+
+    // Record price change if price_per_m2 was updated
+    if (fields.pricePerM2 !== undefined && row) {
+      await recordPriceChangeIfDifferent(
+        client, ctx.tenantId, "veneer", id,
+        "catalog_veneers", "price_per_m2", fields.pricePerM2,
+      );
+    }
+
     return row;
   });
 
@@ -1110,6 +1134,15 @@ export const updateCatalogHardware = createServerFn({ method: "POST" })
       .select("id, code, price_per_piece, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
+
+    // Record price change if price_per_piece was updated
+    if (fields.pricePerPiece !== undefined && row) {
+      await recordPriceChangeIfDifferent(
+        client, ctx.tenantId, "hardware", id,
+        "catalog_hardware", "price_per_piece", fields.pricePerPiece,
+      );
+    }
+
     return row;
   });
 
@@ -1186,6 +1219,15 @@ export const updateCatalogAccessory = createServerFn({ method: "POST" })
       .select("id, code, price_per_piece, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
+
+    // Record price change if price_per_piece was updated
+    if (fields.pricePerPiece !== undefined && row) {
+      await recordPriceChangeIfDifferent(
+        client, ctx.tenantId, "accessory", id,
+        "catalog_accessories", "price_per_piece", fields.pricePerPiece,
+      );
+    }
+
     return row;
   });
 
@@ -1264,6 +1306,15 @@ export const updateCatalogManufacturingOp = createServerFn({ method: "POST" })
       .select("id, code, rate_unit, rate, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
+
+    // Record price change if rate was updated
+    if (fields.rate !== undefined && row) {
+      await recordPriceChangeIfDifferent(
+        client, ctx.tenantId, "manufacturing", id,
+        "catalog_manufacturing_operations", "rate", fields.rate,
+      );
+    }
+
     return row;
   });
 

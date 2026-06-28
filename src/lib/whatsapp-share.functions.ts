@@ -193,7 +193,8 @@ export const sendTrackingWhatsapp = createServerFn({ method: "POST" })
       throw new Error("Forbidden: insufficient role");
     }
 
-    let orderQuery = supabaseAdmin
+    const client = (context as any).supabase;
+    let orderQuery = client
       .from("orders")
       .select("id, order_number, current_stage, expected_delivery, tenant_id, customers(name, phone, email)");
 
@@ -219,7 +220,7 @@ export const sendTrackingWhatsapp = createServerFn({ method: "POST" })
     const channel = "whatsapp";
 
     // Load template (prefer requested language, fall back to English).
-    let { data: tpl } = await supabaseAdmin
+    let { data: tpl } = await client
       .from("notification_templates")
       .select("subject, body")
       .eq("event", "stage_changed")
@@ -229,7 +230,7 @@ export const sendTrackingWhatsapp = createServerFn({ method: "POST" })
       .eq("active", true)
       .maybeSingle();
     if (!tpl) {
-      const { data: fallback } = await supabaseAdmin
+      const { data: fallback } = await client
         .from("notification_templates")
         .select("subject, body")
         .eq("event", "stage_changed")

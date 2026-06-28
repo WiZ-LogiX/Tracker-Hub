@@ -2,10 +2,12 @@
  * BOM resolution — expands unit_type_bom rows into concrete component
  * descriptors ready for engine-v3 pricing.
  *
- * Pure DB read + validation. No pricing logic here.
+ * Pure validation + DB read. No pricing logic here.
+ *
+ * SECURITY: Accepts a Supabase client parameter (never uses supabaseAdmin).
+ * Caller is responsible for providing an RLS-enforcing client.
  */
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { listAreaKeys } from "./areaFunctions";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -13,7 +15,7 @@ import { listAreaKeys } from "./areaFunctions";
 export interface ComponentDescriptor {
   /** Stable id (BOM row uuid). */
   id: string;
-  kind: "material" | "hardware" | "accessory" | "manufacturing";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
   /** catalog_ref uuid — null when area_function_key is set. */
   catalogId: string | null;
   /** default_qty from BOM, parsed to number. */
@@ -40,6 +42,7 @@ function unitOfMeasure(
   kind: string,
   areaFunctionKey: string | null,
 ): string {
+  if (kind === "edge_band") return "m";
   if (kind === "material" && areaFunctionKey) return "m2";
   return "pcs";
 }
@@ -50,6 +53,15 @@ function unitOfMeasure(
  * Read unit_type_bom rows for a given unit type and expand each into a
  * ComponentDescriptor. Sorted by position ascending.
  *
+ * KNOWN LIMITATION: Wastage rules are keyed by areaFunctionKey (e.g.
+ * "cabinet_side"), not by the catalog material itself. This means two
+ * different materials sharing the same area function key share wastage
+ * rules. This is acceptable for Egyptian-market furniture where wastage
+ * is primarily driven by panel geometry, not material type. If a future
+ * market requires per-material wastage, extend wastage_rules to support
+ * an optional material FK override.
+ *
+ * @param client  Supabase client (RLS-enforcing, from context.supabase)
  * @throws if unit_type has no BOM rows
  * @throws if an area_function_key is not in the area function registry
  * @warns if a catalog_ref points to an archived catalog row
@@ -57,8 +69,9 @@ function unitOfMeasure(
 export async function resolveBom(
   unitTypeId: string,
   tenantId: string,
+  client: any,
 ): Promise<ComponentDescriptor[]> {
-  const { data: rows, error } = await supabaseAdmin
+  const { data: rows, error } = await client
     .from("unit_type_bom" as any)
     .select("id, kind, catalog_ref, area_function_key, default_qty, position")
     .eq("unit_type_id", unitTypeId)
@@ -86,7 +99,7 @@ export async function resolveBom(
 
     if (row.catalog_ref) {
       // Check if the catalog item is archived
-      const { data: catalogRow } = await supabaseAdmin
+      const { data: catalogRow } = await client
         .from("catalog_materials" as any)
         .select("id, archived_at")
         .eq("id", row.catalog_ref)

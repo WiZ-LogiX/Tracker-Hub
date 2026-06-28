@@ -5,7 +5,7 @@
  * All monetary outputs go through round2().
  *
  * Factor order is INVARIANT regardless of input order:
- *   subtotal → labor → overhead → complexity → rush → margin → luxury
+ *   subtotal → labor → overhead → complexity → rush → margin → luxury → packaging
  *
  * Per-unit: each factor reads from tenant pricing_factors,
  *           overridable per-unit via override_factor_keys.
@@ -23,7 +23,12 @@ import { round2 } from "./engine-v3";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/** Locked factor order — invariant regardless of input. */
+/**
+ * Locked factor order — invariant regardless of input.
+ *
+ * "packaging" covers box, foam, edge protectors, and wrap.
+ * It is the last per-unit factor before quote-level roll-up.
+ */
 export const FACTOR_ORDER = [
   "subtotal",
   "labor",
@@ -32,6 +37,7 @@ export const FACTOR_ORDER = [
   "rush",
   "margin",
   "luxury",
+  "packaging",
 ] as const;
 
 export type FactorKey = (typeof FACTOR_ORDER)[number];

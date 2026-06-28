@@ -708,6 +708,11 @@
     "errorBomAutofill": "Échec du remplissage automatique des composants",
     "errorLoadUnitTypes": "Échec du chargement des types d'unités"
   },
+  "spanCheck": {
+    "ok": "Fléchissement de l'étagère dans les limites ({{deflection}} mm ≤ {{max}} mm).",
+    "warning": "L'étagère peut s'affaisser sous charge — fléchissement {{deflection}} mm dépasse L/200 ({{max}} mm). Portée {{span}} mm ; envisagez un support central ou un rabat frontal.",
+    "fail": "Fléchissement {{deflection}} mm dépasse la limite sécuritaire {{max}} mm pour une portée de {{span}} mm. Ajoutez un support central, un rabat frontal ou un rail arrière. Portée maximale recommandée : {{maxSpan}} mm."
+  },
   "breakdown": {
     "title": "Ventilation des prix",
     "stale": "Mise à jour…",
@@ -732,7 +737,8 @@
       "complexity": "Complexité",
       "rush": "Urgence",
       "margin": "Marge",
-      "luxury": "Luxe"
+      "luxury": "Luxe",
+      "packaging": "Emballage"
     }
   }
 }

@@ -16,8 +16,8 @@ import { listAreaKeys } from "@/lib/pricing/areaFunctions";
 describe("area function key validation", () => {
   const validKeys = new Set(listAreaKeys());
 
-  it("all 7 built-in keys are registered", () => {
-    expect(validKeys.size).toBe(7);
+  it("all 8 built-in keys are registered", () => {
+    expect(validKeys.size).toBe(8);
     expect(validKeys.has("cabinet_side")).toBe(true);
     expect(validKeys.has("cabinet_top")).toBe(true);
     expect(validKeys.has("cabinet_bottom")).toBe(true);
@@ -25,6 +25,7 @@ describe("area function key validation", () => {
     expect(validKeys.has("shelf")).toBe(true);
     expect(validKeys.has("door_panel")).toBe(true);
     expect(validKeys.has("drawer_front")).toBe(true);
+    expect(validKeys.has("edge_band")).toBe(true);
   });
 
   it("unknown key is not in the registry", () => {

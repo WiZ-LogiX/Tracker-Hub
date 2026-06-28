@@ -985,6 +985,7 @@ export const componentKindEnum = pgEnum("component_kind", [
   "hardware",
   "accessory",
   "manufacturing",
+  "edge_band",
 ]);
 
 export const components = pgTable(

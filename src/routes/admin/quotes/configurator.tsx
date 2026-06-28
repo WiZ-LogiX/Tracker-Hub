@@ -58,6 +58,24 @@ function ConfiguratorBuilder() {
   const [customerId, setCustomerId] = useState("");
   const [plcId] = useState(() => generatePLCId());
 
+  // Legacy configurator state — all hooks MUST be declared before any early return
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [finishes, setFinishes] = useState<any[]>([]);
+  const [veneers, setVeneers] = useState<any[]>([]);
+  const [accessories, setAccessories] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [factors, setFactors] = useState<any[]>([]);
+  const [wastageRules, setWastageRules] = useState<any[]>([]);
+  const [activeRule, setActiveRule] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<Item[]>([blankItem()]);
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Feature flag check
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -78,62 +96,7 @@ function ConfiguratorBuilder() {
     })();
   }, []);
 
-  // If flag check is still loading, show skeleton
-  if (useV2 === null) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-4 w-96" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  // Flag ON → show new hierarchical configurator
-  if (useV2) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-primary" /> {t("admin.nav.configurator")}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t("treeConfigurator.subtitle")}
-          </p>
-        </div>
-        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-          <TreeConfigurator
-            quotationId={null}
-            onSave={(tree) => {
-              toast.success(t("treeConfigurator.treeBuilt", { count: tree.length }));
-            }}
-            onValidationError={(errors) => {
-              errors.forEach((e) => toast.error(e));
-            }}
-          />
-        </Suspense>
-      </div>
-    );
-  }
-
-  // Flag OFF → show legacy flat configurator
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [materials, setMaterials] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [finishes, setFinishes] = useState<any[]>([]);
-  const [veneers, setVeneers] = useState<any[]>([]);
-  const [accessories, setAccessories] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [factors, setFactors] = useState<any[]>([]);
-  const [wastageRules, setWastageRules] = useState<any[]>([]);
-  const [activeRule, setActiveRule] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  const [items, setItems] = useState<Item[]>([blankItem()]);
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-
+  // Legacy data loading (harmless when v2 is on — just unused state)
   useEffect(() => {
     Promise.all([
       supabase.from('product_templates').select('*').eq('active', true),
@@ -231,6 +194,45 @@ function ConfiguratorBuilder() {
     vatPct: 14,
   }), [computed]);
 
+  // If flag check is still loading, show skeleton
+  if (useV2 === null) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  // Flag ON → show new hierarchical configurator
+  if (useV2) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-primary" /> {t("admin.nav.configurator")}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {t("treeConfigurator.subtitle")}
+          </p>
+        </div>
+        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+          <TreeConfigurator
+            quotationId={null}
+            onSave={(tree) => {
+              toast.success(t("treeConfigurator.treeBuilt", { count: tree.length }));
+            }}
+            onValidationError={(errors) => {
+              errors.forEach((e) => toast.error(e));
+            }}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  // Flag OFF → show legacy flat configurator
   async function saveQuote(status: 'draft' | 'sent') {
     if (!customerId) return toast.error(t("quoteBuilder.selectCustomerFirst"));
     setSaving(true);

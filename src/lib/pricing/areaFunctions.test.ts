@@ -12,6 +12,7 @@ const EXPECTED: Record<string, number> = {
   shelf: 0.36, // 0.600 × 0.600
   door_panel: 0.432, // 0.600 × 0.720
   drawer_front: 0.432, // 0.600 × 0.720
+  edge_band: 2.64, // 2 × (0.600 + 0.720) = 2.64 linear metres (perimeter)
 };
 
 describe("areaFunctions", () => {
@@ -150,9 +151,9 @@ describe("areaFunctions", () => {
   });
 
   describe("extensibility", () => {
-    it("listAreaKeys returns all 7 registered keys", () => {
+    it("listAreaKeys returns all 8 registered keys", () => {
       const keys = listAreaKeys();
-      expect(keys).toHaveLength(7);
+      expect(keys).toHaveLength(8);
       expect(keys).toContain("cabinet_side");
       expect(keys).toContain("cabinet_top");
       expect(keys).toContain("cabinet_bottom");
@@ -160,6 +161,50 @@ describe("areaFunctions", () => {
       expect(keys).toContain("shelf");
       expect(keys).toContain("door_panel");
       expect(keys).toContain("drawer_front");
+      expect(keys).toContain("edge_band");
+    });
+  });
+
+  describe("edge_band: linear metres (perimeter)", () => {
+    it("returns perimeter in linear metres for 600×720×600", () => {
+      // 2 × (0.600 + 0.720) = 2.64
+      expect(getArea("edge_band", BASE)).toBeCloseTo(2.64, 6);
+    });
+
+    it("increases when w increases (not linearly — perimeter is 2×(w+h))", () => {
+      const a = getArea("edge_band", BASE);
+      const b = getArea("edge_band", { ...BASE, w: BASE.w * 2 });
+      // 2 × (1.2 + 0.72) = 3.84
+      expect(b).toBeCloseTo(3.84, 6);
+      expect(b).toBeGreaterThan(a);
+    });
+
+    it("increases when h increases", () => {
+      const a = getArea("edge_band", BASE);
+      const b = getArea("edge_band", { ...BASE, h: BASE.h * 2 });
+      // 2 × (0.6 + 1.44) = 4.08
+      expect(b).toBeCloseTo(4.08, 6);
+      expect(b).toBeGreaterThan(a);
+    });
+
+    it("unchanged when d changes", () => {
+      const a = getArea("edge_band", BASE);
+      const b = getArea("edge_band", { ...BASE, d: BASE.d * 3 });
+      expect(b).toBeCloseTo(a, 10);
+    });
+
+    it("for a square panel (600×600), returns 2.4 linear metres", () => {
+      // 2 × (0.600 + 0.600) = 2.4
+      expect(getArea("edge_band", { w: 600, h: 600, d: 18 })).toBeCloseTo(
+        2.4,
+        6,
+      );
+    });
+
+    it("perimeter is commutative: swapping w and h gives same result", () => {
+      const a = getArea("edge_band", { w: 600, h: 720, d: 18 });
+      const b = getArea("edge_band", { w: 720, h: 600, d: 18 });
+      expect(a).toBeCloseTo(b, 10);
     });
   });
 });

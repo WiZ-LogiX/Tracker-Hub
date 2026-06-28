@@ -707,6 +707,11 @@
     "errorBomAutofill": "Failed to auto-fill components from BOM",
     "errorLoadUnitTypes": "Failed to load unit types"
   },
+  "spanCheck": {
+    "ok": "Shelf deflection within limits ({{deflection}} mm ≤ {{max}} mm).",
+    "warning": "Shelf may sag under load — deflection {{deflection}} mm exceeds L/200 ({{max}} mm). Span {{span}} mm; consider adding a centre support or front lip.",
+    "fail": "Shelf deflection {{deflection}} mm exceeds safe limit {{max}} mm at {{span}} mm span. Add a centre support, front lip, or back rail. Max recommended span: {{maxSpan}} mm."
+  },
   "breakdown": {
     "title": "Price Breakdown",
     "stale": "Updating…",
@@ -731,7 +736,8 @@
       "complexity": "Complexity",
       "rush": "Rush",
       "margin": "Margin",
-      "luxury": "Luxury"
+      "luxury": "Luxury",
+      "packaging": "Packaging"
     }
   }
 }

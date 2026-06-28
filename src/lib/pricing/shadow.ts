@@ -233,7 +233,7 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string): P
               overrideFactorKeys: (u.override_factor_keys as Record<string, number>) ?? {},
               components: (compByUnit.get(u.id) ?? []).map((c) => ({
                 id: c.id,
-                kind: c.kind as "material" | "hardware" | "accessory" | "manufacturing",
+                kind: c.kind as "material" | "hardware" | "accessory" | "manufacturing" | "edge_band",
                 catalogId: c.catalog_id,
                 qty: Number(c.qty),
                 unitOfMeasure: c.unit_of_measure,

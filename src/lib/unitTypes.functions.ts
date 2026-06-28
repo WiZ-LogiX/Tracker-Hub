@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { setTenantGuc } from "@/lib/tenant";
 import type { TenantContext } from "@/lib/tenant-context";
 import { resolveBom, type ComponentDescriptor } from "@/lib/pricing/bom";
@@ -55,7 +54,8 @@ export const listUnitTypes = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
 
-    let query = supabaseAdmin
+    const client = (context as any).supabase;
+    let query = client
       .from("unit_types" as any)
       .select(`
         *,
@@ -113,5 +113,6 @@ export const resolveBomFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<ComponentDescriptor[]> => {
     const ctx = context.tenantContext as TenantContext;
     await setTenantGuc(ctx.tenantId);
-    return resolveBom(data.unitTypeId, ctx.tenantId);
+    const client = (context as any).supabase;
+    return resolveBom(data.unitTypeId, ctx.tenantId, client);
   });
