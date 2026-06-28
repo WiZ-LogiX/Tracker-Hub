@@ -285,10 +285,15 @@ The AI is a CTO, Product Owner, Business Strategist, and Senior Engineer capable
 
 ## Current State Notes
 
-Last refreshed: 2026-06-25.
+Last refreshed: 2026-06-28.
 
-- Typecheck: ✅ Clean. Tests: 371/371 ✅. i18n: 557 keys ✅.
-- **T2.0–T2.3 + T3.2–T3.3 + T4.1 complete**: Hierarchy, unit types, snapshots, legacy VIEW, catalog tables (8), pricing lever tables (4), area functions, BOM resolution (T3.2), componentAmount leaf-pricing (T3.3), bottom-up pricing engine v3 (rewritten to integrate componentAmount, deterministic output), **factors.ts** (locked factor order, discount/VAT/fees, auditable breakdown) — all applied to remote DB, tested, passing.
+- Typecheck: ✅ Clean. Tests: 557/557 ✅. i18n: 649 keys ✅.
+- **T1.1–T8.2 complete**: Hierarchy (T1.1), unit types + BOM (T2.1), snapshots (T2.2), legacy VIEW (T2.3), catalog tables (T2.1), pricing levers (T2.2), area functions (T3.1), BOM resolution (T3.2), componentAmount leaf-pricing (T3.3), bottom-up pricing engine v3 (T4.1), factors + VAT + discount (T4.1), shadow comparison (T4.3), TreeConfigurator UI (T6.1), UnitEditor (T6.2), BreakdownPanel (T6.3), snapshot freezing (T5.1), rate-card import (T7.1), price history (T8.1), margin report (T8.2) — all applied to remote DB, tested, passing.
+- **Edge banding**: `edge_band` component kind with perimeter-based linear metres pricing. Migration `20260628_add_edge_band_kind.sql` applied.
+- **Packaging factor**: 8th per-unit factor in `FACTOR_ORDER`. i18n keys in en/ar/fr.
+- **Shelf deflection**: `spanCheck.ts` pure utility. 7 materials. L/200 threshold. UnitEditor shows warning Badge. 16 tests.
+- **Security hardening**: 6 files remediated for supabaseAdmin leakage. All use `(context as any).supabase` for tenant-owned data.
+- **Domain audit**: Completed with 7-dimension table, gap list, reality-check examples, product-type leak audit.
 - `src/integrations/supabase/types.ts` is still a permissive PostgREST stub, not generated Supabase types. Do not add `<Database>` back to `createClient()` until real types are generated.
 - The service-role and auth middleware Supabase clients intentionally omit the placeholder `Database` generic to avoid `.from(...)` chains collapsing to `never`.
 - R2 server helpers now use AWS SDK checksum settings `requestChecksumCalculation: "WHEN_REQUIRED"` and `responseChecksumValidation: "WHEN_REQUIRED"`.
@@ -543,13 +548,13 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 
 **Server function**: `priceQuotationTree` in `quote.functions.ts` loads all catalog + pricing lever data from DB (parallel, tenant-scoped), builds a `CatalogLookup`, and calls the pure `priceQuote()` engine.
 
-### Test Suite (347 tests)
+### Test Suite (557 tests)
 
 | File | Tests | Covers |
 |---|---|---|
 | `quotation-hierarchy.test.ts` | 21 | T2.0 hierarchy schema, migration structure, RLS patterns |
 | `unitTypes.test.ts` | 30 | T2.1 unit types + BOM, CHECK constraints, RLS |
-| `quoteSnapshots.test.ts` | 27 | T2.2 append-only trigger, RLS, multi-snapshot ordering |
+| `quoteSnapshots.test.ts` | 40 | T2.2 append-only trigger, RLS, multi-snapshot ordering |
 | `legacyQuoteItems.test.ts` | 17 | Legacy VIEW mirrors quote_items |
 | `catalog-v2.test.ts` | 37 | 8 catalog tables, CHECK constraints, RLS |
 | `pricing-levers.test.ts` | 39 | 4 pricing lever tables, enums, RLS, seed data |
@@ -559,9 +564,14 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 | `transactional.test.ts` | 8 | Transactional schema exports |
 | `pricing/engine.test.ts` | 1 | v2 engine smoke test |
 | `pricing/engine-v3.test.ts` | 33 | v3 bottom-up engine (components, aggregation, factors, fees, determinism, golden-file, edge cases, board-yield, wastage precedence) |
-| `pricing/areaFunctions.test.ts` | 31 | Area functions (7 types, edge cases, property tests) |
+| `pricing/areaFunctions.test.ts` | 38 | Area functions (8 types incl. edge_band, edge cases, property tests) |
 | `pricing/bom.test.ts` | 24 | BOM resolution (unit type → component descriptors) |
-| `pricing/componentAmount.test.ts` | 29 | Leaf-pricing (material m2/m/pcs/piece, hardware, accessory, manufacturing, board-yield, wastage) |
+| `pricing/componentAmount.test.ts` | 36 | Leaf-pricing (material m2/m/pcs/piece, hardware, accessory, manufacturing, edge_band, board-yield, wastage) |
+| `pricing/factors.test.ts` | 24 | FACTOR_ORDER (8 keys), VAT, discount clamping |
+| `pricing/shadow.test.ts` | 14 | Shadow comparison |
+| `pricing/spanCheck.test.ts` | 16 | Shelf deflection (7 materials, L/200 threshold) |
+| `hierarchy.test.ts` | 30 | Hierarchy CRUD server functions |
+| `reports/margin.test.ts` | 32 | Margin report (pickVersion, computeSnapshotMargin) |
 
 ### Migrations (applied to remote DB)
 
@@ -573,6 +583,10 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 | `20260624_legacy_quote_items_view.sql` | ✅ Applied | VIEW mirrors quote_items |
 | `20260624_catalog_tables.sql` | ✅ Applied | 8 catalog tables, CHECK, RLS (32 policies) |
 | `20260624_pricing_levers.sql` | ✅ Applied | 4 tables, 3 enums, RLS (16 policies), seed data |
+| `20260625_pricing_shadow_runs.sql` | ✅ Applied | feature_flags + pricing_shadow_runs |
+| `20260626_unit_finish_width_tier.sql` | ✅ Applied | width_tier enum + finish_id on units |
+| `20260628_price_history.sql` | ✅ Applied | price_history table (append-only) |
+| `20260628_add_edge_band_kind.sql` | ✅ Applied | edge_band enum value |
 | `20260622_quote_created_template.sql` | ✅ Applied | quote_created WhatsApp templates |
 | `20260622_seed_all_notification_templates.sql` | ✅ Applied | All 6 events × 3 languages |
 | `20260622_drop_legacy_customer_policies.sql` | ✅ Applied | RLS fix for customers |
