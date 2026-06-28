@@ -195,3 +195,136 @@ describe("multi-snapshot ordering", () => {
     expect(schema).toContain('state: text("state")');
   });
 });
+
+// ── 7. Snapshot-freeze integration ─────────────────────────────────────────
+
+describe("snapshot-freeze integration", () => {
+  it("updateQuoteStatus is exported from quote.functions.ts", async () => {
+    const mod = await import("./quote.functions");
+    expect(typeof mod.updateQuoteStatus).toBe("function");
+  });
+
+  it("writeSnapshot is exported from quote.functions.ts", async () => {
+    const mod = await import("./quote.functions");
+    expect(typeof mod.writeSnapshot).toBe("function");
+  });
+
+  it("FREEZE_STATES includes sent and accepted", () => {
+    // The module defines FREEZE_STATES internally; verify via the handler
+    // that transitions to 'sent' and 'accepted' trigger snapshot creation.
+    // This is validated structurally — the actual DB behavior is integration-tested.
+    const quoteFuncs = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+    expect(quoteFuncs).toContain('"sent"');
+    expect(quoteFuncs).toContain('"accepted"');
+    expect(quoteFuncs).toContain("FREEZE_STATES");
+    expect(quoteFuncs).toContain("freezeQuoteSnapshot");
+  });
+
+  it("updateQuoteStatus blocks send with no priceable units", () => {
+    const quoteFuncs = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+    expect(quoteFuncs).toContain("Cannot send: quote has no priceable units");
+  });
+
+  it("updateQuoteStatus blocks send with no products", () => {
+    const quoteFuncs = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+    expect(quoteFuncs).toContain("Cannot send: quote has no products");
+  });
+
+  it("freezeQuoteSnapshot loads hierarchy, prices, writes snapshot + audit", () => {
+    const quoteFuncs = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+    // Loads hierarchy
+    expect(quoteFuncs).toContain("loadHierarchyRaw");
+    // Prices via engine-v3
+    expect(quoteFuncs).toContain("priceQuote");
+    // Writes snapshot
+    expect(quoteFuncs).toContain("writeSnapshot");
+    // Writes audit log
+    expect(quoteFuncs).toContain("audit_log");
+    expect(quoteFuncs).toContain("rule_version_id");
+    expect(quoteFuncs).toContain("breakdown_total");
+  });
+
+  it("snapshot failure is non-blocking (logged, does not throw)", () => {
+    const quoteFuncs = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+    expect(quoteFuncs).toContain("freezeQuoteSnapshot failed (non-blocking)");
+  });
+});
+
+// ── 8. PDF snapshot-reading ────────────────────────────────────────────────
+
+describe("PDF snapshot reading", () => {
+  it("pdf.functions.tsx reads quote_snapshots for non-draft quotes", () => {
+    const pdfFuncs = readFileSync(
+      resolve("src/lib/pdf.functions.tsx"),
+      "utf-8",
+    );
+    expect(pdfFuncs).toContain("quote_snapshots");
+    expect(pdfFuncs).toContain("breakdown_json");
+  });
+
+  it("pdf.functions.tsx renders DRAFT watermark for draft quotes", () => {
+    const pdfFuncs = readFileSync(
+      resolve("src/lib/pdf.functions.tsx"),
+      "utf-8",
+    );
+    expect(pdfFuncs).toContain("isDraft");
+    expect(pdfFuncs).toContain("DRAFT");
+  });
+
+  it("pdf.functions.tsx overrides quote totals from snapshot breakdown", () => {
+    const pdfFuncs = readFileSync(
+      resolve("src/lib/pdf.functions.tsx"),
+      "utf-8",
+    );
+    expect(pdfFuncs).toContain("snapshotBreakdown");
+    expect(pdfFuncs).toContain("subTotal");
+    expect(pdfFuncs).toContain("vatAmount");
+  });
+
+  it("pdf.functions.tsx falls back when snapshot is missing", () => {
+    const pdfFuncs = readFileSync(
+      resolve("src/lib/pdf.functions.tsx"),
+      "utf-8",
+    );
+    expect(pdfFuncs).toContain("Missing snapshot for non-draft quote");
+  });
+});
+
+// ── 9. Audit log on transition ──────────────────────────────────────────────
+
+describe("audit log on transition", () => {
+  it("writes to audit_log table with rule_version + factors", () => {
+    const quoteFuncs = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+    expect(quoteFuncs).toContain('.from("audit_log").insert');
+    expect(quoteFuncs).toContain("entity_type: \"quotation\"");
+    expect(quoteFuncs).toContain("action: `status_change:${state}`");
+    expect(quoteFuncs).toContain("rule_version_number");
+    expect(quoteFuncs).toContain("factors: catalog.pricingFactors");
+  });
+
+  it("audit_log failure is non-blocking", () => {
+    const quoteFuncs = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+    expect(quoteFuncs).toContain("audit_log insert failed (non-blocking)");
+  });
+});

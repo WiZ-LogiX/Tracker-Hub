@@ -95,6 +95,13 @@ export const feeSignEnum = pgEnum("fee_sign", [
   "minus",
 ]);
 
+export const widthTierEnum = pgEnum("width_tier", [
+  "narrow",
+  "standard",
+  "wide",
+  "extra_wide",
+]);
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const timestamps = {
@@ -142,6 +149,7 @@ export const tenants = pgTable("tenants", {
   taxRate: numeric("tax_rate").notNull().default("14"),
   plan: text("plan").notNull().default("free"),
   status: text("status").notNull().default("active"),
+  featureFlags: jsonb("feature_flags").notNull().default("{}"),
   ...timestamps,
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -957,6 +965,8 @@ export const units = pgTable(
     computedUnitPrice: numeric("computed_unit_price", { precision: 14, scale: 2 }).notNull().default("0"),
     snapshotUnitCost: numeric("snapshot_unit_cost", { precision: 14, scale: 2 }).notNull().default("0"),
     snapshotUnitPrice: numeric("snapshot_unit_price", { precision: 14, scale: 2 }).notNull().default("0"),
+    finishId: uuid("finish_id").references(() => catalogFinishes.id, { onDelete: "restrict" }),
+    widthTier: widthTierEnum("width_tier"),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -965,6 +975,7 @@ export const units = pgTable(
   (t) => [
     index("units_tenant_id_idx").on(t.tenantId),
     index("units_section_id_idx").on(t.sectionId),
+    index("units_finish_id_idx").on(t.finishId),
     index("units_tenant_id_created_at_idx").on(t.tenantId, t.createdAt),
   ],
 );
@@ -1073,6 +1084,46 @@ export const quoteSnapshots = pgTable(
     index("quote_snapshots_tenant_id_idx").on(t.tenantId),
     index("quote_snapshots_quotation_id_idx").on(t.quotationId),
     index("quote_snapshots_quotation_id_state_idx").on(t.quotationId, t.state),
+  ],
+);
+
+// ── Price history (append-only catalog price versioning) ─────────────────────
+
+export const priceHistory = pgTable("price_history", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
+  entityType: text("entity_type").notNull(), // 'material' | 'hardware' | 'accessory' | 'manufacturing'
+  entityId: uuid("entity_id").notNull(),
+  price: numeric("price", { precision: 14, scale: 2 }).notNull(),
+  effectiveFrom: timestamp("effective_from", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("price_history_tenant_id_idx").on(t.tenantId),
+  index("price_history_entity_idx").on(t.tenantId, t.entityType, t.entityId),
+  index("price_history_effective_idx").on(t.tenantId, t.entityType, t.entityId, t.effectiveFrom),
+]);
+
+// ── Pricing shadow runs (legacy vs v3 comparison) ──────────────────────────
+
+export const pricingShadowRuns = pgTable(
+  "pricing_shadow_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
+    quotationId: uuid("quotation_id")
+      .notNull()
+      .references(() => quotes.id, { onDelete: "cascade" }),
+    legacyTotal: numeric("legacy_total", { precision: 14, scale: 2 }),
+    v3Total: numeric("v3_total", { precision: 14, scale: 2 }).notNull(),
+    diff: numeric("diff", { precision: 14, scale: 2 }),
+    withinTolerance: boolean("within_tolerance").notNull().default(true),
+    legacyError: text("legacy_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("pricing_shadow_runs_tenant_id_idx").on(t.tenantId),
+    index("pricing_shadow_runs_quotation_id_idx").on(t.quotationId),
+    index("pricing_shadow_runs_tenant_id_created_at_idx").on(t.tenantId, t.createdAt),
   ],
 );
 
@@ -1271,6 +1322,9 @@ export type UnitTypeBom = typeof unitTypeBom.$inferSelect;
 export type NewUnitTypeBom = typeof unitTypeBom.$inferInsert;
 export type QuoteSnapshot = typeof quoteSnapshots.$inferSelect;
 export type NewQuoteSnapshot = typeof quoteSnapshots.$inferInsert;
+
+export type PriceHistory = typeof priceHistory.$inferSelect;
+export type NewPriceHistory = typeof priceHistory.$inferInsert;
 export type CatalogSupplier = typeof catalogSuppliers.$inferSelect;
 export type NewCatalogSupplier = typeof catalogSuppliers.$inferInsert;
 export type CatalogMaterial = typeof catalogMaterials.$inferSelect;
@@ -1295,3 +1349,5 @@ export type TenantDiscount = typeof tenantDiscounts.$inferSelect;
 export type NewTenantDiscount = typeof tenantDiscounts.$inferInsert;
 export type FeesCredit = typeof feesCredits.$inferSelect;
 export type NewFeesCredit = typeof feesCredits.$inferInsert;
+export type PricingShadowRun = typeof pricingShadowRuns.$inferSelect;
+export type NewPricingShadowRun = typeof pricingShadowRuns.$inferInsert;

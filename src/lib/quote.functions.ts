@@ -19,6 +19,11 @@ import {
   type QuoteInput,
   type CatalogLookup,
 } from "@/lib/pricing/engine-v3";
+import { runShadow } from "@/lib/pricing/shadow";
+
+// ── Snapshot-freeze states ──────────────────────────────────────────────────
+/** States that trigger a pricing snapshot freeze on transition. */
+const FREEZE_STATES = new Set(["sent", "accepted"]);
 
 const CreateQuoteInput = z.object({
   customer_id: z.string().uuid(),
@@ -230,6 +235,24 @@ export const createQuote = createServerFn({ method: "POST" })
       log.error("Failed to send quote_created notification:", { error: String(err) });
     }
 
+    // ── Pricing shadow comparison (non-blocking) ───────────────────────────────
+    try {
+      const { data: tenantRow } = await supabaseAdmin
+        .from("tenants")
+        .select("feature_flags")
+        .eq("id", ctx.tenantId)
+        .single();
+
+      const flags = (tenantRow?.feature_flags as Record<string, boolean>) ?? {};
+      if (flags.pricing_shadow) {
+        await runShadow(quote.id, ctx.tenantId);
+      }
+    } catch (err) {
+      log.error("pricing_shadow: failed to check flags or run shadow:", {
+        error: String(err),
+      });
+    }
+
     return { quoteId: quote.id };
   });
 
@@ -243,16 +266,261 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
   .inputValidator((d) => UpdateQuoteStatusInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    const tid = ctx.tenantId;
 
+    // ── Block send with no priceable units ──────────────────────────────
+    if (data.status === "sent") {
+      // Get section IDs for this quote's products
+      const { data: productRows } = await supabaseAdmin
+        .from("quotation_products")
+        .select("id")
+        .eq("quotation_id", data.quote_id)
+        .eq("tenant_id", tid);
+
+      const productIds = (productRows ?? []).map((p: any) => p.id);
+
+      if (productIds.length === 0) {
+        throw new Error("Cannot send: quote has no products. Add at least one product with units.");
+      }
+
+      const { data: sectionRows } = await supabaseAdmin
+        .from("sections")
+        .select("id")
+        .in("quotation_product_id", productIds)
+        .eq("tenant_id", tid);
+
+      const sectionIds = (sectionRows ?? []).map((s: any) => s.id);
+
+      if (sectionIds.length === 0) {
+        throw new Error("Cannot send: quote has no sections. Add at least one section with units.");
+      }
+
+      const { count } = await supabaseAdmin
+        .from("units")
+        .select("id", { count: "exact", head: true })
+        .in("section_id", sectionIds)
+        .eq("tenant_id", tid);
+
+      if (!count || count === 0) {
+        throw new Error("Cannot send: quote has no priceable units. Add at least one unit with components.");
+      }
+    }
+
+    // ── Update status ───────────────────────────────────────────────────
     const { error } = await supabaseAdmin
       .from("quotes")
       .update({ status: data.status })
       .eq("id", data.quote_id)
-      .eq("tenant_id", ctx.tenantId);
+      .eq("tenant_id", tid);
 
     if (error) throw new Error(error.message);
+
+    // ── Freeze snapshot on transition to sent/accepted ───────────────────
+    if (FREEZE_STATES.has(data.status)) {
+      try {
+        await freezeQuoteSnapshot(tid, data.quote_id, data.status);
+      } catch (snapErr) {
+        // Snapshot failure is logged but does NOT block the status change.
+        // The quote is already updated; the snapshot is an audit safety net.
+        log.error("freezeQuoteSnapshot failed (non-blocking)", {
+          tenantId: tid,
+          quoteId: data.quote_id,
+          state: data.status,
+          error: snapErr instanceof Error ? snapErr.message : String(snapErr),
+        });
+      }
+    }
+
     return { ok: true };
   });
+
+// ── Raw hierarchy loader (no middleware — called from server functions) ─────
+
+async function loadHierarchyRaw(quotationId: string, tenantId: string) {
+  const [productsRes, sectionsRes, unitsRes, componentsRes] = await Promise.all([
+    supabaseAdmin
+      .from("quotation_products")
+      .select("id, quotation_id, product_type_code, label, position")
+      .eq("quotation_id", quotationId)
+      .eq("tenant_id", tenantId)
+      .order("position"),
+    supabaseAdmin
+      .from("sections")
+      .select("id, quotation_product_id, label, position")
+      .eq("tenant_id", tenantId)
+      .order("position"),
+    supabaseAdmin
+      .from("units")
+      .select("id, section_id, unit_type_id, width_mm, height_mm, depth_mm, qty, finish_id, width_tier, override_factor_keys, position")
+      .eq("tenant_id", tenantId)
+      .order("position"),
+    supabaseAdmin
+      .from("components")
+      .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, position")
+      .eq("tenant_id", tenantId)
+      .order("position"),
+  ]);
+
+  if (productsRes.error) throw new Error(`Failed to load products: ${productsRes.error.message}`);
+  if (sectionsRes.error) throw new Error(`Failed to load sections: ${sectionsRes.error.message}`);
+  if (unitsRes.error) throw new Error(`Failed to load units: ${unitsRes.error.message}`);
+  if (componentsRes.error) throw new Error(`Failed to load components: ${componentsRes.error.message}`);
+
+  const sectionsByProduct = new Map<string, typeof sectionsRes.data>();
+  for (const s of sectionsRes.data ?? []) {
+    const list = sectionsByProduct.get(s.quotation_product_id) ?? [];
+    list.push(s);
+    sectionsByProduct.set(s.quotation_product_id, list);
+  }
+
+  const unitsBySection = new Map<string, typeof unitsRes.data>();
+  for (const u of unitsRes.data ?? []) {
+    const list = unitsBySection.get(u.section_id) ?? [];
+    list.push(u);
+    unitsBySection.set(u.section_id, list);
+  }
+
+  const componentsByUnit = new Map<string, typeof componentsRes.data>();
+  for (const c of componentsRes.data ?? []) {
+    const list = componentsByUnit.get(c.unit_id) ?? [];
+    list.push(c);
+    componentsByUnit.set(c.unit_id, list);
+  }
+
+  return (productsRes.data ?? []).map((p) => ({
+    ...p,
+    sections: (sectionsByProduct.get(p.id) ?? [])
+      .sort((a, b) => a.position - b.position)
+      .map((s) => ({
+        ...s,
+        units: (unitsBySection.get(s.id) ?? [])
+          .sort((a, b) => a.position - b.position)
+          .map((u) => ({
+            ...u,
+            components: (componentsByUnit.get(u.id) ?? [])
+              .sort((a, b) => a.position - b.position),
+          })),
+      })),
+  }));
+}
+
+// ── Freeze snapshot + audit on state transition ─────────────────────────────
+
+/**
+ * Load the hierarchy, price it via engine-v3, write a snapshot, and
+ * record the transition in the audit log. Called from updateQuoteStatus
+ * on transitions to `sent` or `accepted`.
+ *
+ * Throws on failure — caller decides whether to block the transition.
+ */
+async function freezeQuoteSnapshot(
+  tenantId: string,
+  quotationId: string,
+  state: string,
+): Promise<void> {
+  // 1. Load hierarchy tree
+  const rawTree = await loadHierarchyRaw(quotationId, tenantId);
+
+  // 2. Load catalog lookup (same pattern as priceQuotationTree)
+  const [
+    materialsRes, hardwareRes, accessoriesRes,
+    mfgOpsRes, factorsRes, wastageRes, feesRes,
+  ] = await Promise.all([
+    supabaseAdmin.from("catalog_materials")
+      .select("id, pricing_unit, price_per_unit, default_wastage_pct")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+    supabaseAdmin.from("catalog_hardware")
+      .select("id, price_per_piece")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+    supabaseAdmin.from("catalog_accessories")
+      .select("id, price_per_piece")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+    supabaseAdmin.from("catalog_manufacturing_operations")
+      .select("id, rate_unit, rate")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+    supabaseAdmin.from("tenant_pricing_factors")
+      .select("factor_key, percent")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+    supabaseAdmin.from("tenant_wastage_rules")
+      .select("scope, ref, pct")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+    supabaseAdmin.from("fees_credits")
+      .select("code, sign, amount, formula_key")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+  ]);
+
+  const catalog: CatalogLookup = {
+    materials: Object.fromEntries(
+      (materialsRes.data ?? []).map((m: any) => [
+        m.id,
+        { id: m.id, pricingUnit: m.pricing_unit, pricePerUnit: m.price_per_unit, defaultWastagePct: m.default_wastage_pct },
+      ]),
+    ),
+    hardware: Object.fromEntries(
+      (hardwareRes.data ?? []).map((h: any) => [h.id, { id: h.id, pricePerPiece: h.price_per_piece }]),
+    ),
+    accessories: Object.fromEntries(
+      (accessoriesRes.data ?? []).map((a: any) => [a.id, { id: a.id, pricePerPiece: a.price_per_piece }]),
+    ),
+    manufacturingOps: Object.fromEntries(
+      (mfgOpsRes.data ?? []).map((o: any) => [o.id, { id: o.id, rateUnit: o.rate_unit, rate: o.rate }]),
+    ),
+    pricingFactors: (factorsRes.data ?? []).map((f: any) => ({ factorKey: f.factor_key, percent: f.percent })),
+    wastageRules: (wastageRes.data ?? []).map((w: any) => ({ scope: w.scope, ref: w.ref, pct: w.pct })),
+    feesCredits: (feesRes.data ?? []).map((fc: any) => ({ code: fc.code, sign: fc.sign as "plus" | "minus", amount: fc.amount, formulaKey: fc.formula_key })),
+  };
+
+  // 3. Compute pricing
+  const quoteInput: QuoteInput = { products: rawTree as any };
+  const breakdown = priceQuote(quoteInput, catalog);
+
+  // 4. Load current rule version (latest active pricing rule)
+  const { data: ruleRow } = await supabaseAdmin
+    .from("pricing_rules")
+    .select("id, version")
+    .eq("tenant_id", tenantId)
+    .eq("status", "active")
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // 5. Write snapshot
+  await writeSnapshot({
+    tenantId,
+    quotationId,
+    state,
+    tree: rawTree,
+    breakdown: breakdown.breakdown,
+    ruleVersionId: ruleRow?.id ?? null,
+    factors: catalog.pricingFactors,
+  });
+
+  // 6. Write audit log
+  const { error: auditErr } = await supabaseAdmin.from("audit_log").insert({
+    tenant_id: tenantId,
+    entity_type: "quotation",
+    entityId: quotationId,
+    action: `status_change:${state}`,
+    details: {
+      rule_version_id: ruleRow?.id ?? null,
+      rule_version_number: ruleRow?.version ?? null,
+      factors: catalog.pricingFactors,
+      breakdown_total: breakdown.breakdown.total,
+    },
+  });
+
+  if (auditErr) {
+    log.error("audit_log insert failed (non-blocking)", { error: auditErr.message });
+  }
+
+  log.info("freezeQuoteSnapshot", {
+    tenantId,
+    quotationId,
+    state,
+    ruleVersionId: ruleRow?.id ?? null,
+    breakdownTotal: breakdown.breakdown.total,
+  });
+}
 
 // ── Snapshot helper (append-only, pricing immutability) ─────────────────────
 

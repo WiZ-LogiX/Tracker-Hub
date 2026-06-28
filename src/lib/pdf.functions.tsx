@@ -458,15 +458,36 @@ function QuotePdf({
   tenant,
   logoDataUri,
   styles,
+  isDraft = false,
 }: {
   data: QuoteData;
   tenant: TenantInfo;
   logoDataUri: string | null;
   styles: ReturnType<typeof createStyles>;
+  isDraft?: boolean;
 }) {
   return (
     <Document language="ar">
       <Page size="A4" style={styles.page}>
+        {/* DRAFT watermark — only on draft quotes */}
+        {isDraft ? (
+          <Text
+            style={{
+              position: "absolute",
+              top: "45%",
+              left: "15%",
+              fontSize: 72,
+              color: "#e5e5e5",
+              fontWeight: 700,
+              transform: "rotate(-30deg)",
+              opacity: 0.3,
+              zIndex: 0,
+            }}
+          >
+            DRAFT
+          </Text>
+        ) : null}
+
         <Header
           tenant={tenant}
           title="عرض سعر"
@@ -812,6 +833,42 @@ export const generatePdf = createServerFn({ method: "POST" })
         (quoteData as any).quote_items = [quoteData.quote_items];
       }
 
+      // ── Snapshot-based pricing for sent/accepted quotes ───────────────
+      // On transition to sent/accepted, writeSnapshot freezes the full
+      // tree + breakdown. The PDF must render from that snapshot so that
+      // catalog price changes afterward never alter the sent quote.
+      let isDraft = quoteData.status === "draft";
+      let snapshotBreakdown: Record<string, any> | null = null;
+
+      if (!isDraft) {
+        // Fetch latest snapshot for this quote + state
+        const { data: snapRow } = await supabaseAdmin
+          .from("quote_snapshots")
+          .select("breakdown_json, tree_json")
+          .eq("quotation_id", data.entityId)
+          .eq("tenant_id", ctx.tenantId)
+          .eq("state", quoteData.status)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (snapRow?.breakdown_json) {
+          snapshotBreakdown = snapRow.breakdown_json as Record<string, any>;
+          // Override quote totals with frozen snapshot values
+          quoteData.subtotal = snapshotBreakdown.subTotal ?? quoteData.subtotal;
+          quoteData.discount_amount = snapshotBreakdown.discount ?? quoteData.discount_amount;
+          quoteData.vat_amount = snapshotBreakdown.vatAmount ?? quoteData.vat_amount;
+          quoteData.total = snapshotBreakdown.total ?? quoteData.total;
+        } else {
+          // Missing snapshot for a non-draft quote — log but continue
+          // with the stored quote totals (they were set at creation time).
+          log.error("Missing snapshot for non-draft quote (using stored totals)", {
+            quoteId: data.entityId,
+            status: quoteData.status,
+          });
+        }
+      }
+
       const quoteStyles = createStyles(tenantInfo.primaryColor || DEFAULT_BRAND_COLOR);
       const pdfBuffer = await renderToBuffer(
         <QuotePdf
@@ -819,6 +876,7 @@ export const generatePdf = createServerFn({ method: "POST" })
           tenant={tenantInfo}
           logoDataUri={logoDataUri}
           styles={quoteStyles}
+          isDraft={isDraft}
         />,
       );
 

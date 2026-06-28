@@ -23,6 +23,7 @@ import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSeedRouteImport } from './routes/admin/seed'
 import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
 import { Route as AdminRemakesRouteImport } from './routes/admin/remakes'
+import { Route as AdminRateCardRouteImport } from './routes/admin/rate-card'
 import { Route as AdminProductsRouteImport } from './routes/admin/products'
 import { Route as AdminPricingRulesRouteImport } from './routes/admin/pricing-rules'
 import { Route as AdminPricingFactorsRouteImport } from './routes/admin/pricing-factors'
@@ -108,6 +109,11 @@ const AdminRequestsRoute = AdminRequestsRouteImport.update({
 const AdminRemakesRoute = AdminRemakesRouteImport.update({
   id: '/remakes',
   path: '/remakes',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRateCardRoute = AdminRateCardRouteImport.update({
+  id: '/rate-card',
+  path: '/rate-card',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminProductsRoute = AdminProductsRouteImport.update({
@@ -208,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/rate-card': typeof AdminRateCardRoute
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
@@ -239,6 +246,7 @@ export interface FileRoutesByTo {
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/rate-card': typeof AdminRateCardRoute
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
@@ -272,6 +280,7 @@ export interface FileRoutesById {
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
   '/admin/pricing-rules': typeof AdminPricingRulesRoute
   '/admin/products': typeof AdminProductsRoute
+  '/admin/rate-card': typeof AdminRateCardRoute
   '/admin/remakes': typeof AdminRemakesRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
@@ -306,6 +315,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-factors'
     | '/admin/pricing-rules'
     | '/admin/products'
+    | '/admin/rate-card'
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/seed'
@@ -337,6 +347,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-factors'
     | '/admin/pricing-rules'
     | '/admin/products'
+    | '/admin/rate-card'
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/seed'
@@ -369,6 +380,7 @@ export interface FileRouteTypes {
     | '/admin/pricing-factors'
     | '/admin/pricing-rules'
     | '/admin/products'
+    | '/admin/rate-card'
     | '/admin/remakes'
     | '/admin/requests'
     | '/admin/seed'
@@ -490,6 +502,13 @@ declare module '@tanstack/react-router' {
       path: '/remakes'
       fullPath: '/admin/remakes'
       preLoaderRoute: typeof AdminRemakesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/rate-card': {
+      id: '/admin/rate-card'
+      path: '/rate-card'
+      fullPath: '/admin/rate-card'
+      preLoaderRoute: typeof AdminRateCardRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/products': {
@@ -620,6 +639,7 @@ interface AdminRouteChildren {
   AdminPricingFactorsRoute: typeof AdminPricingFactorsRoute
   AdminPricingRulesRoute: typeof AdminPricingRulesRoute
   AdminProductsRoute: typeof AdminProductsRoute
+  AdminRateCardRoute: typeof AdminRateCardRoute
   AdminRemakesRoute: typeof AdminRemakesRoute
   AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSeedRoute: typeof AdminSeedRoute
@@ -649,6 +669,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPricingFactorsRoute: AdminPricingFactorsRoute,
   AdminPricingRulesRoute: AdminPricingRulesRoute,
   AdminProductsRoute: AdminProductsRoute,
+  AdminRateCardRoute: AdminRateCardRoute,
   AdminRemakesRoute: AdminRemakesRoute,
   AdminRequestsRoute: AdminRequestsRoute,
   AdminSeedRoute: AdminSeedRoute,

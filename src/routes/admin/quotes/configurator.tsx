@@ -1,13 +1,18 @@
 "use client";
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { createQuote } from "@/lib/quote.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const TreeConfigurator = lazy(() =>
+  import("@/components/quote/TreeConfigurator").then((m) => ({ default: m.TreeConfigurator })),
+);
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -47,6 +52,71 @@ function ConfiguratorBuilder() {
   const { t } = useTranslation();
   const nav = useNavigate();
   const createQuoteFn = useServerFn(createQuote);
+
+  // Feature flag: quotation_builder_v2
+  const [useV2, setUseV2] = useState<boolean | null>(null);
+  const [customerId, setCustomerId] = useState("");
+  const [plcId] = useState(() => generatePLCId());
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setUseV2(false); return; }
+      const { data: member } = await supabase
+        .from("tenant_members")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!member) { setUseV2(false); return; }
+      const { data: tenant } = await supabase
+        .from("tenants")
+        .select("feature_flags")
+        .eq("id", member.tenant_id)
+        .single();
+      const flags = (tenant?.feature_flags as Record<string, boolean>) ?? {};
+      setUseV2(!!flags.quotation_builder_v2);
+    })();
+  }, []);
+
+  // If flag check is still loading, show skeleton
+  if (useV2 === null) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  // Flag ON → show new hierarchical configurator
+  if (useV2) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-primary" /> {t("admin.nav.configurator")}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {t("treeConfigurator.subtitle")}
+          </p>
+        </div>
+        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+          <TreeConfigurator
+            quotationId={null}
+            onSave={(tree) => {
+              toast.success(t("treeConfigurator.treeBuilt", { count: tree.length }));
+            }}
+            onValidationError={(errors) => {
+              errors.forEach((e) => toast.error(e));
+            }}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
+  // Flag OFF → show legacy flat configurator
   const [templates, setTemplates] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
@@ -60,13 +130,9 @@ function ConfiguratorBuilder() {
   const [activeRule, setActiveRule] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const [customerId, setCustomerId] = useState('');
   const [items, setItems] = useState<Item[]>([blankItem()]);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
-
-  // Generate a unified PLC ID once when the component mounts
-  const [plcId] = useState(() => generatePLCId());
 
   useEffect(() => {
     Promise.all([
