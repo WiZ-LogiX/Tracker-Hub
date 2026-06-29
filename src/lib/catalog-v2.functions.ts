@@ -166,3 +166,32 @@ export const listSuppliers = createServerFn({ method: "POST" })
       { order: "name" },
     );
   });
+
+// ── listAllCatalogItems ─────────────────────────────────────────────────────
+// Lightweight lookup: returns {id, code, kind} for all non-archived catalog items.
+// Used by TreeConfigurator to show catalog names next to linked components.
+
+export const listAllCatalogItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d) => z.object({}).parse(d))
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    const client = (context as any).supabase;
+    await setTenantGuc(ctx.tenantId);
+
+    const [materials, hardware, accessories, manufacturing, veneers] = await Promise.all([
+      tenantQuery(client, ctx.tenantId, "catalog_materials", "id, code", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_hardware", "id, code", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_accessories", "id, code", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_manufacturing_operations", "id, code", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_veneers", "id, code", { order: "code" }),
+    ]);
+
+    return [
+      ...materials.map((r: any) => ({ id: r.id, code: r.code, kind: "material" as const })),
+      ...hardware.map((r: any) => ({ id: r.id, code: r.code, kind: "hardware" as const })),
+      ...accessories.map((r: any) => ({ id: r.id, code: r.code, kind: "accessory" as const })),
+      ...manufacturing.map((r: any) => ({ id: r.id, code: r.code, kind: "manufacturing" as const })),
+      ...veneers.map((r: any) => ({ id: r.id, code: r.code, kind: "veneer" as const })),
+    ];
+  });

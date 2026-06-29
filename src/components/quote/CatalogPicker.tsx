@@ -115,8 +115,10 @@ export function CatalogPicker({
         code: r.code,
         price: Number(r[priceField] ?? 0),
       }));
+      console.log(`[CatalogPicker] ${kind}: ${mapped.length} items loaded`);
       setItems(mapped);
-    } catch {
+    } catch (err) {
+      console.error("[CatalogPicker] fetchItems failed:", err);
       setItems([]);
     } finally {
       setLoading(false);

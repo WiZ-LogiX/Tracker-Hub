@@ -7,7 +7,7 @@
  * Loads/saves via hierarchy CRUD server functions.
  * Uses TanStack Query for caching + optimistic updates.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -61,6 +61,7 @@ import {
   deleteComponent,
   reorderComponents,
 } from "@/lib/hierarchy.functions";
+import { listAllCatalogItems } from "@/lib/catalog-v2.functions";
 import { log } from "@/lib/log";
 import { UnitEditor } from "@/components/quote/UnitEditor";
 import type { UnitEditorValue, WidthTier } from "@/components/quote/UnitEditor";
@@ -70,6 +71,8 @@ import { CatalogPicker } from "@/components/quote/CatalogPicker";
 import type { CatalogPickerKind, CatalogPickerItem } from "@/components/quote/CatalogPicker";
 
 // ── Types ──────────────────────────────────────────────────────────────────
+
+const CatalogLookupContext = createContext<Map<string, string>>(new Map());
 
 interface ComponentNode {
   id: string;
@@ -144,6 +147,7 @@ export function TreeConfigurator({
   // ── Server function wrappers ──────────────────────────────────────────
 
   const loadHierarchyFn = useServerFn(loadHierarchy);
+  const listAllCatalogItemsFn = useServerFn(listAllCatalogItems);
   const addProductFn = useServerFn(addProduct);
   const updateProductFn = useServerFn(updateProduct);
   const deleteProductFn = useServerFn(deleteProduct);
@@ -172,6 +176,25 @@ export function TreeConfigurator({
     },
     enabled: !!quotationId,
   });
+
+  // ── Catalog lookup map (for showing names next to linked components) ──
+
+  const { data: catalogItems } = useQuery<{ id: string; code: string; kind: string }[]>({
+    queryKey: ["catalog-lookup"],
+    queryFn: async () => {
+      const result = await listAllCatalogItemsFn({ data: {} });
+      return (result as any[]) ?? [];
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const catalogLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of catalogItems ?? []) {
+      map.set(item.id, item.code);
+    }
+    return map;
+  }, [catalogItems]);
 
   // ── Local tree state (for new quotes without quotationId) ─────────────
 
@@ -937,6 +960,7 @@ export function TreeConfigurator({
   }
 
   return (
+    <CatalogLookupContext.Provider value={catalogLookup}>
     <div className="space-y-4">
       {/* Add product buttons */}
       <div className="flex flex-wrap gap-2">
@@ -1025,6 +1049,7 @@ export function TreeConfigurator({
         onSelect={handleCatalogSelect}
       />
     </div>
+    </CatalogLookupContext.Provider>
   );
 }
 
@@ -1724,6 +1749,7 @@ function ComponentNodeComponent({
   onMoveDown,
 }: ComponentNodeProps) {
   const { t } = useTranslation();
+  const catalogLookup = useContext(CatalogLookupContext);
   const [editing, setEditing] = useState(false);
   const [qty, setQty] = useState(component.qty);
 
@@ -1732,6 +1758,7 @@ function ComponentNodeComponent({
     hardware: "bg-amber-100 text-amber-800",
     accessory: "bg-green-100 text-green-800",
     manufacturing: "bg-purple-100 text-purple-800",
+    edge_band: "bg-rose-100 text-rose-800",
   };
 
   return (
@@ -1741,9 +1768,9 @@ function ComponentNodeComponent({
         {t(`treeConfigurator.kind.${component.kind}`)}
       </Badge>
       {component.catalog_id && (
-        <Badge variant="secondary" className="text-xs">
-          {t("treeConfigurator.linked")}
-        </Badge>
+        <span className="text-xs text-muted-foreground font-mono truncate max-w-[160px]" title={catalogLookup.get(component.catalog_id) ?? component.catalog_id}>
+          {catalogLookup.get(component.catalog_id) ?? component.catalog_id}
+        </span>
       )}
 
       {editing ? (
