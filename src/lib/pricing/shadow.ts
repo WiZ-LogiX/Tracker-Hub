@@ -6,9 +6,11 @@
  *
  * Invoked on quote save ONLY when tenant feature flag `pricing_shadow` is on.
  * Never blocks the user; errors are logged only.
+ *
+ * SECURITY: Accepts a Supabase client parameter for all reads/writes.
+ * The caller (quote.functions.ts) passes the RLS-enforcing context.supabase.
  */
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   priceQuote,
   type QuoteInput,
@@ -70,11 +72,12 @@ export async function runShadow(
   quotationId: string,
   tenantId: string,
   options?: ShadowRunOptions,
+  client?: any,
 ): Promise<ShadowRunResult> {
   const tolerance = options?.tolerance ?? DEFAULT_TOLERANCE;
 
   // 1. Load quote → legacy total
-  const { data: quote, error: quoteErr } = await supabaseAdmin
+  const { data: quote, error: quoteErr } = await client
     .from("quotes")
     .select("total")
     .eq("id", quotationId)
@@ -96,11 +99,11 @@ export async function runShadow(
   const legacyTotal = Number(quote.total);
 
   // 2. Load hierarchy + catalog, build tree, run v3 engine
-  const { tree, catalog, error: loadErr } = await loadHierarchyAndCatalog(quotationId, tenantId);
+  const { tree, catalog, error: loadErr } = await loadHierarchyAndCatalog(quotationId, tenantId, client);
 
   if (loadErr) {
     log.warn("pricing_shadow: " + loadErr, { tenantId, quotationId });
-    await writeShadowRow(tenantId, quotationId, null, 0, loadErr);
+    await writeShadowRow(tenantId, quotationId, null, 0, loadErr, client);
     return {
       withinTolerance: false,
       legacyTotal: null,
@@ -118,7 +121,7 @@ export async function runShadow(
   } catch (e) {
     const err = `v3 engine error: ${e instanceof Error ? e.message : String(e)}`;
     log.error("pricing_shadow: " + err, { tenantId, quotationId });
-    await writeShadowRow(tenantId, quotationId, legacyTotal, 0, err);
+    await writeShadowRow(tenantId, quotationId, legacyTotal, 0, err, client);
     return {
       withinTolerance: false,
       legacyTotal,
@@ -132,7 +135,7 @@ export async function runShadow(
   const { diff, withinTolerance } = comparePricing(legacyTotal, v3Total, tolerance);
 
   // 5. Write shadow row
-  await writeShadowRow(tenantId, quotationId, legacyTotal, v3Total, null, diff, withinTolerance);
+  await writeShadowRow(tenantId, quotationId, legacyTotal, v3Total, null, client, diff, withinTolerance);
 
   log.info("pricing_shadow: comparison complete", {
     tenantId,
@@ -154,9 +157,9 @@ interface LoadResult {
   error?: string;
 }
 
-async function loadHierarchyAndCatalog(quotationId: string, tenantId: string): Promise<LoadResult> {
+async function loadHierarchyAndCatalog(quotationId: string, tenantId: string, client: any): Promise<LoadResult> {
   // Load hierarchy
-  const { data: products, error: prodErr } = await supabaseAdmin
+  const { data: products, error: prodErr } = await client
     .from("quotation_products")
     .select("id, product_type_code, label, position")
     .eq("quotation_id", quotationId)
@@ -171,29 +174,29 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string): P
     };
   }
 
-  const productIds = products.map((p) => p.id);
+  const productIds = products.map((p: any) => p.id);
 
-  const { data: sections } = await supabaseAdmin
+  const { data: sections } = await client
     .from("sections")
     .select("id, quotation_product_id, position")
     .in("quotation_product_id", productIds)
     .eq("tenant_id", tenantId)
     .order("position");
 
-  const sectionIds = (sections ?? []).map((s) => s.id);
+  const sectionIds = (sections ?? []).map((s: any) => s.id);
 
   const { data: units } = sectionIds.length > 0
-    ? await supabaseAdmin
+    ? await client
         .from("units")
         .select("id, section_id, width_mm, height_mm, depth_mm, qty, override_factor_keys")
         .in("section_id", sectionIds)
         .eq("tenant_id", tenantId)
     : { data: [] };
 
-  const unitIds = (units ?? []).map((u) => u.id);
+  const unitIds = (units ?? []).map((u: any) => u.id);
 
   const { data: components } = unitIds.length > 0
-    ? await supabaseAdmin
+    ? await client
         .from("components")
         .select("id, unit_id, kind, catalog_id, qty, unit_of_measure")
         .in("unit_id", unitIds)
@@ -213,17 +216,17 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string): P
   }
 
   const tree: QuoteInput = {
-    products: products.map((p) => ({
+    products: products.map((p: any) => ({
       id: p.id,
       sections: sectionsArr
-        .filter((s) => s.quotation_product_id === p.id)
-        .sort((a, b) => a.position - b.position)
-        .map((s) => ({
+        .filter((s: any) => s.quotation_product_id === p.id)
+        .sort((a: any, b: any) => a.position - b.position)
+        .map((s: any) => ({
           id: s.id,
           units: unitsArr
-            .filter((u) => u.section_id === s.id)
-            .sort((a, b) => a.id.localeCompare(b.id))
-            .map((u) => ({
+            .filter((u: any) => u.section_id === s.id)
+            .sort((a: any, b: any) => a.id.localeCompare(b.id))
+            .map((u: any) => ({
               id: u.id,
               unitTypeId: null,
               widthMm: u.width_mm,
@@ -231,7 +234,7 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string): P
               depthMm: u.depth_mm,
               qty: u.qty,
               overrideFactorKeys: (u.override_factor_keys as Record<string, number>) ?? {},
-              components: (compByUnit.get(u.id) ?? []).map((c) => ({
+              components: (compByUnit.get(u.id) ?? []).map((c: any) => ({
                 id: c.id,
                 kind: c.kind as "material" | "hardware" | "accessory" | "manufacturing" | "edge_band",
                 catalogId: c.catalog_id,
@@ -244,7 +247,7 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string): P
   };
 
   // Load catalog
-  const catalog = await loadCatalog(tenantId);
+  const catalog = await loadCatalog(tenantId, client);
 
   return { tree, catalog };
 }
@@ -257,10 +260,11 @@ async function writeShadowRow(
   legacyTotal: number | null,
   v3Total: number,
   legacyError: string | null,
+  client: any,
   diff?: number,
   withinTolerance?: boolean,
 ): Promise<void> {
-  const { error } = await supabaseAdmin.from("pricing_shadow_runs").insert({
+  const { error } = await client.from("pricing_shadow_runs").insert({
     tenant_id: tenantId,
     quotation_id: quotationId,
     legacy_total: legacyTotal,
@@ -291,40 +295,40 @@ function emptyCatalog(): CatalogLookup {
   };
 }
 
-async function loadCatalog(tenantId: string): Promise<CatalogLookup> {
+async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup> {
   const [materialsRes, hardwareRes, accessoriesRes, mfgOpsRes, factorsRes, wastageRes, feesRes] =
     await Promise.all([
-      supabaseAdmin
+      client
         .from("catalog_materials")
         .select("id, pricing_unit, price_per_unit, default_wastage_pct")
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("catalog_hardware")
         .select("id, price_per_piece")
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("catalog_accessories")
         .select("id, price_per_piece")
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("catalog_manufacturing_operations")
         .select("id, rate_unit, rate")
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("tenant_pricing_factors")
         .select("factor_key, percent")
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("tenant_wastage_rules")
         .select("scope, ref, pct")
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("fees_credits")
         .select("code, sign, amount, formula_key")
         .eq("tenant_id", tenantId)

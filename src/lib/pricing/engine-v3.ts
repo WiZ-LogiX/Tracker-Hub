@@ -256,6 +256,11 @@ function priceUnit(
             ? manufacturingToEntity(catalog.manufacturingOps[comp.catalogId])
             : null;
           break;
+        case "edge_band":
+          entity = catalog.materials[comp.catalogId]
+            ? materialToEntity(catalog.materials[comp.catalogId])
+            : null;
+          break;
       }
     }
 

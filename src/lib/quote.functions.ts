@@ -1,15 +1,14 @@
 /**
  * Quote CRUD — tenant-scoped server functions.
  *
- * Uses supabaseAdmin (service-role) to bypass RLS. The primary tenant
- * isolation guard is the .eq('tenant_id') filter on every query, enforced
- * by the requireTenant middleware.
+ * SECURITY: Uses RLS-enforcing context.supabase for all tenant-owned data.
+ * supabaseAdmin is NOT imported — all reads/writes go through the
+ * requireTenant middleware client.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { TenantContext } from "@/lib/tenant-context";
 import { deliverToN8n, type NotifyPayload } from "@/lib/whatsapp-share.functions";
 import { generatePdf } from "@/lib/pdf.functions";
@@ -66,9 +65,10 @@ export const createQuote = createServerFn({ method: "POST" })
   .inputValidator((d) => CreateQuoteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    const client = (context as any).supabase;
 
     // Insert quote with tenant_id
-    const { data: quote, error: quoteError } = await supabaseAdmin
+    const { data: quote, error: quoteError } = await client
       .from("quotes")
       .insert({
         customer_id: data.customer_id,
@@ -112,14 +112,14 @@ export const createQuote = createServerFn({ method: "POST" })
         tenant_id: ctx.tenantId,
       }));
 
-      const { data: insertedItems, error: itemsError } = await supabaseAdmin
+      const { data: insertedItems, error: itemsError } = await client
         .from("quote_items")
         .insert(itemsToInsert as any)
         .select("id");
 
       if (itemsError) {
         // Quote was created but items failed — clean up
-        await supabaseAdmin.from("quotes").delete().eq("id", quote.id);
+        await client.from("quotes").delete().eq("id", quote.id);
         throw new Error(itemsError.message);
       }
 
@@ -138,7 +138,7 @@ export const createQuote = createServerFn({ method: "POST" })
         tenant_id: ctx.tenantId,
       }));
 
-      const { error: configError } = await supabaseAdmin
+      const { error: configError } = await client
         .from("configurations")
         .insert(configsToInsert as any);
 
@@ -150,7 +150,7 @@ export const createQuote = createServerFn({ method: "POST" })
 
     // Update quote_requests status if linked
     if (data.request_id) {
-      await supabaseAdmin
+      await client
         .from("quote_requests")
         .update({ status: "quoted" as any })
         .eq("id", data.request_id)
@@ -159,7 +159,7 @@ export const createQuote = createServerFn({ method: "POST" })
 
     // Send WhatsApp notification to customer (with PDF attachment)
     try {
-      const { data: customer } = await supabaseAdmin
+      const { data: customer } = await client
         .from("customers")
         .select("name, phone, email")
         .eq("id", data.customer_id)
@@ -180,7 +180,7 @@ export const createQuote = createServerFn({ method: "POST" })
         };
 
         // Load template (fallback to en)
-        let { data: tpl } = await supabaseAdmin
+        let { data: tpl } = await client
           .from("notification_templates")
           .select("subject, body")
           .eq("event", "quote_created")
@@ -190,7 +190,7 @@ export const createQuote = createServerFn({ method: "POST" })
           .eq("active", true)
           .maybeSingle();
         if (!tpl) {
-          const { data: fallback } = await supabaseAdmin
+          const { data: fallback } = await client
             .from("notification_templates")
             .select("subject, body")
             .eq("event", "quote_created")
@@ -237,7 +237,7 @@ export const createQuote = createServerFn({ method: "POST" })
 
     // ── Pricing shadow comparison (non-blocking) ───────────────────────────────
     try {
-      const { data: tenantRow } = await supabaseAdmin
+      const { data: tenantRow } = await client
         .from("tenants")
         .select("feature_flags")
         .eq("id", ctx.tenantId)
@@ -245,7 +245,7 @@ export const createQuote = createServerFn({ method: "POST" })
 
       const flags = (tenantRow?.feature_flags as Record<string, boolean>) ?? {};
       if (flags.pricing_shadow) {
-        await runShadow(quote.id, ctx.tenantId);
+        await runShadow(quote.id, ctx.tenantId, undefined, client);
       }
     } catch (err) {
       log.error("pricing_shadow: failed to check flags or run shadow:", {
@@ -267,11 +267,12 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     const tid = ctx.tenantId;
+    const client = (context as any).supabase;
 
     // ── Block send with no priceable units ──────────────────────────────
     if (data.status === "sent") {
       // Get section IDs for this quote's products
-      const { data: productRows } = await supabaseAdmin
+      const { data: productRows } = await client
         .from("quotation_products")
         .select("id")
         .eq("quotation_id", data.quote_id)
@@ -283,7 +284,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
         throw new Error("Cannot send: quote has no products. Add at least one product with units.");
       }
 
-      const { data: sectionRows } = await supabaseAdmin
+      const { data: sectionRows } = await client
         .from("sections")
         .select("id")
         .in("quotation_product_id", productIds)
@@ -295,7 +296,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
         throw new Error("Cannot send: quote has no sections. Add at least one section with units.");
       }
 
-      const { count } = await supabaseAdmin
+      const { count } = await client
         .from("units")
         .select("id", { count: "exact", head: true })
         .in("section_id", sectionIds)
@@ -307,7 +308,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
     }
 
     // ── Update status ───────────────────────────────────────────────────
-    const { error } = await supabaseAdmin
+    const { error } = await client
       .from("quotes")
       .update({ status: data.status })
       .eq("id", data.quote_id)
@@ -318,7 +319,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
     // ── Freeze snapshot on transition to sent/accepted ───────────────────
     if (FREEZE_STATES.has(data.status)) {
       try {
-        await freezeQuoteSnapshot(tid, data.quote_id, data.status);
+        await freezeQuoteSnapshot(tid, data.quote_id, data.status, client);
       } catch (snapErr) {
         // Snapshot failure is logged but does NOT block the status change.
         // The quote is already updated; the snapshot is an audit safety net.
@@ -336,25 +337,25 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
 
 // ── Raw hierarchy loader (no middleware — called from server functions) ─────
 
-async function loadHierarchyRaw(quotationId: string, tenantId: string) {
+async function loadHierarchyRaw(quotationId: string, tenantId: string, client: any) {
   const [productsRes, sectionsRes, unitsRes, componentsRes] = await Promise.all([
-    supabaseAdmin
+    client
       .from("quotation_products")
       .select("id, quotation_id, product_type_code, label, position")
       .eq("quotation_id", quotationId)
       .eq("tenant_id", tenantId)
       .order("position"),
-    supabaseAdmin
+    client
       .from("sections")
       .select("id, quotation_product_id, label, position")
       .eq("tenant_id", tenantId)
       .order("position"),
-    supabaseAdmin
+    client
       .from("units")
       .select("id, section_id, unit_type_id, width_mm, height_mm, depth_mm, qty, finish_id, width_tier, override_factor_keys, position")
       .eq("tenant_id", tenantId)
       .order("position"),
-    supabaseAdmin
+    client
       .from("components")
       .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, position")
       .eq("tenant_id", tenantId)
@@ -387,18 +388,18 @@ async function loadHierarchyRaw(quotationId: string, tenantId: string) {
     componentsByUnit.set(c.unit_id, list);
   }
 
-  return (productsRes.data ?? []).map((p) => ({
+  return (productsRes.data ?? []).map((p: any) => ({
     ...p,
     sections: (sectionsByProduct.get(p.id) ?? [])
-      .sort((a, b) => a.position - b.position)
-      .map((s) => ({
+      .sort((a: any, b: any) => a.position - b.position)
+      .map((s: any) => ({
         ...s,
         units: (unitsBySection.get(s.id) ?? [])
-          .sort((a, b) => a.position - b.position)
-          .map((u) => ({
+          .sort((a: any, b: any) => a.position - b.position)
+          .map((u: any) => ({
             ...u,
             components: (componentsByUnit.get(u.id) ?? [])
-              .sort((a, b) => a.position - b.position),
+              .sort((a: any, b: any) => a.position - b.position),
           })),
       })),
   }));
@@ -417,34 +418,35 @@ async function freezeQuoteSnapshot(
   tenantId: string,
   quotationId: string,
   state: string,
+  client: any,
 ): Promise<void> {
   // 1. Load hierarchy tree
-  const rawTree = await loadHierarchyRaw(quotationId, tenantId);
+  const rawTree = await loadHierarchyRaw(quotationId, tenantId, client);
 
   // 2. Load catalog lookup (same pattern as priceQuotationTree)
   const [
     materialsRes, hardwareRes, accessoriesRes,
     mfgOpsRes, factorsRes, wastageRes, feesRes,
   ] = await Promise.all([
-    supabaseAdmin.from("catalog_materials")
+    client.from("catalog_materials")
       .select("id, pricing_unit, price_per_unit, default_wastage_pct")
       .eq("tenant_id", tenantId).is("archived_at", null),
-    supabaseAdmin.from("catalog_hardware")
+    client.from("catalog_hardware")
       .select("id, price_per_piece")
       .eq("tenant_id", tenantId).is("archived_at", null),
-    supabaseAdmin.from("catalog_accessories")
+    client.from("catalog_accessories")
       .select("id, price_per_piece")
       .eq("tenant_id", tenantId).is("archived_at", null),
-    supabaseAdmin.from("catalog_manufacturing_operations")
+    client.from("catalog_manufacturing_operations")
       .select("id, rate_unit, rate")
       .eq("tenant_id", tenantId).is("archived_at", null),
-    supabaseAdmin.from("tenant_pricing_factors")
+    client.from("tenant_pricing_factors")
       .select("factor_key, percent")
       .eq("tenant_id", tenantId).is("archived_at", null),
-    supabaseAdmin.from("tenant_wastage_rules")
+    client.from("tenant_wastage_rules")
       .select("scope, ref, pct")
       .eq("tenant_id", tenantId).is("archived_at", null),
-    supabaseAdmin.from("fees_credits")
+    client.from("fees_credits")
       .select("code, sign, amount, formula_key")
       .eq("tenant_id", tenantId).is("archived_at", null),
   ]);
@@ -475,7 +477,7 @@ async function freezeQuoteSnapshot(
   const breakdown = priceQuote(quoteInput, catalog);
 
   // 4. Load current rule version (latest active pricing rule)
-  const { data: ruleRow } = await supabaseAdmin
+  const { data: ruleRow } = await client
     .from("pricing_rules")
     .select("id, version")
     .eq("tenant_id", tenantId)
@@ -493,10 +495,10 @@ async function freezeQuoteSnapshot(
     breakdown: breakdown.breakdown,
     ruleVersionId: ruleRow?.id ?? null,
     factors: catalog.pricingFactors,
-  });
+  }, client);
 
   // 6. Write audit log
-  const { error: auditErr } = await supabaseAdmin.from("audit_log").insert({
+  const { error: auditErr } = await client.from("audit_log").insert({
     tenant_id: tenantId,
     entity_type: "quotation",
     entityId: quotationId,
@@ -546,10 +548,10 @@ export interface WriteSnapshotInput {
  * Throws on failure — callers should catch and decide whether to block
  * the status change.
  */
-export async function writeSnapshot(input: WriteSnapshotInput): Promise<void> {
+export async function writeSnapshot(input: WriteSnapshotInput, client: any): Promise<void> {
   const { tenantId, quotationId, state, tree, breakdown, ruleVersionId, factors } = input;
 
-  const { error } = await supabaseAdmin.from("quote_snapshots").insert({
+  const { error } = await client.from("quote_snapshots").insert({
     tenant_id: tenantId,
     quotation_id: quotationId,
     state,
@@ -586,6 +588,7 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     const tid = ctx.tenantId;
+    const client = (context as any).supabase;
 
     // Load all catalog + pricing data in parallel
     const [
@@ -597,37 +600,37 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
       wastageRes,
       feesRes,
     ] = await Promise.all([
-      supabaseAdmin
+      client
         .from("catalog_materials")
         .select("id, pricing_unit, price_per_unit, default_wastage_pct")
         .eq("tenant_id", tid)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("catalog_hardware")
         .select("id, price_per_piece")
         .eq("tenant_id", tid)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("catalog_accessories")
         .select("id, price_per_piece")
         .eq("tenant_id", tid)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("catalog_manufacturing_operations")
         .select("id, rate_unit, rate")
         .eq("tenant_id", tid)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("tenant_pricing_factors")
         .select("factor_key, percent")
         .eq("tenant_id", tid)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("tenant_wastage_rules")
         .select("scope, ref, pct")
         .eq("tenant_id", tid)
         .is("archived_at", null),
-      supabaseAdmin
+      client
         .from("fees_credits")
         .select("code, sign, amount, formula_key")
         .eq("tenant_id", tid)

@@ -80,19 +80,6 @@ describe("runShadow (integration)", () => {
   it("writes shadow row with correct values", async () => {
     let insertRow: any = null;
 
-    const mockChain = () => {
-      const chain: any = {
-        select() { return chain; },
-        eq() { return chain; },
-        is() { return chain; },
-        in() { return chain; },
-        order() { return chain; },
-        single() { return Promise.resolve({ data: { total: "100" }, error: null }); },
-        then(resolve: any) { resolve({ data: [], error: null }); },
-      };
-      return chain;
-    };
-
     const insertChain = {
       insert(row: any) { insertRow = row; return { error: null }; },
     };
@@ -121,15 +108,13 @@ describe("runShadow (integration)", () => {
       };
     });
 
-    vi.doMock("@/integrations/supabase/client.server", () => ({
-      supabaseAdmin: { from: fromMock },
-    }));
     vi.doMock("@/lib/log", () => ({
       log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     }));
 
+    const mockClient = { from: fromMock };
     const { runShadow } = await import("@/lib/pricing/shadow");
-    const result = await runShadow("quote-001", "tenant-001");
+    const result = await runShadow("quote-001", "tenant-001", undefined, mockClient);
 
     // No hierarchy → error
     expect(result.error).toContain("No hierarchy data");
@@ -159,15 +144,13 @@ describe("runShadow (integration)", () => {
       };
     });
 
-    vi.doMock("@/integrations/supabase/client.server", () => ({
-      supabaseAdmin: { from: fromMock },
-    }));
     vi.doMock("@/lib/log", () => ({
       log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
     }));
 
+    const mockClient = { from: fromMock };
     const { runShadow } = await import("@/lib/pricing/shadow");
-    const result = await runShadow("quote-001", "tenant-001");
+    const result = await runShadow("quote-001", "tenant-001", undefined, mockClient);
 
     expect(result.legacyTotal).toBeNull();
     expect(result.error).toContain("Failed to load quote");

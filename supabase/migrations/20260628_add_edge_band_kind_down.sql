@@ -1,0 +1,26 @@
+-- Down migration: remove edge_band from component_kind enum
+
+-- NOTE: PostgreSQL does not support DROP VALUE on enum types.
+-- The only safe way to remove a value is to:
+--   1. Rename the old enum type
+--   2. Create a new enum type without the value
+--   3. Alter all columns to use the new type
+--   4. Drop the old enum type
+--
+-- Since edge_band was just added and no data should reference it yet,
+-- we skip the column migration and just document the limitation.
+
+-- Cannot safely remove 'edge_band' from component_kind enum without
+-- recreating the enum type and all dependent columns. If a rollback is
+-- needed, use the full enum recreation approach:
+--
+-- ALTER TABLE components RENAME COLUMN kind TO kind_old;
+-- ALTER TABLE components ALTER COLUMN kind_old TYPE text;
+-- DROP TYPE component_kind;
+-- CREATE TYPE component_kind AS ENUM ('material','hardware','accessory','manufacturing');
+-- ALTER TABLE components ADD COLUMN kind component_kind;
+-- UPDATE components SET kind = kind_old::component_kind;
+-- ALTER TABLE components DROP COLUMN kind_old;
+--
+-- For now, this is a no-op down migration. The edge_band value remains
+-- in the enum but is harmless — no data should reference it after rollback.

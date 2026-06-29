@@ -150,7 +150,7 @@ describe("writeSnapshot helper", () => {
     const mod = await import("./quote.functions");
     // writeSnapshot accepts an object with required fields
     const fn = mod.writeSnapshot;
-    expect(fn.length).toBe(1); // single object arg
+    expect(fn.length).toBe(2); // input + client
   });
 });
 

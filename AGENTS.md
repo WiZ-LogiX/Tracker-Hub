@@ -287,7 +287,7 @@ The AI is a CTO, Product Owner, Business Strategist, and Senior Engineer capable
 
 Last refreshed: 2026-06-28.
 
-- Typecheck: ✅ Clean. Tests: 557/557 ✅. i18n: 649 keys ✅.
+- Typecheck: ✅ Clean. Tests: 576/576 ✅. i18n: 649 keys ✅. E2E: 2/2 ✅.
 - **T1.1–T8.2 complete**: Hierarchy (T1.1), unit types + BOM (T2.1), snapshots (T2.2), legacy VIEW (T2.3), catalog tables (T2.1), pricing levers (T2.2), area functions (T3.1), BOM resolution (T3.2), componentAmount leaf-pricing (T3.3), bottom-up pricing engine v3 (T4.1), factors + VAT + discount (T4.1), shadow comparison (T4.3), TreeConfigurator UI (T6.1), UnitEditor (T6.2), BreakdownPanel (T6.3), snapshot freezing (T5.1), rate-card import (T7.1), price history (T8.1), margin report (T8.2) — all applied to remote DB, tested, passing.
 - **Edge banding**: `edge_band` component kind with perimeter-based linear metres pricing. Migration `20260628_add_edge_band_kind.sql` applied.
 - **Packaging factor**: 8th per-unit factor in `FACTOR_ORDER`. i18n keys in en/ar/fr.
@@ -467,6 +467,7 @@ Use `generateObjectKey()` from `src/lib/r2.server.ts`; do not hand-roll key pref
 | `npm run typecheck`           | Run `tsc --noEmit`                                       |
 | `npm run lint`                | Run ESLint on all `**/*.{ts,tsx}`                        |
 | `npm run test`                | Run Vitest test suite                                    |
+| `npm run test:e2e`            | Run Playwright E2E tests                                 |
 | `npm run format`              | Format with Prettier                                     |
 | `node scripts/check-i18n.mjs` | Verify Arabic/French locale key coverage against English |
 
@@ -548,7 +549,7 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 
 **Server function**: `priceQuotationTree` in `quote.functions.ts` loads all catalog + pricing lever data from DB (parallel, tenant-scoped), builds a `CatalogLookup`, and calls the pure `priceQuote()` engine.
 
-### Test Suite (557 tests)
+### Test Suite (576 unit tests + 2 E2E tests)
 
 | File | Tests | Covers |
 |---|---|---|
@@ -568,10 +569,21 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 | `pricing/bom.test.ts` | 24 | BOM resolution (unit type → component descriptors) |
 | `pricing/componentAmount.test.ts` | 36 | Leaf-pricing (material m2/m/pcs/piece, hardware, accessory, manufacturing, edge_band, board-yield, wastage) |
 | `pricing/factors.test.ts` | 24 | FACTOR_ORDER (8 keys), VAT, discount clamping |
-| `pricing/shadow.test.ts` | 14 | Shadow comparison |
+| `pricing/shadow.test.ts` | 14 | Shadow comparison (runs v3 engine, writes rows, tolerances) |
+| `pricing/shadow-integration.test.ts` | 19 | Full shadow pipeline with realistic Egyptian furniture data |
 | `pricing/spanCheck.test.ts` | 16 | Shelf deflection (7 materials, L/200 threshold) |
 | `hierarchy.test.ts` | 30 | Hierarchy CRUD server functions |
 | `reports/margin.test.ts` | 32 | Margin report (pickVersion, computeSnapshotMargin) |
+
+#### E2E Tests (Playwright)
+
+| File | Tests | Covers |
+|---|---|---|
+| `e2e/builder.spec.ts` | 2 | Full tree build (product→section→unit→component→save) + empty-section validation |
+
+**E2E setup**: `@playwright/test` devDependency, chromium headless shell 149.0.7827.55, `playwright.config.ts` with webServer on port 8081. Auth: form-based login via `signIn()` (navigates to `/auth`, fills username/password, submits, waits for `/admin`). Feature flag: route interception via `enableFeatureFlag()` mocks `tenants.feature_flags` Supabase REST response to enable `quotation_builder_v2`.
+
+**Collapsible start states**: Products and sections start **open** (`useState(true)`). Units start **closed** (`useState(false)`).
 
 ### Migrations (applied to remote DB)
 
