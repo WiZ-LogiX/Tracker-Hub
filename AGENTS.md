@@ -289,7 +289,9 @@ Last refreshed: 2026-06-29.
 
 - Typecheck: ✅ Clean. Tests: 576/576 ✅. i18n: 655 keys ✅. E2E: 2/2 ✅.
 - **T1.1–T8.2 complete**: Hierarchy (T1.1), unit types + BOM (T2.1), snapshots (T2.2), legacy VIEW (T2.3), catalog tables (T2.1), pricing levers (T2.2), area functions (T3.1), BOM resolution (T3.2), componentAmount leaf-pricing (T3.3), bottom-up pricing engine v3 (T4.1), factors + VAT + discount (T4.1), shadow comparison (T4.3), TreeConfigurator UI (T6.1), UnitEditor (T6.2), BreakdownPanel (T6.3), snapshot freezing (T5.1), rate-card import (T7.1), price history (T8.1), margin report (T8.2) — all applied to remote DB, tested, passing.
-- **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 6 kinds (material/hardware/accessory/manufacturing/edge_band/veneer). Wired into TreeConfigurator: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows "Linked" badge when catalog_id present.
+- **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 6 kinds (material/hardware/accessory/manufacturing/edge_band/veneer). Wired into both TreeConfigurator and UnitEditor: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows "Linked" badge when catalog_id present. UnitEditor finish picker replaced with CommandDialog-based searchable picker (was plain `<Select>`).
+- **Catalog seed data**: `scripts/seed-catalog.sql` — 86 rows: 12 materials, 14 hardware, 9 accessories, 8 manufacturing ops, 10 finishes, 8 veneers, 7 pricing factors, 8 wastage rules. Applied to remote DB.
+- **Packaging factor**: 8th per-unit factor in `FACTOR_ORDER`. `pricing_factor_key` enum extended with `packaging` in remote DB.
 - **Edge banding**: `edge_band` component kind with perimeter-based linear metres pricing. Migration `20260628_add_edge_band_kind.sql` applied. `hierarchy.functions.ts` Zod schema updated to include edge_band.
 - **Packaging factor**: 8th per-unit factor in `FACTOR_ORDER`. i18n keys in en/ar/fr.
 - **Shelf deflection**: `spanCheck.ts` pure utility. 7 materials. L/200 threshold. UnitEditor shows warning Badge. 16 tests.
