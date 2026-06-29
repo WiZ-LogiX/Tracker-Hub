@@ -41,7 +41,11 @@ test.describe("Quote Builder — v2 TreeConfigurator", () => {
     const addMaterialBtn = page.getByRole("button", { name: /material/i }).first();
     await expect(addMaterialBtn).toBeVisible({ timeout: 5_000 });
     await addMaterialBtn.click();
-    await page.waitForTimeout(300);
+
+    // CatalogPicker dialog opens — close it (no catalog data in test DB)
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5_000 });
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 5_000 });
 
     // ── 4. Save the quote ─────────────────────────────────────────────
     const saveBtn = page.getByRole("button", { name: /Save quote/i });

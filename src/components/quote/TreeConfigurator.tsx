@@ -66,6 +66,8 @@ import { UnitEditor } from "@/components/quote/UnitEditor";
 import type { UnitEditorValue, WidthTier } from "@/components/quote/UnitEditor";
 import { BreakdownPanel } from "@/components/quote/BreakdownPanel";
 import type { BreakdownTree } from "@/components/quote/BreakdownPanel";
+import { CatalogPicker } from "@/components/quote/CatalogPicker";
+import type { CatalogPickerKind, CatalogPickerItem } from "@/components/quote/CatalogPicker";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -675,7 +677,7 @@ export function TreeConfigurator({
   // ── Component mutations ───────────────────────────────────────────────
 
   const handleAddComponent = useCallback(
-    async (unitId: string, kind: string) => {
+    async (unitId: string, kind: string, catalogItem?: CatalogPickerItem) => {
       const unit = effectiveTree
         .flatMap((p) => p.sections)
         .flatMap((s) => s.units)
@@ -686,9 +688,9 @@ export function TreeConfigurator({
         id: `_optimistic_${Date.now()}`,
         unit_id: unitId,
         kind: kind as ComponentNode["kind"],
-        catalog_id: null,
+        catalog_id: catalogItem?.id ?? null,
         qty: 1,
-        unit_of_measure: "pcs",
+        unit_of_measure: kind === "manufacturing" ? "minute" : "pcs",
         position: pos,
       };
 
@@ -711,7 +713,7 @@ export function TreeConfigurator({
       try {
         if (quotationId) {
           await addComponentFn({
-            data: { unitId, kind: kind as any, position: pos },
+            data: { unitId, kind: kind as any, catalogId: catalogItem?.id ?? null, position: pos },
           });
           await queryClient.invalidateQueries({ queryKey });
         }
@@ -750,6 +752,27 @@ export function TreeConfigurator({
       addComponentFn,
       setTree,
     ],
+  );
+
+  // ── Catalog picker state ─────────────────────────────────────────────
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerKind, setPickerKind] = useState<CatalogPickerKind>("material");
+  const [pendingUnitId, setPendingUnitId] = useState<string | null>(null);
+
+  const openPicker = useCallback((kind: string, unitId: string) => {
+    setPickerKind(kind as CatalogPickerKind);
+    setPendingUnitId(unitId);
+    setPickerOpen(true);
+  }, []);
+
+  const handleCatalogSelect = useCallback(
+    (item: CatalogPickerItem) => {
+      if (pendingUnitId) {
+        handleAddComponent(pendingUnitId, pickerKind, item);
+      }
+    },
+    [pendingUnitId, pickerKind, handleAddComponent],
   );
 
   const handleUpdateComponent = useCallback(
@@ -969,6 +992,7 @@ export function TreeConfigurator({
               onUpdateComponent={handleUpdateComponent}
               onDeleteComponent={handleDeleteComponent}
               onReorderComponents={handleReorderComponents}
+              onOpenPicker={openPicker}
               tree={effectiveTree}
             />
           ))}
@@ -992,6 +1016,14 @@ export function TreeConfigurator({
           </Button>
         </div>
       )}
+
+      {/* Catalog picker dialog */}
+      <CatalogPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        kind={pickerKind}
+        onSelect={handleCatalogSelect}
+      />
     </div>
   );
 }
@@ -1018,6 +1050,7 @@ interface ProductNodeProps {
   onUpdateComponent: (id: string, patch: Partial<ComponentNode>) => Promise<void>;
   onDeleteComponent: (unitId: string, componentId: string) => Promise<void>;
   onReorderComponents: (unitId: string, ids: string[]) => Promise<void>;
+  onOpenPicker: (kind: string, unitId: string) => void;
   tree: TreeData;
 }
 
@@ -1041,6 +1074,7 @@ function ProductNodeComponent({
   onUpdateComponent,
   onDeleteComponent,
   onReorderComponents,
+  onOpenPicker,
   tree,
 }: ProductNodeProps) {
   const { t } = useTranslation();
@@ -1183,6 +1217,7 @@ function ProductNodeComponent({
               onUpdateComponent={onUpdateComponent}
               onDeleteComponent={onDeleteComponent}
               onReorderComponents={onReorderComponents}
+              onOpenPicker={onOpenPicker}
             />
           ))}
 
@@ -1219,6 +1254,7 @@ interface SectionNodeProps {
   onUpdateComponent: (id: string, patch: Partial<ComponentNode>) => Promise<void>;
   onDeleteComponent: (unitId: string, componentId: string) => Promise<void>;
   onReorderComponents: (unitId: string, ids: string[]) => Promise<void>;
+  onOpenPicker: (kind: string, unitId: string) => void;
 }
 
 function SectionNodeComponent({
@@ -1238,6 +1274,7 @@ function SectionNodeComponent({
   onUpdateComponent,
   onDeleteComponent,
   onReorderComponents,
+  onOpenPicker,
 }: SectionNodeProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
@@ -1365,6 +1402,7 @@ function SectionNodeComponent({
               onUpdateComponent={onUpdateComponent}
               onDeleteComponent={onDeleteComponent}
               onReorderComponents={onReorderComponents}
+              onOpenPicker={onOpenPicker}
             />
           ))}
 
@@ -1397,6 +1435,7 @@ interface UnitNodeProps {
   onUpdateComponent: (id: string, patch: Partial<ComponentNode>) => Promise<void>;
   onDeleteComponent: (unitId: string, componentId: string) => Promise<void>;
   onReorderComponents: (unitId: string, ids: string[]) => Promise<void>;
+  onOpenPicker: (kind: string, unitId: string) => void;
 }
 
 function UnitNodeComponent({
@@ -1412,6 +1451,7 @@ function UnitNodeComponent({
   onUpdateComponent,
   onDeleteComponent,
   onReorderComponents,
+  onOpenPicker,
 }: UnitNodeProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -1647,7 +1687,7 @@ function UnitNodeComponent({
                     key={kind}
                     size="sm"
                     variant="ghost"
-                    onClick={() => onAddComponent(unit.id, kind)}
+                    onClick={() => onOpenPicker(kind, unit.id)}
                     className="gap-1 text-xs"
                   >
                     <Plus className="h-3 w-3" /> {t(`treeConfigurator.kind.${kind}`)}
@@ -1700,6 +1740,11 @@ function ComponentNodeComponent({
       <Badge className={`text-xs ${kindColors[component.kind] ?? ""}`} variant="outline">
         {t(`treeConfigurator.kind.${component.kind}`)}
       </Badge>
+      {component.catalog_id && (
+        <Badge variant="secondary" className="text-xs">
+          {t("treeConfigurator.linked")}
+        </Badge>
+      )}
 
       {editing ? (
         <>

@@ -663,8 +663,10 @@
       "material": "Matériau",
       "hardware": "Quincaillerie",
       "accessory": "Accessoire",
-      "manufacturing": "Fabrication"
+      "manufacturing": "Fabrication",
+      "edge_band": "Bandeau de chant"
     },
+    "linked": "Lié",
     "productAdded": "Produit ajouté",
     "productDeleted": "Produit supprimé",
     "sectionAdded": "Section ajoutée",
@@ -679,6 +681,12 @@
     "errorReorder": "Échec du réordonnancement",
     "errorEmptySection": "La section \"{{section}}\" dans \"{{product}}\" n'a aucune unité. Ajoutez au moins une unité avant d'envoyer.",
     "errorLoadUnitTypes": "Échec du chargement des types d'unités"
+  },
+  "catalogPicker": {
+    "search": "Rechercher {{kind}}…",
+    "loading": "Chargement…",
+    "empty": "Aucun {{kind}} trouvé.",
+    "results": "{{count}} {{kind}} disponible(s)"
   },
   "unitEditor": {
     "unitType": "Type d'unité",

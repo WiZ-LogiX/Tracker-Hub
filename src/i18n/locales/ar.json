@@ -662,8 +662,10 @@
       "material": "مادة",
       "hardware": "عدد",
       "accessory": "إكسسوار",
-      "manufacturing": "تصنيع"
+      "manufacturing": "تصنيع",
+      "edge_band": "شريط الحافة"
     },
+    "linked": "مرتبط",
     "productAdded": "تمت إضافة المنتج",
     "productDeleted": "تم حذف المنتج",
     "sectionAdded": "تمت إضافة القسم",
@@ -678,6 +680,12 @@
     "errorReorder": "فشل في إعادة الترتيب",
     "errorEmptySection": "القسم \"{{section}}\" في \"{{product}}\" لا يحتوي على وحدات. أضف وحدة واحدة على الأقل قبل الإرسال.",
     "errorLoadUnitTypes": "فشل في تحميل أنواع الوحدات"
+  },
+  "catalogPicker": {
+    "search": "بحث {{kind}}…",
+    "loading": "جاري التحميل…",
+    "empty": "لا توجد {{kind}}.",
+    "results": "{{count}} {{kind}} متاح"
   },
   "unitEditor": {
     "unitType": "نوع الوحدة",

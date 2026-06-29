@@ -662,8 +662,10 @@
       "material": "Material",
       "hardware": "Hardware",
       "accessory": "Accessory",
-      "manufacturing": "Manufacturing"
+      "manufacturing": "Manufacturing",
+      "edge_band": "Edge Band"
     },
+    "linked": "Linked",
     "productAdded": "Product added",
     "productDeleted": "Product deleted",
     "sectionAdded": "Section added",
@@ -678,6 +680,12 @@
     "errorReorder": "Failed to reorder",
     "errorEmptySection": "Section \"{{section}}\" in \"{{product}}\" has 0 units. Add at least one unit before sending.",
     "errorLoadUnitTypes": "Failed to load unit types"
+  },
+  "catalogPicker": {
+    "search": "Search {{kind}}…",
+    "loading": "Loading…",
+    "empty": "No {{kind}} found.",
+    "results": "{{count}} {{kind}} available"
   },
   "unitEditor": {
     "unitType": "Unit Type",

@@ -69,7 +69,7 @@ const unitUpdateInput = z.object({
 
 const componentInput = z.object({
   unitId: z.string().uuid(),
-  kind: z.enum(["material", "hardware", "accessory", "manufacturing"]),
+  kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band"]),
   catalogId: z.string().uuid().nullable().optional(),
   qty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
@@ -78,7 +78,7 @@ const componentInput = z.object({
 
 const componentUpdateInput = z.object({
   id: z.string().uuid(),
-  kind: z.enum(["material", "hardware", "accessory", "manufacturing"]).optional(),
+  kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band"]).optional(),
   catalogId: z.string().uuid().nullable().optional(),
   qty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
