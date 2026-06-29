@@ -407,7 +407,7 @@ describe("UnitEditor component", () => {
     expect(src).toContain("handleComponentQtyChange");
     expect(src).toContain("handleRemoveComponent");
     expect(src).toContain("handleMoveComponent");
-    expect(src).toContain("handleAddBlankComponent");
+    expect(src).toContain("handleCatalogSelect");
   });
 
   it("UnitEditor shows BOM autofill preview", () => {

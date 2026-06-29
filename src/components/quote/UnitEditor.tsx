@@ -28,12 +28,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { AlertTriangle, Check, Plus, Trash2, ArrowUp, ArrowDown, Ruler } from "lucide-react";
+import { AlertTriangle, Check, Plus, Trash2, ArrowUp, ArrowDown, Ruler, Search } from "lucide-react";
 import { resolveBomFn, listUnitTypes } from "@/lib/unitTypes.functions";
 import { listFinishes } from "@/lib/catalog-v2.functions";
 import { formatEGP } from "@/lib/pricing";
 import { checkShelfSpan, getMaxSpanMm } from "@/lib/pricing/spanCheck";
 import type { ComponentDescriptor } from "@/lib/pricing/bom";
+import { CatalogPicker, type CatalogPickerItem, type CatalogPickerKind } from "./CatalogPicker";
+import {
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from "@/components/ui/command";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -227,21 +236,46 @@ export function UnitEditor({
     [value, onChange],
   );
 
-  // Add a blank component of a given kind
-  const handleAddBlankComponent = useCallback(
-    (kind: UnitEditorComponent["kind"]) => {
+  // Catalog picker state
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerKind, setPickerKind] = useState<CatalogPickerKind>("material");
+
+  const openPicker = useCallback((kind: string) => {
+    setPickerKind(kind as CatalogPickerKind);
+    setPickerOpen(true);
+  }, []);
+
+  const handleCatalogSelect = useCallback(
+    (item: CatalogPickerItem | null) => {
+      if (!item) return;
+      const unitOfMeasure =
+        pickerKind === "manufacturing"
+          ? "minute"
+          : pickerKind === "edge_band"
+            ? "m"
+            : "pcs";
       const newComp: UnitEditorComponent = {
         _bomId: makeBomId(),
-        kind,
-        catalogId: null,
+        kind: pickerKind as UnitEditorComponent["kind"],
+        catalogId: item.id,
         qty: 1,
-        unitOfMeasure: kind === "manufacturing" ? "minute" : "pcs",
+        unitOfMeasure,
         areaFunctionKey: null,
-        label: kind,
+        label: item.code,
       };
       onChange({ ...value, components: [...value.components, newComp] });
     },
-    [value, onChange],
+    [value, onChange, pickerKind],
+  );
+
+  // Finish picker state
+  const [finishPickerOpen, setFinishPickerOpen] = useState(false);
+  const [finishSearch, setFinishSearch] = useState("");
+
+  const filteredFinishes = finishes.filter((f) =>
+    finishSearch
+      ? f.code.toLowerCase().includes(finishSearch.toLowerCase())
+      : true,
   );
 
   // Move component up/down
@@ -387,27 +421,70 @@ export function UnitEditor({
         {/* Finish */}
         <div>
           <Label className="text-xs mb-1 block">{t("unitEditor.finish")}</Label>
-          <Select
-            value={value.finishId ?? "__none__"}
-            onValueChange={(v) =>
-              onChange({ ...value, finishId: v === "__none__" ? null : v })
-            }
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setFinishSearch("");
+              setFinishPickerOpen(true);
+            }}
+            className={`h-8 text-sm w-full justify-start gap-2 ${
+              errors.finishId ? "border-destructive" : ""
+            } ${!value.finishId ? "text-muted-foreground" : ""}`}
           >
-            <SelectTrigger className={`h-8 text-sm ${errors.finishId ? "border-destructive" : ""}`}>
-              <SelectValue placeholder={t("unitEditor.selectFinish")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">{t("unitEditor.noFinish")}</SelectItem>
-              {finishes.map((f) => (
-                <SelectItem key={f.id} value={f.id}>
-                  {f.code}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Search className="h-3 w-3 shrink-0" />
+            {value.finishId
+              ? finishes.find((f) => f.id === value.finishId)?.code ?? t("unitEditor.selectFinish")
+              : t("unitEditor.selectFinish")}
+          </Button>
+          {value.finishId && (
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:text-foreground mt-1 underline"
+              onClick={() => onChange({ ...value, finishId: null })}
+            >
+              {t("unitEditor.noFinish")}
+            </button>
+          )}
           {errors.finishId && (
             <p className="text-xs text-destructive mt-1">{errors.finishId}</p>
           )}
+
+          <CommandDialog open={finishPickerOpen} onOpenChange={setFinishPickerOpen}>
+            <CommandInput
+              placeholder={t("unitEditor.selectFinish")}
+              value={finishSearch}
+              onValueChange={setFinishSearch}
+            />
+            <CommandList>
+              <CommandEmpty>{t("catalogPicker.empty", { kind: t("unitEditor.finish") })}</CommandEmpty>
+              <CommandGroup heading={t("catalogPicker.results", { count: filteredFinishes.length, kind: t("unitEditor.finish") })}>
+                <CommandItem
+                  key="__none__"
+                  value="__none__"
+                  onSelect={() => {
+                    onChange({ ...value, finishId: null });
+                    setFinishPickerOpen(false);
+                  }}
+                >
+                  {t("unitEditor.noFinish")}
+                </CommandItem>
+                {filteredFinishes.map((f) => (
+                  <CommandItem
+                    key={f.id}
+                    value={f.id}
+                    onSelect={() => {
+                      onChange({ ...value, finishId: f.id });
+                      setFinishPickerOpen(false);
+                    }}
+                  >
+                    {f.code}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </CommandDialog>
         </div>
 
         {/* Width tier */}
@@ -545,7 +622,7 @@ export function UnitEditor({
               );
             })}
 
-            {/* Add blank component buttons */}
+            {/* Add component via catalog picker buttons */}
             {value.components.length > 0 && (
               <div className="flex flex-wrap gap-1 pt-1">
                 {(["material", "hardware", "accessory", "manufacturing", "edge_band"] as const).map(
@@ -554,7 +631,7 @@ export function UnitEditor({
                       key={kind}
                       size="sm"
                       variant="ghost"
-                      onClick={() => handleAddBlankComponent(kind)}
+                      onClick={() => openPicker(kind)}
                       className="gap-1 text-xs"
                     >
                       <Plus className="h-3 w-3" /> {t(`treeConfigurator.kind.${kind}`)}
@@ -595,6 +672,14 @@ export function UnitEditor({
           {t("unitEditor.selectUnitTypeHint")}
         </div>
       )}
+
+      {/* Catalog picker dialog */}
+      <CatalogPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        kind={pickerKind}
+        onSelect={handleCatalogSelect}
+      />
     </div>
   );
 }
