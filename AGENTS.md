@@ -289,7 +289,7 @@ Last refreshed: 2026-06-29.
 
 - Typecheck: ✅ Clean. Tests: 576/576 ✅. i18n: 655 keys ✅. E2E: 2/2 ✅.
 - **T1.1–T8.2 complete**: Hierarchy (T1.1), unit types + BOM (T2.1), snapshots (T2.2), legacy VIEW (T2.3), catalog tables (T2.1), pricing levers (T2.2), area functions (T3.1), BOM resolution (T3.2), componentAmount leaf-pricing (T3.3), bottom-up pricing engine v3 (T4.1), factors + VAT + discount (T4.1), shadow comparison (T4.3), TreeConfigurator UI (T6.1), UnitEditor (T6.2), BreakdownPanel (T6.3), snapshot freezing (T5.1), rate-card import (T7.1), price history (T8.1), margin report (T8.2) — all applied to remote DB, tested, passing.
-- **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 6 kinds (material/hardware/accessory/manufacturing/edge_band/veneer). Wired into both TreeConfigurator and UnitEditor: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows "Linked" badge when catalog_id present. UnitEditor finish picker replaced with CommandDialog-based searchable picker (was plain `<Select>`).
+- **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 6 kinds (material/hardware/accessory/manufacturing/edge_band/veneer). Wired into both TreeConfigurator and UnitEditor: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows catalog code name (e.g. "ACRYLIC-W") via `CatalogLookupContext` — a `useQuery`-backed Map fetched by `listAllCatalogItems` server function (queries all 5 catalog types in parallel). UnitEditor finish picker replaced with CommandDialog-based searchable picker (was plain `<Select>`).
 - **Catalog seed data**: `scripts/seed-catalog.sql` — 86 rows: 12 materials, 14 hardware, 9 accessories, 8 manufacturing ops, 10 finishes, 8 veneers, 7 pricing factors, 8 wastage rules. Applied to remote DB.
 - **Packaging factor**: 8th per-unit factor in `FACTOR_ORDER`. `pricing_factor_key` enum extended with `packaging` in remote DB.
 - **Edge banding**: `edge_band` component kind with perimeter-based linear metres pricing. Migration `20260628_add_edge_band_kind.sql` applied. `hierarchy.functions.ts` Zod schema updated to include edge_band.
@@ -582,7 +582,7 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 
 | File | Tests | Covers |
 |---|---|---|
-| `e2e/builder.spec.ts` | 2 | Full tree build (product→section→unit→component→save) + empty-section validation |
+| `e2e/builder.spec.ts` | 3 | Full tree build, catalog picker loads data + links component, empty-section validation |
 
 **E2E setup**: `@playwright/test` devDependency, chromium headless shell 149.0.7827.55, `playwright.config.ts` with webServer on port 8081. Auth: form-based login via `signIn()` (navigates to `/auth`, fills username/password, submits, waits for `/admin`). Feature flag: route interception via `enableFeatureFlag()` mocks `tenants.feature_flags` Supabase REST response to enable `quotation_builder_v2`.
 
