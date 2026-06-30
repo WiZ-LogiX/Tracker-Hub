@@ -32,8 +32,8 @@ if (!i18n.isInitialized) {
       load: "languageOnly",
       interpolation: {
         escapeValue: false,
-        prefix: "{",
-        suffix: "}",
+        prefix: "{{",
+        suffix: "}}",
       },
       detection: {
         order: ["localStorage", "navigator"],
