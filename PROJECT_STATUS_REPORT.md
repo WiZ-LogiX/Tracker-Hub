@@ -104,7 +104,7 @@ PeleCanon is a multi-tenant furniture-manufacturing SaaS for the Egyptian market
 
 | Item | Status | Details |
 |------|--------|---------|
-| Keys | ✅ | 649 keys consistent across en/ar/fr. |
+| Keys | ✅ | 662 keys consistent across en/ar/fr. |
 | Coverage | ✅ | All UI components use `useTranslation()`. |
 
 ---
@@ -112,21 +112,22 @@ PeleCanon is a multi-tenant furniture-manufacturing SaaS for the Egyptian market
 ## 2. Test Results
 
 ```
- Test Files  22 passed (22)
-      Tests  557 passed (557)
-   Duration  1.85s
+ Test Files  23 passed (23)
+      Tests  593 passed (593)
+   Duration  2.40s
 ```
 
 | Test File | Tests | Covers |
 |-----------|-------|--------|
 | `areaFunctions.test.ts` | 38 | 8 area types incl. edge_band |
 | `bom.test.ts` | 24 | BOM resolution, 8 area keys |
-| `componentAmount.test.ts` | 36 | Leaf-pricing incl. edge_band |
+| `componentAmount.test.ts` | 46 | Leaf-pricing incl. edge_band, veneer, finish |
 | `engine-v3.test.ts` | 33 | Bottom-up engine, golden file, determinism |
 | `factors.test.ts` | 24 | FACTOR_ORDER (8 keys), VAT, discount |
 | `shadow.test.ts` | 14 | Shadow comparison |
+| `shadow-integration.test.ts` | 19 | Shadow pipeline with Egyptian furniture data |
 | `spanCheck.test.ts` | 16 | Shelf deflection |
-| `hierarchy.test.ts` | 30 | Hierarchy CRUD |
+| `hierarchy.test.ts` | 36 | Hierarchy CRUD + saveV2Quote |
 | `unitTypes.test.ts` | 30 | Unit types + BOM |
 | `quoteSnapshots.test.ts` | 40 | Append-only trigger |
 | `legacyQuoteItems.test.ts` | 17 | Legacy VIEW |
@@ -138,6 +139,12 @@ PeleCanon is a multi-tenant furniture-manufacturing SaaS for the Egyptian market
 | `transactional.test.ts` | 8 | Schema exports |
 | `pricing/engine.test.ts` | 1 | v2 engine smoke |
 | `reports/margin.test.ts` | 32 | Margin report |
+
+### E2E Tests (Playwright)
+
+| Test File | Tests | Covers |
+|-----------|-------|--------|
+| `e2e/builder.spec.ts` | 3 | Full tree build, catalog picker loads + links component, empty-section validation |
 
 ---
 
@@ -157,6 +164,10 @@ PeleCanon is a multi-tenant furniture-manufacturing SaaS for the Egyptian market
 | `20260626_unit_finish_width_tier.sql` | width_tier enum + finish_id on units |
 | `20260628_price_history.sql` | price_history table (append-only) |
 | `20260628_add_edge_band_kind.sql` | edge_band enum value |
+| `20260622_quote_created_template.sql` | quote_created WhatsApp templates |
+| `20260622_seed_all_notification_templates.sql` | All 6 events × 3 languages |
+| `20260622_drop_legacy_customer_policies.sql` | RLS fix for customers |
+| `20260701_add_length_veneer_finish.sql` | veneer/finish enum values + units.length_mm + units.dimension_unit |
 
 ### Down Migrations Available
 
@@ -168,6 +179,7 @@ PeleCanon is a multi-tenant furniture-manufacturing SaaS for the Egyptian market
 | `20260624_legacy_quote_items_view_down.sql` | Legacy VIEW |
 | `20260624_catalog_tables_down.sql` | 8 catalog tables |
 | `20260624_pricing_levers_down.sql` | 4 pricing lever tables |
+| `20260701_add_length_veneer_finish_down.sql` | veneer/finish + length_mm + dimension_unit |
 
 ---
 
@@ -245,8 +257,8 @@ Browser → Bearer JWT → auth-middleware → tenant-middleware → Business Lo
 
 | File | Usage | Priority |
 |------|-------|----------|
-| `quote.functions.ts` | Quote creation, snapshot freezing, catalog loads, audit_log | High |
-| `pricing/shadow.ts` | Shadow runs: reads hierarchy + catalog, writes pricing_shadow_runs | Medium |
+| ~~`quote.functions.ts`~~ | ~~Quote creation, snapshot freezing, catalog loads, audit_log~~ | ~~High~~ ✅ MIGRATED |
+| ~~`pricing/shadow.ts`~~ | ~~Shadow runs: reads hierarchy + catalog, writes pricing_shadow_runs~~ | ~~Medium~~ ✅ MIGRATED |
 
 ### Pre-Existing (Not in Scope)
 
