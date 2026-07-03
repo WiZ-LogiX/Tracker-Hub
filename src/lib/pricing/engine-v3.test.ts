@@ -19,6 +19,8 @@ const EMPTY_CATALOG: CatalogLookup = {
   hardware: {},
   accessories: {},
   manufacturingOps: {},
+  veneers: {},
+  finishes: {},
   pricingFactors: [],
   wastageRules: [],
   feesCredits: [],

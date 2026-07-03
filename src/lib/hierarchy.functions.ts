@@ -47,6 +47,8 @@ const unitInput = z.object({
   widthMm: z.number().int().optional(),
   heightMm: z.number().int().optional(),
   depthMm: z.number().int().optional(),
+  lengthMm: z.number().default(0).optional(),
+  dimensionUnit: z.enum(["mm", "m", "m2"]).default("mm").optional(),
   qty: z.number().int().min(1).optional(),
   finishId: z.string().uuid().nullable().optional(),
   widthTier: z.enum(["narrow", "standard", "wide", "extra_wide"]).nullable().optional(),
@@ -60,6 +62,8 @@ const unitUpdateInput = z.object({
   widthMm: z.number().int().optional(),
   heightMm: z.number().int().optional(),
   depthMm: z.number().int().optional(),
+  lengthMm: z.number().default(0).optional(),
+  dimensionUnit: z.enum(["mm", "m", "m2"]).default("mm").optional(),
   qty: z.number().int().min(1).optional(),
   finishId: z.string().uuid().nullable().optional(),
   widthTier: z.enum(["narrow", "standard", "wide", "extra_wide"]).nullable().optional(),
@@ -69,7 +73,7 @@ const unitUpdateInput = z.object({
 
 const componentInput = z.object({
   unitId: z.string().uuid(),
-  kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band"]),
+  kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band", "veneer", "finish"]),
   catalogId: z.string().uuid().nullable().optional(),
   qty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
@@ -78,7 +82,7 @@ const componentInput = z.object({
 
 const componentUpdateInput = z.object({
   id: z.string().uuid(),
-  kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band"]).optional(),
+  kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band", "veneer", "finish"]).optional(),
   catalogId: z.string().uuid().nullable().optional(),
   qty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
@@ -116,7 +120,7 @@ export const loadHierarchy = createServerFn({ method: "POST" })
         .order("position"),
       (context as any).supabase
         .from("units")
-        .select("id, section_id, unit_type_id, width_mm, height_mm, depth_mm, qty, finish_id, width_tier, override_factor_keys, position")
+        .select("id, section_id, unit_type_id, width_mm, height_mm, depth_mm, length_mm, dimension_unit, qty, finish_id, width_tier, override_factor_keys, position")
         .eq("tenant_id", tid)
         .order("position"),
       (context as any).supabase
@@ -342,6 +346,8 @@ export const addUnit = createServerFn({ method: "POST" })
         width_mm: data.widthMm ?? 600,
         height_mm: data.heightMm ?? 720,
         depth_mm: data.depthMm ?? 600,
+        length_mm: data.lengthMm ?? 0,
+        dimension_unit: data.dimensionUnit ?? "mm",
         qty: data.qty ?? 1,
         finish_id: data.finishId ?? null,
         width_tier: data.widthTier ?? null,
@@ -367,6 +373,8 @@ export const updateUnit = createServerFn({ method: "POST" })
     if (patch.widthMm !== undefined) updates.width_mm = patch.widthMm;
     if (patch.heightMm !== undefined) updates.height_mm = patch.heightMm;
     if (patch.depthMm !== undefined) updates.depth_mm = patch.depthMm;
+    if (patch.lengthMm !== undefined) updates.length_mm = patch.lengthMm;
+    if (patch.dimensionUnit !== undefined) updates.dimension_unit = patch.dimensionUnit;
     if (patch.qty !== undefined) updates.qty = patch.qty;
     if (patch.finishId !== undefined) updates.finish_id = patch.finishId;
     if (patch.widthTier !== undefined) updates.width_tier = patch.widthTier;

@@ -285,11 +285,13 @@ The AI is a CTO, Product Owner, Business Strategist, and Senior Engineer capable
 
 ## Current State Notes
 
-Last refreshed: 2026-06-29.
+Last refreshed: 2026-07-03.
 
-- Typecheck: ✅ Clean. Tests: 576/576 ✅. i18n: 655 keys ✅. E2E: 2/2 ✅.
+- Typecheck: ✅ Clean. Tests: 593/593 ✅. i18n: 662 keys ✅. E2E: 3/3 ✅.
 - **T1.1–T8.2 complete**: Hierarchy (T1.1), unit types + BOM (T2.1), snapshots (T2.2), legacy VIEW (T2.3), catalog tables (T2.1), pricing levers (T2.2), area functions (T3.1), BOM resolution (T3.2), componentAmount leaf-pricing (T3.3), bottom-up pricing engine v3 (T4.1), factors + VAT + discount (T4.1), shadow comparison (T4.3), TreeConfigurator UI (T6.1), UnitEditor (T6.2), BreakdownPanel (T6.3), snapshot freezing (T5.1), rate-card import (T7.1), price history (T8.1), margin report (T8.2) — all applied to remote DB, tested, passing.
-- **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 6 kinds (material/hardware/accessory/manufacturing/edge_band/veneer). Wired into both TreeConfigurator and UnitEditor: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows catalog code name (e.g. "ACRYLIC-W") via `CatalogLookupContext` — a `useQuery`-backed Map fetched by `listAllCatalogItems` server function (queries all 5 catalog types in parallel). UnitEditor finish picker replaced with CommandDialog-based searchable picker (was plain `<Select>`).
+- **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 7 kinds (material/hardware/accessory/manufacturing/edge_band/veneer/finish). Wired into both TreeConfigurator and UnitEditor: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows catalog code name (e.g. "ACRYLIC-W") via `CatalogLookupContext` — a `useQuery`-backed Map fetched by `listAllCatalogItems` server function (queries all 6 catalog types in parallel: materials, hardware, accessories, manufacturing ops, veneers, finishes). UnitEditor finish picker replaced with CommandDialog-based searchable picker (was plain `<Select>`).
+- **Unit dimensions overhaul**: `units` table now has 4 dimensions — `length_mm` (int, default 0), `width_mm`, `height_mm`, `depth_mm` — plus `dimension_unit` enum (mm/m/m2, default mm). Internal storage always mm; `mmToUnit`/`unitToMm` conversion helpers in UnitEditor handle display. Engine-v3 works in mm.
+- **component_kind enum: 7 values**: material, hardware, accessory, manufacturing, edge_band, veneer, finish. Veneer and finish are now selectable as component kinds via CatalogPicker. Veneer priced per m² (price_per_m2 from catalog_veneers); finish priced per m² (price_per_unit from catalog_finishes). engine-v3 + componentAmount + shadow all updated to handle these kinds.
 - **Catalog seed data**: `scripts/seed-catalog.sql` — 86 rows: 12 materials, 14 hardware, 9 accessories, 8 manufacturing ops, 10 finishes, 8 veneers, 7 pricing factors, 8 wastage rules. Applied to remote DB.
 - **Packaging factor**: 8th per-unit factor in `FACTOR_ORDER`. `pricing_factor_key` enum extended with `packaging` in remote DB.
 - **Edge banding**: `edge_band` component kind with perimeter-based linear metres pricing. Migration `20260628_add_edge_band_kind.sql` applied. `hierarchy.functions.ts` Zod schema updated to include edge_band.
@@ -297,6 +299,9 @@ Last refreshed: 2026-06-29.
 - **Shelf deflection**: `spanCheck.ts` pure utility. 7 materials. L/200 threshold. UnitEditor shows warning Badge. 16 tests.
 - **Security hardening**: 6 files remediated for supabaseAdmin leakage. All use `(context as any).supabase` for tenant-owned data.
 - **Domain audit**: Completed with 7-dimension table, gap list, reality-check examples, product-type leak audit.
+- **V2Configurator**: `src/routes/admin/quotes/configurator.tsx` — feature-flag gated (`quotation_builder_v2`). Customer picker, notes textarea, TreeConfigurator integration, save button. Wired to `saveV2Quote` server function.
+- **saveV2Quote**: `src/lib/quote.functions.ts` — creates quote row + inserts full hierarchy (products → sections → units → components). Atomic with rollback (deletes quote on hierarchy insertion failure). Triggers shadow comparison if `pricing_shadow` feature flag is on.
+- **Pricing shadow flag**: `pricing_shadow` enabled via Supabase REST API on tenant `2bf7cd99-d567-42d3-b5fc-22cc40654293`. Feature flags: `{"quotation_builder_v2": true, "pricing_shadow": true}`.
 - `src/integrations/supabase/types.ts` is still a permissive PostgREST stub, not generated Supabase types. Do not add `<Database>` back to `createClient()` until real types are generated.
 - The service-role and auth middleware Supabase clients intentionally omit the placeholder `Database` generic to avoid `.from(...)` chains collapsing to `never`.
 - R2 server helpers now use AWS SDK checksum settings `requestChecksumCalculation: "WHEN_REQUIRED"` and `responseChecksumValidation: "WHEN_REQUIRED"`.
@@ -552,7 +557,7 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 
 **Server function**: `priceQuotationTree` in `quote.functions.ts` loads all catalog + pricing lever data from DB (parallel, tenant-scoped), builds a `CatalogLookup`, and calls the pure `priceQuote()` engine.
 
-### Test Suite (576 unit tests + 2 E2E tests)
+### Test Suite (593 unit tests + 3 E2E tests)
 
 | File | Tests | Covers |
 |---|---|---|
@@ -570,12 +575,12 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 | `pricing/engine-v3.test.ts` | 33 | v3 bottom-up engine (components, aggregation, factors, fees, determinism, golden-file, edge cases, board-yield, wastage precedence) |
 | `pricing/areaFunctions.test.ts` | 38 | Area functions (8 types incl. edge_band, edge cases, property tests) |
 | `pricing/bom.test.ts` | 24 | BOM resolution (unit type → component descriptors) |
-| `pricing/componentAmount.test.ts` | 36 | Leaf-pricing (material m2/m/pcs/piece, hardware, accessory, manufacturing, edge_band, board-yield, wastage) |
+| `pricing/componentAmount.test.ts` | 46 | Leaf-pricing (material m2/m/pcs/piece, hardware, accessory, manufacturing, edge_band, veneer, finish, board-yield, wastage) |
 | `pricing/factors.test.ts` | 24 | FACTOR_ORDER (8 keys), VAT, discount clamping |
 | `pricing/shadow.test.ts` | 14 | Shadow comparison (runs v3 engine, writes rows, tolerances) |
 | `pricing/shadow-integration.test.ts` | 19 | Full shadow pipeline with realistic Egyptian furniture data |
 | `pricing/spanCheck.test.ts` | 16 | Shelf deflection (7 materials, L/200 threshold) |
-| `hierarchy.test.ts` | 30 | Hierarchy CRUD server functions |
+| `hierarchy.test.ts` | 36 | Hierarchy CRUD server functions |
 | `reports/margin.test.ts` | 32 | Margin report (pickVersion, computeSnapshotMargin) |
 
 #### E2E Tests (Playwright)
@@ -605,6 +610,7 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 | `20260622_quote_created_template.sql` | ✅ Applied | quote_created WhatsApp templates |
 | `20260622_seed_all_notification_templates.sql` | ✅ Applied | All 6 events × 3 languages |
 | `20260622_drop_legacy_customer_policies.sql` | ✅ Applied | RLS fix for customers |
+| `20260701_add_length_veneer_finish.sql` | ✅ Applied | Extends component_kind enum with veneer/finish; adds units.length_mm + units.dimension_unit (mm/m/m2) |
 
 Project Context Management
 

@@ -188,7 +188,7 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string, cl
   const { data: units } = sectionIds.length > 0
     ? await client
         .from("units")
-        .select("id, section_id, width_mm, height_mm, depth_mm, qty, override_factor_keys")
+        .select("id, section_id, length_mm, width_mm, height_mm, depth_mm, qty, override_factor_keys")
         .in("section_id", sectionIds)
         .eq("tenant_id", tenantId)
     : { data: [] };
@@ -229,6 +229,7 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string, cl
             .map((u: any) => ({
               id: u.id,
               unitTypeId: null,
+              lengthMm: u.length_mm ?? 0,
               widthMm: u.width_mm,
               heightMm: u.height_mm,
               depthMm: u.depth_mm,
@@ -236,7 +237,7 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string, cl
               overrideFactorKeys: (u.override_factor_keys as Record<string, number>) ?? {},
               components: (compByUnit.get(u.id) ?? []).map((c: any) => ({
                 id: c.id,
-                kind: c.kind as "material" | "hardware" | "accessory" | "manufacturing" | "edge_band",
+                kind: c.kind as "material" | "hardware" | "accessory" | "manufacturing" | "edge_band" | "veneer" | "finish",
                 catalogId: c.catalog_id,
                 qty: Number(c.qty),
                 unitOfMeasure: c.unit_of_measure,
@@ -289,6 +290,8 @@ function emptyCatalog(): CatalogLookup {
     hardware: {},
     accessories: {},
     manufacturingOps: {},
+    veneers: {},
+    finishes: {},
     pricingFactors: [],
     wastageRules: [],
     feesCredits: [],
@@ -296,7 +299,7 @@ function emptyCatalog(): CatalogLookup {
 }
 
 async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup> {
-  const [materialsRes, hardwareRes, accessoriesRes, mfgOpsRes, factorsRes, wastageRes, feesRes] =
+  const [materialsRes, hardwareRes, accessoriesRes, mfgOpsRes, veneersRes, finishesRes, factorsRes, wastageRes, feesRes] =
     await Promise.all([
       client
         .from("catalog_materials")
@@ -316,6 +319,16 @@ async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup
       client
         .from("catalog_manufacturing_operations")
         .select("id, rate_unit, rate")
+        .eq("tenant_id", tenantId)
+        .is("archived_at", null),
+      client
+        .from("catalog_veneers")
+        .select("id, price_per_m2")
+        .eq("tenant_id", tenantId)
+        .is("archived_at", null),
+      client
+        .from("catalog_finishes")
+        .select("id, price_per_unit")
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
       client
@@ -340,6 +353,8 @@ async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup
     ["hardware", hardwareRes],
     ["accessories", accessoriesRes],
     ["manufacturingOps", mfgOpsRes],
+    ["veneers", veneersRes],
+    ["finishes", finishesRes],
     ["pricingFactors", factorsRes],
     ["wastageRules", wastageRes],
     ["feesCredits", feesRes],
@@ -374,6 +389,28 @@ async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup
       (mfgOpsRes.data ?? []).map((o: any) => [
         o.id,
         { id: o.id, rateUnit: o.rate_unit, rate: o.rate },
+      ]),
+    ),
+    veneers: Object.fromEntries(
+      (veneersRes.data ?? []).map((v: any) => [
+        v.id,
+        {
+          id: v.id,
+          pricingUnit: "m2",
+          pricePerUnit: v.price_per_m2,
+          defaultWastagePct: 0,
+        },
+      ]),
+    ),
+    finishes: Object.fromEntries(
+      (finishesRes.data ?? []).map((f: any) => [
+        f.id,
+        {
+          id: f.id,
+          pricingUnit: "m2",
+          pricePerUnit: f.price_per_unit,
+          defaultWastagePct: 0,
+        },
       ]),
     ),
     pricingFactors: (factorsRes.data ?? []).map((f: any) => ({

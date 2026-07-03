@@ -663,7 +663,9 @@
       "hardware": "عدد",
       "accessory": "إكسسوار",
       "manufacturing": "تصنيع",
-      "edge_band": "شريط الحافة"
+      "edge_band": "شريط الحافة",
+      "veneer": "تغليف",
+      "finish": "تشطيب"
     },
     "linked": "مرتبط",
     "productAdded": "تمت إضافة المنتج",
@@ -703,6 +705,13 @@
       "standard": "قياسي (400–800 مم)",
       "wide": "عريض (800–1200 مم)",
       "extra_wide": "عريض جداً (> 1200 مم)"
+    },
+    "length": "الطول",
+    "dimensionUnit": "الوحدة",
+    "dimUnit": {
+      "mm": "مم",
+      "m": "م",
+      "m2": "م²"
     },
     "componentPreview": "المكونات",
     "autofilling": "جارٍ تحليل BOM…",

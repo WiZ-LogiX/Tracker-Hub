@@ -47,11 +47,12 @@ import {
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type WidthTier = "narrow" | "standard" | "wide" | "extra_wide";
+export type DimensionUnit = "mm" | "m" | "m2";
 
 export interface UnitEditorComponent {
   /** Temporary id for tracking during autofill. */
   _bomId?: string;
-  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band" | "veneer" | "finish";
   catalogId: string | null;
   qty: number;
   unitOfMeasure: string;
@@ -61,10 +62,12 @@ export interface UnitEditorComponent {
 
 export interface UnitEditorValue {
   unitTypeId: string | null;
+  lengthMm: number;
   widthMm: number;
   heightMm: number;
   depthMm: number;
   qty: number;
+  dimensionUnit: DimensionUnit;
   finishId: string | null;
   widthTier: WidthTier | null;
   components: UnitEditorComponent[];
@@ -80,6 +83,21 @@ export interface UnitEditorProps {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const WIDTH_TIERS: WidthTier[] = ["narrow", "standard", "wide", "extra_wide"];
+const DIMENSION_UNITS: DimensionUnit[] = ["mm", "m", "m2"];
+
+/** Convert mm to the display unit */
+function mmToUnit(mm: number, unit: DimensionUnit): number {
+  if (unit === "m") return mm / 1000;
+  if (unit === "m2") return (mm / 1000) * (mm / 1000); // rough area approximation
+  return mm;
+}
+
+/** Convert from display unit back to mm */
+function unitToMm(val: number, unit: DimensionUnit): number {
+  if (unit === "m") return Math.round(val * 1000);
+  if (unit === "m2") return Math.round(Math.sqrt(val) * 1000);
+  return val;
+}
 
 let _bomCounter = 0;
 function makeBomId(): string {
@@ -209,10 +227,22 @@ export function UnitEditor({
     [runBomAutofill],
   );
 
-  // Handle dimension change
+  // Handle dimension change (converts from display unit to mm)
   const handleDimChange = useCallback(
-    (field: "widthMm" | "heightMm" | "depthMm" | "qty", val: number) => {
-      onChange({ ...value, [field]: val });
+    (field: "lengthMm" | "widthMm" | "heightMm" | "depthMm" | "qty", val: number) => {
+      if (field === "qty") {
+        onChange({ ...value, [field]: val });
+      } else {
+        onChange({ ...value, [field]: unitToMm(val, value.dimensionUnit) });
+      }
+    },
+    [value, onChange],
+  );
+
+  // Handle dimension unit change
+  const handleDimUnitChange = useCallback(
+    (newUnit: DimensionUnit) => {
+      onChange({ ...value, dimensionUnit: newUnit });
     },
     [value, onChange],
   );
@@ -297,6 +327,7 @@ export function UnitEditor({
   const validate = useCallback((): boolean => {
     const errs: Record<string, string> = {};
 
+    if (value.lengthMm <= 0) errs.lengthMm = t("unitEditor.errorPositiveDims");
     if (value.widthMm <= 0) errs.widthMm = t("unitEditor.errorPositiveDims");
     if (value.heightMm <= 0) errs.heightMm = t("unitEditor.errorPositiveDims");
     if (value.depthMm <= 0) errs.depthMm = t("unitEditor.errorPositiveDims");
@@ -329,7 +360,7 @@ export function UnitEditor({
   return (
     <div className={`space-y-4 ${className ?? ""}`} data-testid="unit-editor">
       {/* ── Row 1: Unit Type + Dimensions ────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {/* Unit type */}
         <div className="col-span-2">
           <Label className="text-xs mb-1 block">{t("unitEditor.unitType")}</Label>
@@ -361,12 +392,46 @@ export function UnitEditor({
           )}
         </div>
 
+        {/* Dimension unit */}
+        <div>
+          <Label className="text-xs mb-1 block">{t("unitEditor.dimensionUnit")}</Label>
+          <Select
+            value={value.dimensionUnit}
+            onValueChange={(v) => handleDimUnitChange(v as DimensionUnit)}
+          >
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DIMENSION_UNITS.map((u) => (
+                <SelectItem key={u} value={u}>
+                  {t(`unitEditor.dimUnit.${u}`)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Length */}
+        <div>
+          <Label className="text-xs mb-1 block">{t("treeConfigurator.length")}</Label>
+          <Input
+            type="number"
+            value={mmToUnit(value.lengthMm, value.dimensionUnit)}
+            onChange={(e) => handleDimChange("lengthMm", Number(e.target.value))}
+            className={`h-8 text-sm ${errors.lengthMm ? "border-destructive" : ""}`}
+          />
+          {errors.lengthMm && (
+            <p className="text-xs text-destructive mt-1">{errors.lengthMm}</p>
+          )}
+        </div>
+
         {/* Width */}
         <div>
           <Label className="text-xs mb-1 block">{t("treeConfigurator.width")}</Label>
           <Input
             type="number"
-            value={value.widthMm}
+            value={mmToUnit(value.widthMm, value.dimensionUnit)}
             onChange={(e) => handleDimChange("widthMm", Number(e.target.value))}
             className={`h-8 text-sm ${errors.widthMm ? "border-destructive" : ""}`}
           />
@@ -374,13 +439,16 @@ export function UnitEditor({
             <p className="text-xs text-destructive mt-1">{errors.widthMm}</p>
           )}
         </div>
+      </div>
 
+      {/* ── Row 2: Height + Depth + Qty + Finish + Width Tier ───────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {/* Height */}
         <div>
           <Label className="text-xs mb-1 block">{t("treeConfigurator.height")}</Label>
           <Input
             type="number"
-            value={value.heightMm}
+            value={mmToUnit(value.heightMm, value.dimensionUnit)}
             onChange={(e) => handleDimChange("heightMm", Number(e.target.value))}
             className={`h-8 text-sm ${errors.heightMm ? "border-destructive" : ""}`}
           />
@@ -388,16 +456,13 @@ export function UnitEditor({
             <p className="text-xs text-destructive mt-1">{errors.heightMm}</p>
           )}
         </div>
-      </div>
 
-      {/* ── Row 2: Depth + Qty + Finish + Width Tier ────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Depth */}
         <div>
           <Label className="text-xs mb-1 block">{t("treeConfigurator.depth")}</Label>
           <Input
             type="number"
-            value={value.depthMm}
+            value={mmToUnit(value.depthMm, value.dimensionUnit)}
             onChange={(e) => handleDimChange("depthMm", Number(e.target.value))}
             className={`h-8 text-sm ${errors.depthMm ? "border-destructive" : ""}`}
           />
@@ -625,7 +690,7 @@ export function UnitEditor({
             {/* Add component via catalog picker buttons */}
             {value.components.length > 0 && (
               <div className="flex flex-wrap gap-1 pt-1">
-                {(["material", "hardware", "accessory", "manufacturing", "edge_band"] as const).map(
+                {(["material", "hardware", "accessory", "manufacturing", "edge_band", "veneer", "finish"] as const).map(
                   (kind) => (
                     <Button
                       key={kind}

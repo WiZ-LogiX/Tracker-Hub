@@ -523,3 +523,98 @@ describe("units table finish_id + width_tier columns", () => {
     expect(src).toContain("finish_id, width_tier");
   });
 });
+
+// ── saveV2Quote (hierarchical quote save) ────────────────────────────────────
+
+describe("saveV2Quote (quote.functions.ts)", () => {
+  it("exports saveV2Quote as a createServerFn", async () => {
+    const mod = await import("@/lib/quote.functions");
+    expect(mod).toHaveProperty("saveV2Quote");
+    expect(typeof mod.saveV2Quote).toBe("function");
+  });
+
+  it("saveV2Quote uses requireSupabaseAuth + requireTenant middleware", () => {
+    const src = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+
+    // Find the saveV2Quote block and verify middleware
+    const idx = src.indexOf("export const saveV2Quote");
+    expect(idx).toBeGreaterThan(-1);
+    const block = src.slice(idx, idx + 600);
+
+    expect(block).toContain("createServerFn");
+    expect(block).toContain("requireSupabaseAuth");
+    expect(block).toContain("requireTenant");
+    expect(block).toContain("SaveV2QuoteInput.parse");
+  });
+
+  it("saveV2Quote inserts quote with tenant_id from middleware (not from client)", () => {
+    const src = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+
+    const idx = src.indexOf("export const saveV2Quote");
+    expect(idx).toBeGreaterThan(-1);
+    const block = src.slice(idx, idx + 4000);
+
+    // Must inject tenant_id via ctx.tenantId, NOT from input data
+    expect(block).toContain("tenant_id: tid");
+    // Must NOT use a client-supplied tenant_id override
+    expect(block).not.toContain("tenant_id: data.tenantId");
+  });
+
+  it("saveV2Quote inserts hierarchy in dependency order (quote → products → sections → units → components)", () => {
+    const src = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+
+    const idx = src.indexOf("export const saveV2Quote");
+    const block = src.slice(idx, idx + 4000);
+
+    // Insert orders must appear in the right sequence
+    const quotesIdx = block.indexOf('.from("quotes")');
+    const productsIdx = block.indexOf('.from("quotation_products")');
+    const sectionsIdx = block.indexOf('.from("sections")');
+    const unitsIdx = block.indexOf('.from("units")');
+    const componentsIdx = block.indexOf('.from("components")');
+
+    expect(quotesIdx).toBeGreaterThan(-1);
+    expect(productsIdx).toBeGreaterThan(quotesIdx);
+    expect(sectionsIdx).toBeGreaterThan(productsIdx);
+    expect(unitsIdx).toBeGreaterThan(sectionsIdx);
+    expect(componentsIdx).toBeGreaterThan(unitsIdx);
+  });
+
+  it("saveV2Quote triggers shadow comparison when pricing_shadow flag is on", () => {
+    const src = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+
+    const idx = src.indexOf("export const saveV2Quote");
+    const endIdx = src.indexOf("\n});\n", idx);
+    const block = src.slice(idx, endIdx + 5);
+
+    expect(block).toContain("pricing_shadow");
+    expect(block).toContain("runShadow");
+  });
+
+  it("saveV2Quote rolls back the quote when hierarchy insertion fails", () => {
+    const src = readFileSync(
+      resolve("src/lib/quote.functions.ts"),
+      "utf-8",
+    );
+
+    const idx = src.indexOf("export const saveV2Quote");
+    const endIdx = src.indexOf("\n});\n", idx);
+    const block = src.slice(idx, endIdx + 5);
+
+    expect(block).toContain("hierarchyErr");
+    expect(block).toContain('.from("quotes").delete()');
+    expect(block).toContain("throw hierarchyErr");
+  });
+});

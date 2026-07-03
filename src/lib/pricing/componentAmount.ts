@@ -12,7 +12,7 @@ import { getArea } from "./areaFunctions";
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface ComponentLike {
-  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band" | "veneer" | "finish";
   qty: number;
   unitOfMeasure: string;
   areaFunctionKey?: string | null;
@@ -230,6 +230,68 @@ function priceEdgeBand(
   return applyWastage(raw, wastagePct);
 }
 
+function priceVeneer(
+  comp: ComponentLike,
+  entity: CatalogEntityLike,
+  dims: { w: number; h: number; d: number },
+  wastageLookup: WastageLookup,
+): number {
+  const price = entity.pricePerUnit;
+
+  if (price == null || !Number.isFinite(price) || price < 0) {
+    throw new Error(
+      `Veneer catalog ${comp.areaFunctionKey ?? "entity"} is missing pricePerUnit (price per m²).`,
+    );
+  }
+
+  if (!comp.areaFunctionKey) {
+    throw new Error(
+      "Veneer component requires an areaFunctionKey to compute area in m².",
+    );
+  }
+
+  const area = getArea(comp.areaFunctionKey, dims);
+  const raw = comp.qty * area * price;
+
+  // Resolve wastage
+  let wastagePct = entity.defaultWastagePct ?? 0;
+  const rule = wastageLookup("material", comp.areaFunctionKey);
+  if (rule) wastagePct = rule.pct;
+
+  return applyWastage(raw, wastagePct);
+}
+
+function priceFinish(
+  comp: ComponentLike,
+  entity: CatalogEntityLike,
+  dims: { w: number; h: number; d: number },
+  wastageLookup: WastageLookup,
+): number {
+  const price = entity.pricePerUnit;
+
+  if (price == null || !Number.isFinite(price) || price < 0) {
+    throw new Error(
+      `Finish catalog ${comp.areaFunctionKey ?? "entity"} is missing pricePerUnit (price per m²).`,
+    );
+  }
+
+  if (!comp.areaFunctionKey) {
+    throw new Error(
+      "Finish component requires an areaFunctionKey to compute area in m².",
+    );
+  }
+
+  const area = getArea(comp.areaFunctionKey, dims);
+  const raw = comp.qty * area * price;
+
+  // Resolve wastage
+  let wastagePct = entity.defaultWastagePct ?? 0;
+  const rule = wastageLookup("material", comp.areaFunctionKey);
+  if (rule) wastagePct = rule.pct;
+
+  return applyWastage(raw, wastagePct);
+}
+
 // ── Main entry point ───────────────────────────────────────────────────────
 
 /**
@@ -263,6 +325,10 @@ export function componentAmount(
       return priceManufacturing(comp, entity, dims);
     case "edge_band":
       return priceEdgeBand(comp, entity, dims, wastageLookup);
+    case "veneer":
+      return priceVeneer(comp, entity, dims, wastageLookup);
+    case "finish":
+      return priceFinish(comp, entity, dims, wastageLookup);
     default:
       throw new Error(`Unknown component kind: "${comp.kind}".`);
   }

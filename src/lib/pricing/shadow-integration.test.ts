@@ -224,6 +224,8 @@ function buildEgyptianCatalog(): CatalogLookup {
       "mfg-assembly": { id: "mfg-assembly", rateUnit: "piece", rate: 120 },
       "mfg-finish-m2": { id: "mfg-finish-m2", rateUnit: "m2", rate: 35 },
     },
+    veneers: {},
+    finishes: {},
     // Egyptian furniture pricing factors
     pricingFactors: [
       { factorKey: "labor", percent: 15 },

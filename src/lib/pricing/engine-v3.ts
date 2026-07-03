@@ -40,7 +40,7 @@ export function round2(n: number): number {
 
 export interface ComponentInput {
   id: string;
-  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band" | "veneer" | "finish";
   catalogId: string | null;
   qty: number;
   unitOfMeasure: string;
@@ -122,6 +122,8 @@ export interface CatalogLookup {
   hardware: Record<string, CatalogHardware>;
   accessories: Record<string, CatalogAccessory>;
   manufacturingOps: Record<string, CatalogManufacturingOp>;
+  veneers: Record<string, CatalogMaterial>;
+  finishes: Record<string, CatalogMaterial>;
   pricingFactors: PricingFactor[];
   wastageRules: WastageRule[];
   feesCredits: FeesCredit[];
@@ -259,6 +261,16 @@ function priceUnit(
         case "edge_band":
           entity = catalog.materials[comp.catalogId]
             ? materialToEntity(catalog.materials[comp.catalogId])
+            : null;
+          break;
+        case "veneer":
+          entity = catalog.veneers[comp.catalogId]
+            ? materialToEntity(catalog.veneers[comp.catalogId])
+            : null;
+          break;
+        case "finish":
+          entity = catalog.finishes[comp.catalogId]
+            ? materialToEntity(catalog.finishes[comp.catalogId])
             : null;
           break;
       }

@@ -256,6 +256,195 @@ export const createQuote = createServerFn({ method: "POST" })
     return { quoteId: quote.id };
   });
 
+// ── V2 hierarchical quote save ──────────────────────────────────────────────
+
+const V2ProductInput = z.object({
+  productTypeCode: z.string(),
+  label: z.string().nullable().optional(),
+  position: z.number().int().default(0),
+  sections: z.array(z.object({
+    label: z.string().nullable().optional(),
+    position: z.number().int().default(0),
+    units: z.array(z.object({
+      unitTypeId: z.string().uuid().nullable().optional(),
+      widthMm: z.number().int().default(0),
+      heightMm: z.number().int().default(0),
+      depthMm: z.number().int().default(0),
+      qty: z.number().int().min(1).default(1),
+      finishId: z.string().uuid().nullable().optional(),
+      widthTier: z.enum(["narrow", "standard", "wide", "extra_wide"]).nullable().optional(),
+      overrideFactorKeys: z.record(z.number()).optional(),
+      position: z.number().int().default(0),
+      components: z.array(z.object({
+        kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band"]),
+        catalogId: z.string().uuid().nullable().optional(),
+        qty: z.number().min(0).default(1),
+        unitOfMeasure: z.string().default("pcs"),
+        position: z.number().int().default(0),
+      })).default([]),
+    })).default([]),
+  })).default([]),
+});
+
+const SaveV2QuoteInput = z.object({
+  customer_id: z.string().uuid(),
+  request_id: z.string().uuid().nullable().optional(),
+  status: z.enum(["draft", "sent"]).default("draft"),
+  quote_number: z.string().min(1),
+  notes: z.string().nullable().optional(),
+  products: z.array(V2ProductInput).default([]),
+});
+
+/**
+ * Save a v2 hierarchical quote in one call.
+ *
+ * Creates the quote row, inserts the full tree (products → sections → units → components)
+ * in dependency order, then optionally runs shadow pricing comparison.
+ *
+ * SECURITY: Uses context.supabase (RLS-enforcing) for all writes.
+ * No direct supabaseAdmin usage — all tenant_id injection is via middleware.
+ */
+export const saveV2Quote = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d) => SaveV2QuoteInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    const tid = ctx.tenantId;
+    const client = (context as any).supabase;
+
+    // 1. Insert quote
+    const { data: quote, error: quoteErr } = await client
+      .from("quotes")
+      .insert({
+        customer_id: data.customer_id,
+        request_id: data.request_id ?? null,
+        status: data.status,
+        quote_number: data.quote_number,
+        subtotal: 0,
+        discount_amount: 0,
+        vat_pct: 14,
+        vat_amount: 0,
+        total: 0,
+        notes: data.notes ?? null,
+        snapshot: {},
+        tenant_id: tid,
+      })
+      .select("id")
+      .single();
+
+    if (quoteErr || !quote) {
+      throw new Error(quoteErr?.message ?? "فشل إنشاء عرض السعر");
+    }
+
+    const quoteId = quote.id;
+
+    // 2. Insert products → sections → units → components
+    try {
+      for (const product of data.products) {
+        const { data: prodRow, error: prodErr } = await client
+          .from("quotation_products")
+          .insert({
+            quotation_id: quoteId,
+            product_type_code: product.productTypeCode,
+            label: product.label ?? null,
+            position: product.position,
+            tenant_id: tid,
+          })
+          .select("id")
+          .single();
+
+        if (prodErr || !prodRow) {
+          throw new Error(`Failed to insert product: ${prodErr?.message ?? "no id"}`);
+        }
+
+        for (const section of product.sections) {
+          const { data: secRow, error: secErr } = await client
+            .from("sections")
+            .insert({
+              quotation_product_id: prodRow.id,
+              label: section.label ?? null,
+              position: section.position,
+              tenant_id: tid,
+            })
+            .select("id")
+            .single();
+
+          if (secErr || !secRow) {
+            throw new Error(`Failed to insert section: ${secErr?.message ?? "no id"}`);
+          }
+
+          for (const unit of section.units) {
+            const { data: unitRow, error: unitErr } = await client
+              .from("units")
+              .insert({
+                section_id: secRow.id,
+                unit_type_id: unit.unitTypeId ?? null,
+                width_mm: unit.widthMm,
+                height_mm: unit.heightMm,
+                depth_mm: unit.depthMm,
+                qty: unit.qty,
+                finish_id: unit.finishId ?? null,
+                width_tier: unit.widthTier ?? null,
+                override_factor_keys: unit.overrideFactorKeys ?? {},
+                position: unit.position,
+                tenant_id: tid,
+              })
+              .select("id")
+              .single();
+
+            if (unitErr || !unitRow) {
+              throw new Error(`Failed to insert unit: ${unitErr?.message ?? "no id"}`);
+            }
+
+            if (unit.components.length > 0) {
+              const componentInserts = unit.components.map((c) => ({
+                unit_id: unitRow.id,
+                kind: c.kind,
+                catalog_id: c.catalogId ?? null,
+                qty: c.qty,
+                unit_of_measure: c.unitOfMeasure,
+                position: c.position,
+                tenant_id: tid,
+              }));
+
+              const { error: compErr } = await client
+                .from("components")
+                .insert(componentInserts as any);
+
+              if (compErr) {
+                throw new Error(`Failed to insert components: ${compErr.message}`);
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Run shadow comparison if feature flag is on (non-blocking)
+      try {
+        const { data: tenantRow } = await client
+          .from("tenants")
+          .select("feature_flags")
+          .eq("id", tid)
+          .single();
+
+        const flags = (tenantRow?.feature_flags as Record<string, boolean>) ?? {};
+        if (flags.pricing_shadow) {
+          await runShadow(quoteId, tid, undefined, client);
+        }
+      } catch (shadowErr) {
+        log.error("saveV2Quote shadow pricing failed (non-blocking):", {
+          error: shadowErr instanceof Error ? shadowErr.message : String(shadowErr),
+        });
+      }
+    } catch (hierarchyErr) {
+      // Roll back: delete the quote (cascades to products → sections → units → components)
+      await client.from("quotes").delete().eq("id", quoteId);
+      throw hierarchyErr;
+    }
+
+    return { quoteId };
+  });
+
 const UpdateQuoteStatusInput = z.object({
   quote_id: z.string().uuid(),
   status: z.enum(["draft", "sent", "accepted", "rejected", "expired"]),
@@ -426,7 +615,7 @@ async function freezeQuoteSnapshot(
   // 2. Load catalog lookup (same pattern as priceQuotationTree)
   const [
     materialsRes, hardwareRes, accessoriesRes,
-    mfgOpsRes, factorsRes, wastageRes, feesRes,
+    mfgOpsRes, veneersRes, finishesRes, factorsRes, wastageRes, feesRes,
   ] = await Promise.all([
     client.from("catalog_materials")
       .select("id, pricing_unit, price_per_unit, default_wastage_pct")
@@ -439,6 +628,12 @@ async function freezeQuoteSnapshot(
       .eq("tenant_id", tenantId).is("archived_at", null),
     client.from("catalog_manufacturing_operations")
       .select("id, rate_unit, rate")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+    client.from("catalog_veneers")
+      .select("id, price_per_m2")
+      .eq("tenant_id", tenantId).is("archived_at", null),
+    client.from("catalog_finishes")
+      .select("id, price_per_unit")
       .eq("tenant_id", tenantId).is("archived_at", null),
     client.from("tenant_pricing_factors")
       .select("factor_key, percent")
@@ -466,6 +661,12 @@ async function freezeQuoteSnapshot(
     ),
     manufacturingOps: Object.fromEntries(
       (mfgOpsRes.data ?? []).map((o: any) => [o.id, { id: o.id, rateUnit: o.rate_unit, rate: o.rate }]),
+    ),
+    veneers: Object.fromEntries(
+      (veneersRes.data ?? []).map((v: any) => [v.id, { id: v.id, pricingUnit: "m2", pricePerUnit: v.price_per_m2, defaultWastagePct: 0 }]),
+    ),
+    finishes: Object.fromEntries(
+      (finishesRes.data ?? []).map((f: any) => [f.id, { id: f.id, pricingUnit: "m2", pricePerUnit: f.price_per_unit, defaultWastagePct: 0 }]),
     ),
     pricingFactors: (factorsRes.data ?? []).map((f: any) => ({ factorKey: f.factor_key, percent: f.percent })),
     wastageRules: (wastageRes.data ?? []).map((w: any) => ({ scope: w.scope, ref: w.ref, pct: w.pct })),
@@ -596,6 +797,8 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
       hardwareRes,
       accessoriesRes,
       mfgOpsRes,
+      veneersRes,
+      finishesRes,
       factorsRes,
       wastageRes,
       feesRes,
@@ -621,6 +824,16 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
         .eq("tenant_id", tid)
         .is("archived_at", null),
       client
+        .from("catalog_veneers")
+        .select("id, price_per_m2")
+        .eq("tenant_id", tid)
+        .is("archived_at", null),
+      client
+        .from("catalog_finishes")
+        .select("id, price_per_unit")
+        .eq("tenant_id", tid)
+        .is("archived_at", null),
+      client
         .from("tenant_pricing_factors")
         .select("factor_key, percent")
         .eq("tenant_id", tid)
@@ -643,6 +856,8 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
       ["hardware", hardwareRes],
       ["accessories", accessoriesRes],
       ["manufacturingOps", mfgOpsRes],
+      ["veneers", veneersRes],
+      ["finishes", finishesRes],
       ["pricingFactors", factorsRes],
       ["wastageRules", wastageRes],
       ["feesCredits", feesRes],
@@ -681,6 +896,28 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
         (mfgOpsRes.data ?? []).map((o: any) => [
           o.id,
           { id: o.id, rateUnit: o.rate_unit, rate: o.rate },
+        ]),
+      ),
+      veneers: Object.fromEntries(
+        (veneersRes.data ?? []).map((v: any) => [
+          v.id,
+          {
+            id: v.id,
+            pricingUnit: "m2",
+            pricePerUnit: v.price_per_m2,
+            defaultWastagePct: 0,
+          },
+        ]),
+      ),
+      finishes: Object.fromEntries(
+        (finishesRes.data ?? []).map((f: any) => [
+          f.id,
+          {
+            id: f.id,
+            pricingUnit: "m2",
+            pricePerUnit: f.price_per_unit,
+            defaultWastagePct: 0,
+          },
         ]),
       ),
       pricingFactors: (factorsRes.data ?? []).map((f: any) => ({

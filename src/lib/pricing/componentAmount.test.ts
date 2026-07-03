@@ -475,6 +475,200 @@ describe("edge_band — linear metres pricing", () => {
   });
 });
 
+// ── 14b. Veneer — m² pricing ───────────────────────────────────────────────
+
+describe("veneer — m² pricing", () => {
+  it("area × price with no wastage", () => {
+    const comp: ComponentLike = {
+      kind: "veneer",
+      qty: 1,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "door_panel",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 120,
+      defaultWastagePct: 0,
+    };
+    // door_panel: 800 × 600 = 0.48 m²
+    const result = componentAmount(comp, entity, DIMS_800_600_500, NO_W);
+    expect(result).toBeCloseTo(57.6, 6);
+  });
+
+  it("area × price × (1 + wastage%)", () => {
+    const comp: ComponentLike = {
+      kind: "veneer",
+      qty: 1,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "cabinet_side",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 120,
+      defaultWastagePct: 15,
+    };
+    // cabinet_side: 600 × 720 = 0.432 m²; 0.432 × 120 = 51.84; × 1.15 = 59.616
+    const result = componentAmount(comp, entity, DIMS_600_720_600, NO_W);
+    expect(result).toBeCloseTo(59.616, 6);
+  });
+
+  it("qty > 1 multiplies area", () => {
+    const comp: ComponentLike = {
+      kind: "veneer",
+      qty: 3,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "cabinet_side",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 100,
+      defaultWastagePct: 0,
+    };
+    // 0.432 × 3 × 100 = 129.6
+    const result = componentAmount(comp, entity, DIMS_600_720_600, NO_W);
+    expect(result).toBeCloseTo(129.6, 6);
+  });
+
+  it("wastage lookup overrides catalog default", () => {
+    const comp: ComponentLike = {
+      kind: "veneer",
+      qty: 1,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "cabinet_side",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 100,
+      defaultWastagePct: 5,
+    };
+    const lookup: WastageLookup = () => ({ pct: 20 });
+    const result = componentAmount(comp, entity, DIMS_600_720_600, lookup);
+    // 0.432 × 100 = 43.2; × 1.20 = 51.84
+    expect(result).toBeCloseTo(51.84, 6);
+  });
+});
+
+// ── 14c. Veneer — error cases ───────────────────────────────────────────────
+
+describe("veneer — error cases", () => {
+  it("missing pricePerUnit throws", () => {
+    const comp: ComponentLike = {
+      kind: "veneer",
+      qty: 1,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "door_panel",
+    };
+    const entity: CatalogEntityLike = { pricingUnit: "m2", defaultWastagePct: 0 };
+    expect(() =>
+      componentAmount(comp, entity, DIMS_800_600_500, NO_W),
+    ).toThrow(/missing pricePerUnit/i);
+  });
+
+  it("missing areaFunctionKey throws", () => {
+    const comp: ComponentLike = {
+      kind: "veneer",
+      qty: 1,
+      unitOfMeasure: "m2",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 120,
+      defaultWastagePct: 0,
+    };
+    expect(() =>
+      componentAmount(comp, entity, DIMS_800_600_500, NO_W),
+    ).toThrow(/requires an areaFunctionKey/i);
+  });
+});
+
+// ── 14d. Finish — m² pricing ────────────────────────────────────────────────
+
+describe("finish — m² pricing", () => {
+  it("area × price with no wastage", () => {
+    const comp: ComponentLike = {
+      kind: "finish",
+      qty: 1,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "cabinet_side",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 80,
+      defaultWastagePct: 0,
+    };
+    // cabinet_side: 600 × 720 = 0.432 m²; × 80 = 34.56
+    const result = componentAmount(comp, entity, DIMS_600_720_600, NO_W);
+    expect(result).toBeCloseTo(34.56, 6);
+  });
+
+  it("area × price × (1 + wastage%)", () => {
+    const comp: ComponentLike = {
+      kind: "finish",
+      qty: 1,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "door_panel",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 80,
+      defaultWastagePct: 10,
+    };
+    // door_panel: 800 × 600 = 0.48 m²; × 80 = 38.4; × 1.10 = 42.24
+    const result = componentAmount(comp, entity, DIMS_800_600_500, NO_W);
+    expect(result).toBeCloseTo(42.24, 6);
+  });
+
+  it("qty > 1 multiplies area", () => {
+    const comp: ComponentLike = {
+      kind: "finish",
+      qty: 4,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "cabinet_side",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 100,
+      defaultWastagePct: 0,
+    };
+    // 0.432 × 4 × 100 = 172.8
+    const result = componentAmount(comp, entity, DIMS_600_720_600, NO_W);
+    expect(result).toBeCloseTo(172.8, 6);
+  });
+});
+
+// ── 14e. Finish — error cases ───────────────────────────────────────────────
+
+describe("finish — error cases", () => {
+  it("missing pricePerUnit throws", () => {
+    const comp: ComponentLike = {
+      kind: "finish",
+      qty: 1,
+      unitOfMeasure: "m2",
+      areaFunctionKey: "cabinet_side",
+    };
+    const entity: CatalogEntityLike = { pricingUnit: "m2", defaultWastagePct: 0 };
+    expect(() =>
+      componentAmount(comp, entity, DIMS_600_720_600, NO_W),
+    ).toThrow(/missing pricePerUnit/i);
+  });
+
+  it("missing areaFunctionKey throws", () => {
+    const comp: ComponentLike = {
+      kind: "finish",
+      qty: 1,
+      unitOfMeasure: "m2",
+    };
+    const entity: CatalogEntityLike = {
+      pricingUnit: "m2",
+      pricePerUnit: 80,
+      defaultWastagePct: 0,
+    };
+    expect(() =>
+      componentAmount(comp, entity, DIMS_600_720_600, NO_W),
+    ).toThrow(/requires an areaFunctionKey/i);
+  });
+});
+
 // ── 15. Edge banding — error cases ──────────────────────────────────────────
 
 describe("edge_band — error cases", () => {

@@ -77,7 +77,7 @@ const CatalogLookupContext = createContext<Map<string, string>>(new Map());
 interface ComponentNode {
   id: string;
   unit_id: string;
-  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band";
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band" | "veneer" | "finish";
   catalog_id: string | null;
   qty: number;
   unit_of_measure: string;
@@ -88,10 +88,12 @@ interface UnitNode {
   id: string;
   section_id: string;
   unit_type_id: string | null;
+  length_mm: number;
   width_mm: number;
   height_mm: number;
   depth_mm: number;
   qty: number;
+  dimension_unit: "mm" | "m" | "m2";
   finish_id: string | null;
   width_tier: string | null;
   override_factor_keys: Record<string, number>;
@@ -536,9 +538,11 @@ export function TreeConfigurator({
         id: `_optimistic_${Date.now()}`,
         section_id: sectionId,
         unit_type_id: null,
+        length_mm: 0,
         width_mm: 600,
         height_mm: 720,
         depth_mm: 600,
+        dimension_unit: "mm",
         qty: 1,
         finish_id: null,
         width_tier: null,
@@ -1483,10 +1487,12 @@ function UnitNodeComponent({
   const [editing, setEditing] = useState(false);
   const [localValue, setLocalValue] = useState<UnitEditorValue>({
     unitTypeId: unit.unit_type_id,
+    lengthMm: unit.length_mm ?? 0,
     widthMm: unit.width_mm,
     heightMm: unit.height_mm,
     depthMm: unit.depth_mm,
     qty: unit.qty,
+    dimensionUnit: unit.dimension_unit ?? "mm",
     finishId: unit.finish_id,
     widthTier: unit.width_tier as WidthTier | null,
     components: unit.components.map((c) => ({
@@ -1506,10 +1512,12 @@ function UnitNodeComponent({
     if (!editing) {
       setLocalValue({
         unitTypeId: unit.unit_type_id,
+        lengthMm: unit.length_mm ?? 0,
         widthMm: unit.width_mm,
         heightMm: unit.height_mm,
         depthMm: unit.depth_mm,
         qty: unit.qty,
+        dimensionUnit: unit.dimension_unit ?? "mm",
         finishId: unit.finish_id,
         widthTier: unit.width_tier as WidthTier | null,
         components: unit.components.map((c) => ({
@@ -1530,10 +1538,12 @@ function UnitNodeComponent({
     // Sync unit-level fields to tree
     await onUpdate(unit.id, {
       unit_type_id: localValue.unitTypeId,
+      length_mm: localValue.lengthMm,
       width_mm: localValue.widthMm,
       height_mm: localValue.heightMm,
       depth_mm: localValue.depthMm,
       qty: localValue.qty,
+      dimension_unit: localValue.dimensionUnit,
       finish_id: localValue.finishId,
       width_tier: localValue.widthTier,
       override_factor_keys: localValue.overrideFactorKeys,
@@ -1580,9 +1590,11 @@ function UnitNodeComponent({
     // Reset to tree values
     setLocalValue({
       unitTypeId: unit.unit_type_id,
+      lengthMm: unit.length_mm ?? 0,
       widthMm: unit.width_mm,
       heightMm: unit.height_mm,
       depthMm: unit.depth_mm,
+      dimensionUnit: unit.dimension_unit ?? "mm",
       qty: unit.qty,
       finishId: unit.finish_id,
       widthTier: unit.width_tier as WidthTier | null,

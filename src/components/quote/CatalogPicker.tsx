@@ -15,6 +15,7 @@ import {
   listAccessories,
   listManufacturingOperations,
   listVeneers,
+  listFinishes,
 } from "@/lib/catalog-v2.functions";
 import { formatEGP } from "@/lib/pricing";
 import { Loader2 } from "lucide-react";
@@ -25,7 +26,8 @@ export type CatalogPickerKind =
   | "accessory"
   | "manufacturing"
   | "edge_band"
-  | "veneer";
+  | "veneer"
+  | "finish";
 
 export interface CatalogPickerItem {
   id: string;
@@ -49,6 +51,7 @@ const PRICE_FIELDS: Record<CatalogPickerKind, string> = {
   manufacturing: "rate",
   edge_band: "price_per_unit",
   veneer: "price_per_m2",
+  finish: "price_per_unit",
 };
 
 const UNIT_LABELS: Record<CatalogPickerKind, string> = {
@@ -58,6 +61,7 @@ const UNIT_LABELS: Record<CatalogPickerKind, string> = {
   manufacturing: "/ min",
   edge_band: "/ m",
   veneer: "/ m²",
+  finish: "/ m²",
 };
 
 export function CatalogPicker({
@@ -75,6 +79,7 @@ export function CatalogPicker({
   const fetchAccessories = useServerFn(listAccessories);
   const fetchManufacturing = useServerFn(listManufacturingOperations);
   const fetchVeneers = useServerFn(listVeneers);
+  const fetchFinishes = useServerFn(listFinishes);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -104,6 +109,11 @@ export function CatalogPicker({
         }
         case "veneer": {
           const res = await fetchVeneers({ data: {} });
+          raw = res ?? [];
+          break;
+        }
+        case "finish": {
+          const res = await fetchFinishes({ data: {} });
           raw = res ?? [];
           break;
         }

@@ -329,6 +329,8 @@ describe("no regression — engine-v3", () => {
         hardware: {},
         accessories: {},
         manufacturingOps: {},
+        veneers: {},
+        finishes: {},
         pricingFactors: [],
         wastageRules: [],
         feesCredits: [],

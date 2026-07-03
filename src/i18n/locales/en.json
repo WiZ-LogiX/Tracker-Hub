@@ -663,7 +663,9 @@
       "hardware": "Hardware",
       "accessory": "Accessory",
       "manufacturing": "Manufacturing",
-      "edge_band": "Edge Band"
+      "edge_band": "Edge Band",
+      "veneer": "Veneer",
+      "finish": "Finish"
     },
     "linked": "Linked",
     "productAdded": "Product added",
@@ -698,6 +700,13 @@
     "widthTier": "Width Tier",
     "selectWidthTier": "Select width tier…",
     "noWidthTier": "None",
+    "length": "Length",
+    "dimensionUnit": "Unit",
+    "dimUnit": {
+      "mm": "mm",
+      "m": "m",
+      "m2": "m²"
+    },
     "tier": {
       "narrow": "Narrow (< 400mm)",
       "standard": "Standard (400–800mm)",

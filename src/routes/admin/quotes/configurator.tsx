@@ -5,7 +5,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { createQuote } from "@/lib/quote.functions";
+import { createQuote, saveV2Quote } from "@/lib/quote.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -207,29 +207,7 @@ function ConfiguratorBuilder() {
 
   // Flag ON → show new hierarchical configurator
   if (useV2) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-primary" /> {t("admin.nav.configurator")}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {t("treeConfigurator.subtitle")}
-          </p>
-        </div>
-        <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-          <TreeConfigurator
-            quotationId={null}
-            onSave={(tree) => {
-              toast.success(t("treeConfigurator.treeBuilt", { count: tree.length }));
-            }}
-            onValidationError={(errors) => {
-              errors.forEach((e) => toast.error(e));
-            }}
-          />
-        </Suspense>
-      </div>
-    );
+    return <V2Configurator />;
   }
 
   // Flag OFF → show legacy flat configurator
@@ -494,6 +472,188 @@ function ConfiguratorBuilder() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ── V2 hierarchical configurator ─────────────────────────────────────────────
+
+interface V2ProductNode {
+  id: string;
+  product_type_code: string;
+  label: string | null;
+  position: number;
+  sections: V2SectionNode[];
+}
+
+interface V2SectionNode {
+  id: string;
+  label: string | null;
+  position: number;
+  units: V2UnitNode[];
+}
+
+interface V2UnitNode {
+  id: string;
+  unit_type_id: string | null;
+  width_mm: number;
+  height_mm: number;
+  depth_mm: number;
+  length_mm: number;
+  dimension_unit: "mm" | "m" | "m2";
+  qty: number;
+  finish_id: string | null;
+  width_tier: string | null;
+  override_factor_keys: Record<string, number>;
+  position: number;
+  components: V2ComponentNode[];
+}
+
+interface V2ComponentNode {
+  id: string;
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band" | "veneer" | "finish";
+  catalog_id: string | null;
+  qty: number;
+  unit_of_measure: string;
+  position: number;
+}
+
+function V2Configurator() {
+  const { t } = useTranslation();
+  const nav = useNavigate();
+  const createQuoteFn = useServerFn(saveV2Quote);
+
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customerId, setCustomerId] = useState("");
+  const [plcId] = useState(() => generatePLCId());
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Load customers
+  useEffect(() => {
+    supabase
+      .from("customers")
+      .select("id, name, phone")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setCustomers(data);
+      });
+  }, []);
+
+  const handleSave = async (tree: V2ProductNode[]) => {
+    if (!customerId) {
+      toast.error(t("quoteBuilder.selectCustomerFirst"));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const products = tree.map((p) => ({
+        productTypeCode: p.product_type_code,
+        label: p.label ?? null,
+        position: p.position,
+        sections: p.sections.map((s) => ({
+          label: s.label ?? null,
+          position: s.position,
+          units: s.units.map((u) => ({
+            unitTypeId: u.unit_type_id ?? null,
+            widthMm: u.width_mm ?? 0,
+            heightMm: u.height_mm ?? 0,
+            depthMm: u.depth_mm ?? 0,
+            qty: u.qty ?? 1,
+            finishId: u.finish_id ?? null,
+            widthTier: (u.width_tier ?? null) as any,
+            overrideFactorKeys: u.override_factor_keys ?? {},
+            position: u.position,
+            components: u.components.map((c) => ({
+              kind: c.kind,
+              catalogId: c.catalog_id ?? null,
+              qty: c.qty,
+              unitOfMeasure: c.unit_of_measure ?? "pcs",
+              position: c.position,
+            })),
+          })),
+        })),
+      }));
+
+      const { quoteId } = await createQuoteFn({
+        data: {
+          customer_id: customerId,
+          status: "draft" as const,
+          quote_number: plcId,
+          notes: notes || null,
+          products,
+        },
+      });
+
+      setSaving(false);
+      toast.success(t("quoteBuilder.saved"));
+      nav({ to: "/admin/quotes/$id", params: { id: quoteId } });
+    } catch (e: any) {
+      setSaving(false);
+      toast.error(e?.message ?? t("errors.somethingWrong"));
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
+          <Sparkles className="h-6 w-6 text-primary" /> {t("admin.nav.configurator")}
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          {t("treeConfigurator.subtitle")}
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">{t("quotes.customer")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Label>{t("quotes.customer")}</Label>
+          <Select
+            value={customerId || (customers.length ? "" : "none")}
+            onValueChange={(v) => v !== "none" && setCustomerId(v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              {customers.length === 0 && (
+                <SelectItem value="none" disabled>
+                  {t("common.noData")}
+                </SelectItem>
+              )}
+              {customers.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} • {c.phone}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div>
+            <Label>{t("quotes.notes")}</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+        <TreeConfigurator
+          quotationId={null}
+          onSave={handleSave}
+          onValidationError={(errors) => {
+            errors.forEach((e) => toast.error(e));
+          }}
+        />
+      </Suspense>
+
+      {saving && <div className="text-center text-sm text-muted-foreground">…</div>}
     </div>
   );
 }

@@ -664,7 +664,9 @@
       "hardware": "Quincaillerie",
       "accessory": "Accessoire",
       "manufacturing": "Fabrication",
-      "edge_band": "Bandeau de chant"
+      "edge_band": "Bandeau de chant",
+      "veneer": "Placage",
+      "finish": "Finition"
     },
     "linked": "Lié",
     "productAdded": "Produit ajouté",
@@ -704,6 +706,13 @@
       "standard": "Standard (400–800 mm)",
       "wide": "Large (800–1200 mm)",
       "extra_wide": "Très large (> 1200 mm)"
+    },
+    "length": "Longueur",
+    "dimensionUnit": "Unité",
+    "dimUnit": {
+      "mm": "mm",
+      "m": "m",
+      "m2": "m²"
     },
     "componentPreview": "Composants",
     "autofilling": "Résolution du BOM…",
