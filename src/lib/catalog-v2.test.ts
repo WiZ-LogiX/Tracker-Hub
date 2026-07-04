@@ -48,8 +48,8 @@ describe("catalog schema", () => {
     expect(schema).toContain("catalog_materials_price_per_unit_positive");
   });
 
-  it("catalog_finishes has modifierType using modifierTypeEnum", () => {
-    expect(schema).toContain('modifierType: modifierTypeEnum("modifier_type").notNull()');
+  it("catalog_finishes has pricePerUnit", () => {
+    expect(schema).toContain('pricePerUnit: numeric("price_per_unit"');
   });
 
   it("catalog_manufacturing_operations has rateUnit using manufacturingRateUnitEnum", () => {
@@ -91,10 +91,8 @@ describe("enums", () => {
     expect(schema).toContain('"unit"');
   });
 
-  it("modifierTypeEnum has percent and fixed", () => {
-    expect(schema).toContain('modifierTypeEnum');
-    expect(schema).toContain('"percent"');
-    expect(schema).toContain('"fixed"');
+  it("modifierTypeEnum removed (catalog_finishes uses price_per_unit now)", () => {
+    expect(schema).not.toContain('modifierTypeEnum("modifier_type")');
   });
 
   it("manufacturingRateUnitEnum has piece, m, m2, minute", () => {
@@ -255,16 +253,5 @@ describe("Zod validation", () => {
     expect(() => pricingUnitSchema.parse("linear_meter")).toThrow();
     expect(() => pricingUnitSchema.parse("kg")).toThrow();
     expect(() => pricingUnitSchema.parse("")).toThrow();
-  });
-
-  const modifierTypeSchema = z.enum(["percent", "fixed"]);
-
-  it("accepts valid modifier_type values", () => {
-    expect(() => modifierTypeSchema.parse("percent")).not.toThrow();
-    expect(() => modifierTypeSchema.parse("fixed")).not.toThrow();
-  });
-
-  it("rejects invalid modifier_type", () => {
-    expect(() => modifierTypeSchema.parse("absolute")).toThrow();
   });
 });

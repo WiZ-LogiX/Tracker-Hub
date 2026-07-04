@@ -87,7 +87,7 @@ export const listFinishes = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
     return tenantQuery(client, ctx.tenantId, "catalog_finishes",
-      "id, code, modifier_type, modifier_value, archived_at, created_at, updated_at",
+      "id, code, price_per_unit, archived_at, created_at, updated_at",
       { order: "code" },
     );
   });

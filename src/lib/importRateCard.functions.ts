@@ -112,16 +112,16 @@ function decodeBase64(b64: string): Buffer {
 async function queryExistingFinishes(
   client: any,
   tenantId: string,
-): Promise<Map<string, { id: string; name: string; price_per_unit: number }>> {
+): Promise<Map<string, { id: string; code: string; price_per_unit: number }>> {
   const { data } = await client
     .from("catalog_finishes")
-    .select("id, name, price_per_unit")
+    .select("id, code, price_per_unit")
     .eq("tenant_id", tenantId)
     .is("archived_at", null);
 
-  const map = new Map<string, { id: string; name: string; price_per_unit: number }>();
+  const map = new Map<string, { id: string; code: string; price_per_unit: number }>();
   for (const row of data ?? []) {
-    map.set(row.name, row);
+    map.set(row.code, row);
   }
   return map;
 }

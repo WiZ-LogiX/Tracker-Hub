@@ -106,23 +106,20 @@ describe("Material Zod schemas", () => {
 describe("Finish Zod schemas", () => {
   const FinishCreate = z.object({
     code: z.string().trim().min(1).max(64),
-    modifierType: z.enum(["percent", "fixed"]),
-    modifierValue: z.coerce.number(),
+    pricePerUnit: z.coerce.number().min(0),
   }).strict();
 
   it("accepts valid create", () => {
     expect(() => FinishCreate.parse({
       code: "GLOSS",
-      modifierType: "percent",
-      modifierValue: 15,
+      pricePerUnit: 45,
     })).not.toThrow();
   });
 
   it("rejects unknown field", () => {
     expect(() => FinishCreate.parse({
       code: "GLOSS",
-      modifierType: "percent",
-      modifierValue: 15,
+      pricePerUnit: 45,
       tenant_id: UUID,
     })).toThrow();
   });

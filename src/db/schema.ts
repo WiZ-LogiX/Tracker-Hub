@@ -63,10 +63,7 @@ export const pricingUnitEnum = pgEnum("pricing_unit", [
   "unit",
 ]);
 
-export const modifierTypeEnum = pgEnum("modifier_type", [
-  "percent",
-  "fixed",
-]);
+// modifier_type enum removed — catalog_finishes now uses price_per_unit
 
 export const manufacturingRateUnitEnum = pgEnum("manufacturing_rate_unit", [
   "piece",
@@ -1177,8 +1174,7 @@ export const catalogFinishes = pgTable("catalog_finishes", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
   code: text("code").notNull(),
-  modifierType: modifierTypeEnum("modifier_type").notNull(),
-  modifierValue: numeric("modifier_value", { precision: 14, scale: 2 }).notNull(),
+  pricePerUnit: numeric("price_per_unit", { precision: 14, scale: 2 }).notNull().default("0"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

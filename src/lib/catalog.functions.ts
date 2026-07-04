@@ -686,19 +686,15 @@ const MaterialUpdate = z.object({
   supplierId: z.string().uuid().optional().nullable(),
 }).strict();
 
-const ModifierType = z.enum(["percent", "fixed"]);
-
 const FinishCreate = z.object({
   code: z.string().trim().min(1).max(64),
-  modifierType: ModifierType,
-  modifierValue: z.coerce.number(),
+  pricePerUnit: z.coerce.number().min(0),
 }).strict();
 
 const FinishUpdate = z.object({
   id: z.string().uuid(),
   code: z.string().trim().min(1).max(64).optional(),
-  modifierType: ModifierType.optional(),
-  modifierValue: z.coerce.number().optional(),
+  pricePerUnit: z.coerce.number().min(0).optional(),
 }).strict();
 
 const VeneerCreate = z.object({
@@ -929,13 +925,12 @@ export const createCatalogFinish = createServerFn({ method: "POST" })
     const payload = {
       tenant_id: ctx.tenantId,
       code: data.code,
-      modifier_type: data.modifierType,
-      modifier_value: String(data.modifierValue),
+      price_per_unit: String(data.pricePerUnit),
     };
     const { data: row, error } = await client
       .from("catalog_finishes")
       .insert(payload)
-      .select("id, code, modifier_type, modifier_value, archived_at, created_at, updated_at")
+      .select("id, code, price_per_unit, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Finish not created");
@@ -954,22 +949,21 @@ export const updateCatalogFinish = createServerFn({ method: "POST" })
     blockIfArchived(archivedAt, "catalog_finishes", id);
     const payload: Record<string, unknown> = { updated_at: catalogNow() };
     if (fields.code !== undefined) payload.code = fields.code;
-    if (fields.modifierType !== undefined) payload.modifier_type = fields.modifierType;
-    if (fields.modifierValue !== undefined) payload.modifier_value = String(fields.modifierValue);
+    if (fields.pricePerUnit !== undefined) payload.price_per_unit = String(fields.pricePerUnit);
     const { data: row, error } = await client
       .from("catalog_finishes")
       .update(payload)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId)
-      .select("id, code, modifier_type, modifier_value, archived_at, created_at, updated_at")
+      .select("id, code, price_per_unit, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
 
-    // Record price change if modifier_value was updated
-    if (fields.modifierValue !== undefined && row) {
+    // Record price change if price_per_unit was updated
+    if (fields.pricePerUnit !== undefined && row) {
       await recordPriceChangeIfDifferent(
         client, ctx.tenantId, "finish", id,
-        "catalog_finishes", "modifier_value", fields.modifierValue,
+        "catalog_finishes", "price_per_unit", fields.pricePerUnit,
       );
     }
 
