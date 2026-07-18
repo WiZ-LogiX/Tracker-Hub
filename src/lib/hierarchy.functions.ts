@@ -107,34 +107,53 @@ export const loadHierarchy = createServerFn({ method: "POST" })
     const tid = ctx.tenantId;
     const qid = data.quotationId;
 
-    // Load all 4 levels in parallel
-    const [productsRes, sectionsRes, unitsRes, componentsRes] = await Promise.all([
-      (context as any).supabase
-        .from("quotation_products")
-        .select("id, quotation_id, product_type_code, label, position")
-        .eq("quotation_id", qid)
-        .eq("tenant_id", tid)
-        .order("position"),
-      (context as any).supabase
-        .from("sections")
-        .select("id, quotation_product_id, label, position")
-        .eq("tenant_id", tid)
-        .order("position"),
-      (context as any).supabase
-        .from("units")
-        .select("id, section_id, unit_type_id, width_mm, height_mm, depth_mm, length_mm, dimension_unit, qty, finish_id, width_tier, override_factor_keys, position")
-        .eq("tenant_id", tid)
-        .order("position"),
-      (context as any).supabase
-        .from("components")
-        .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, area_function_key, position")
-        .eq("tenant_id", tid)
-        .order("position"),
-    ]);
+    // Step 1: Load products for this quotation (scoped by quotation_id)
+    const productsRes = await (context as any).supabase
+      .from("quotation_products")
+      .select("id, quotation_id, product_type_code, label, position")
+      .eq("quotation_id", qid)
+      .eq("tenant_id", tid)
+      .order("position");
 
     if (productsRes.error) throw new Error(`Failed to load products: ${productsRes.error.message}`);
+    const productIds = (productsRes.data ?? []).map((p: any) => p.id);
+
+    // Step 2: Load sections scoped to these products
+    const sectionsRes = productIds.length > 0
+      ? await (context as any).supabase
+          .from("sections")
+          .select("id, quotation_product_id, label, position")
+          .in("quotation_product_id", productIds)
+          .eq("tenant_id", tid)
+          .order("position")
+      : { data: [], error: null };
+
     if (sectionsRes.error) throw new Error(`Failed to load sections: ${sectionsRes.error.message}`);
+    const sectionIds = (sectionsRes.data ?? []).map((s: any) => s.id);
+
+    // Step 3: Load units scoped to these sections
+    const unitsRes = sectionIds.length > 0
+      ? await (context as any).supabase
+          .from("units")
+          .select("id, section_id, unit_type_id, width_mm, height_mm, depth_mm, length_mm, dimension_unit, qty, finish_id, width_tier, override_factor_keys, position")
+          .in("section_id", sectionIds)
+          .eq("tenant_id", tid)
+          .order("position")
+      : { data: [], error: null };
+
     if (unitsRes.error) throw new Error(`Failed to load units: ${unitsRes.error.message}`);
+    const unitIds = (unitsRes.data ?? []).map((u: any) => u.id);
+
+    // Step 4: Load components scoped to these units
+    const componentsRes = unitIds.length > 0
+      ? await (context as any).supabase
+          .from("components")
+          .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, area_function_key, position")
+          .in("unit_id", unitIds)
+          .eq("tenant_id", tid)
+          .order("position")
+      : { data: [], error: null };
+
     if (componentsRes.error) throw new Error(`Failed to load components: ${componentsRes.error.message}`);
 
     // Index children by parent id
