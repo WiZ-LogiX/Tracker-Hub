@@ -179,12 +179,13 @@ export const listAllCatalogItems = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
 
-    const [materials, hardware, accessories, manufacturing, veneers] = await Promise.all([
+    const [materials, hardware, accessories, manufacturing, veneers, finishes] = await Promise.all([
       tenantQuery(client, ctx.tenantId, "catalog_materials", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_hardware", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_accessories", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_manufacturing_operations", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_veneers", "id, code", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_finishes", "id, code", { order: "code" }),
     ]);
 
     return [
@@ -193,5 +194,6 @@ export const listAllCatalogItems = createServerFn({ method: "POST" })
       ...accessories.map((r: any) => ({ id: r.id, code: r.code, kind: "accessory" as const })),
       ...manufacturing.map((r: any) => ({ id: r.id, code: r.code, kind: "manufacturing" as const })),
       ...veneers.map((r: any) => ({ id: r.id, code: r.code, kind: "veneer" as const })),
+      ...finishes.map((r: any) => ({ id: r.id, code: r.code, kind: "finish" as const })),
     ];
   });

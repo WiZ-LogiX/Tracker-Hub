@@ -558,9 +558,11 @@ function V2Configurator() {
           position: s.position,
           units: s.units.map((u) => ({
             unitTypeId: u.unit_type_id ?? null,
+            lengthMm: u.length_mm ?? 0,
             widthMm: u.width_mm ?? 0,
             heightMm: u.height_mm ?? 0,
             depthMm: u.depth_mm ?? 0,
+            dimensionUnit: (u.dimension_unit ?? "mm") as any,
             qty: u.qty ?? 1,
             finishId: u.finish_id ?? null,
             widthTier: (u.width_tier ?? null) as any,

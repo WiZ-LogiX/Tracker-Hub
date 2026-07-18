@@ -267,9 +267,11 @@ const V2ProductInput = z.object({
     position: z.number().int().default(0),
     units: z.array(z.object({
       unitTypeId: z.string().uuid().nullable().optional(),
+      lengthMm: z.number().int().default(0),
       widthMm: z.number().int().default(0),
       heightMm: z.number().int().default(0),
       depthMm: z.number().int().default(0),
+      dimensionUnit: z.enum(["mm", "m", "m2"]).default("mm"),
       qty: z.number().int().min(1).default(1),
       finishId: z.string().uuid().nullable().optional(),
       widthTier: z.enum(["narrow", "standard", "wide", "extra_wide"]).nullable().optional(),
@@ -380,9 +382,11 @@ export const saveV2Quote = createServerFn({ method: "POST" })
               .insert({
                 section_id: secRow.id,
                 unit_type_id: unit.unitTypeId ?? null,
+                length_mm: unit.lengthMm,
                 width_mm: unit.widthMm,
                 height_mm: unit.heightMm,
                 depth_mm: unit.depthMm,
+                dimension_unit: unit.dimensionUnit,
                 qty: unit.qty,
                 finish_id: unit.finishId ?? null,
                 width_tier: unit.widthTier ?? null,
