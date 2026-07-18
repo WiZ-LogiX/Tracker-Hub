@@ -113,7 +113,7 @@ PeleCanon is a multi-tenant furniture-manufacturing SaaS for the Egyptian market
 
 ```
  Test Files  23 passed (23)
-      Tests  593 passed (593)
+      Tests  591 passed (591)
    Duration  2.40s
 ```
 
@@ -168,6 +168,7 @@ PeleCanon is a multi-tenant furniture-manufacturing SaaS for the Egyptian market
 | `20260622_seed_all_notification_templates.sql` | All 6 events × 3 languages |
 | `20260622_drop_legacy_customer_policies.sql` | RLS fix for customers |
 | `20260701_add_length_veneer_finish.sql` | veneer/finish enum values + units.length_mm + units.dimension_unit |
+| `20260704_fix_finish_price_per_unit.sql` | catalog_finishes: replace modifier_type/modifier_value with price_per_unit |
 
 ### Down Migrations Available
 
@@ -180,6 +181,7 @@ PeleCanon is a multi-tenant furniture-manufacturing SaaS for the Egyptian market
 | `20260624_catalog_tables_down.sql` | 8 catalog tables |
 | `20260624_pricing_levers_down.sql` | 4 pricing lever tables |
 | `20260701_add_length_veneer_finish_down.sql` | veneer/finish + length_mm + dimension_unit |
+| `20260704_fix_finish_price_per_unit_down.sql` | restore modifier_type/modifier_value on catalog_finishes |
 
 ---
 
@@ -356,7 +358,7 @@ Browser → Bearer JWT → auth-middleware → tenant-middleware → Business Lo
 | Check | Result |
 |-------|--------|
 | Typecheck (`npm run typecheck`) | ✅ Clean |
-| Tests (`npm run test`) | ✅ 557/557 pass |
+| Tests (`npm run test`) | ✅ 591/591 pass |
 | i18n (`check-i18n.mjs`) | ✅ 649 keys consistent |
 | supabaseAdmin in critical-path files | ✅ 0 (except append-only audit) |
 | `(context as any).supabase` in critical-path files | ✅ Present in all |

@@ -287,7 +287,7 @@ The AI is a CTO, Product Owner, Business Strategist, and Senior Engineer capable
 
 Last refreshed: 2026-07-03.
 
-- Typecheck: ✅ Clean. Tests: 593/593 ✅. i18n: 662 keys ✅. E2E: 3/3 ✅.
+- Typecheck: ✅ Clean. Tests: 591/591 ✅. i18n: 662 keys ✅. E2E: 3/3 ✅.
 - **T1.1–T8.2 complete**: Hierarchy (T1.1), unit types + BOM (T2.1), snapshots (T2.2), legacy VIEW (T2.3), catalog tables (T2.1), pricing levers (T2.2), area functions (T3.1), BOM resolution (T3.2), componentAmount leaf-pricing (T3.3), bottom-up pricing engine v3 (T4.1), factors + VAT + discount (T4.1), shadow comparison (T4.3), TreeConfigurator UI (T6.1), UnitEditor (T6.2), BreakdownPanel (T6.3), snapshot freezing (T5.1), rate-card import (T7.1), price history (T8.1), margin report (T8.2) — all applied to remote DB, tested, passing.
 - **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 7 kinds (material/hardware/accessory/manufacturing/edge_band/veneer/finish). Wired into both TreeConfigurator and UnitEditor: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows catalog code name (e.g. "ACRYLIC-W") via `CatalogLookupContext` — a `useQuery`-backed Map fetched by `listAllCatalogItems` server function (queries all 6 catalog types in parallel: materials, hardware, accessories, manufacturing ops, veneers, finishes). UnitEditor finish picker replaced with CommandDialog-based searchable picker (was plain `<Select>`).
 - **Unit dimensions overhaul**: `units` table now has 4 dimensions — `length_mm` (int, default 0), `width_mm`, `height_mm`, `depth_mm` — plus `dimension_unit` enum (mm/m/m2, default mm). Internal storage always mm; `mmToUnit`/`unitToMm` conversion helpers in UnitEditor handle display. Engine-v3 works in mm.
@@ -557,7 +557,7 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 
 **Server function**: `priceQuotationTree` in `quote.functions.ts` loads all catalog + pricing lever data from DB (parallel, tenant-scoped), builds a `CatalogLookup`, and calls the pure `priceQuote()` engine.
 
-### Test Suite (593 unit tests + 3 E2E tests)
+### Test Suite (591 unit tests + 3 E2E tests)
 
 | File | Tests | Covers |
 |---|---|---|
@@ -611,6 +611,7 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 | `20260622_seed_all_notification_templates.sql` | ✅ Applied | All 6 events × 3 languages |
 | `20260622_drop_legacy_customer_policies.sql` | ✅ Applied | RLS fix for customers |
 | `20260701_add_length_veneer_finish.sql` | ✅ Applied | Extends component_kind enum with veneer/finish; adds units.length_mm + units.dimension_unit (mm/m/m2) |
+| `20260704_fix_finish_price_per_unit.sql` | ✅ Applied | catalog_finishes: replace modifier_type/modifier_value with price_per_unit |
 
 Project Context Management
 
