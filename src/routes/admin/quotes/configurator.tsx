@@ -515,6 +515,7 @@ interface V2ComponentNode {
   catalog_id: string | null;
   qty: number;
   unit_of_measure: string;
+  area_function_key: string | null;
   position: number;
 }
 
@@ -570,6 +571,7 @@ function V2Configurator() {
               catalogId: c.catalog_id ?? null,
               qty: c.qty,
               unitOfMeasure: c.unit_of_measure ?? "pcs",
+              areaFunctionKey: c.area_function_key ?? null,
               position: c.position,
             })),
           })),
