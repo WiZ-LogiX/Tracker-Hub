@@ -241,7 +241,8 @@
     "depositSuggested": "Suggested deposit ({pct}%)",
     "convertToOrder": "Convert to Invoice & Order",
     "downloadPdf": "Download PDF",
-    "internalNotes": "Internal Notes"
+    "internalNotes": "Internal Notes",
+    "catalogSummary": "Catalog Summary"
   },
   "quoteBuilder": {
     "title": "Create Quote",

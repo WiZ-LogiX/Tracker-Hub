@@ -21,6 +21,10 @@ const TreeConfigurator = lazy(() =>
   import("@/components/quote/TreeConfigurator").then((m) => ({ default: m.TreeConfigurator })),
 );
 
+const QuoteCatalogSummary = lazy(() =>
+  import("@/components/quote/QuoteCatalogSummary").then((m) => ({ default: m.QuoteCatalogSummary })),
+);
+
 export const Route = createFileRoute("/admin/quotes/$id")({ component: QuoteDetail });
 
 function QuoteDetail() {
@@ -179,16 +183,29 @@ function QuoteDetail() {
           </CardContent>
         </Card>
       ) : isV2 ? (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">{t("quotes.items")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-              <TreeConfigurator quotationId={id} />
-            </Suspense>
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">{t("quotes.items")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                <TreeConfigurator quotationId={id} />
+              </Suspense>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">{t("quotes.catalogSummary", "Catalog Summary")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Suspense fallback={<Skeleton className="h-32 w-full" />}>
+                <QuoteCatalogSummary quotationId={id} />
+              </Suspense>
+            </CardContent>
+          </Card>
+        </>
       ) : (
         <Card>
           <CardHeader className="pb-2">

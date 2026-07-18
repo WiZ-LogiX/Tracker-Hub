@@ -205,7 +205,8 @@
     "depositSuggested": "Acompte suggéré ({pct}%)",
     "convertToOrder": "Convertir en facture et commande",
     "downloadPdf": "Télécharger PDF",
-    "internalNotes": "Notes internes"
+    "internalNotes": "Notes internes",
+    "catalogSummary": "Résumé du catalogue"
   },
   "track": {
     "title": "Suivre votre commande",

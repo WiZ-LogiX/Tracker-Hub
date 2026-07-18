@@ -204,7 +204,8 @@
     "depositSuggested": "عربون مقترح ({pct}%)",
     "convertToOrder": "تحويل لفاتورة وأمر إنتاج",
     "downloadPdf": "تحميل PDF",
-    "internalNotes": "ملاحظات داخلية"
+    "internalNotes": "ملاحظات داخلية",
+    "catalogSummary": "ملخص الكتالوج"
   },
   "track": {
     "title": "تتبع طلبك",
