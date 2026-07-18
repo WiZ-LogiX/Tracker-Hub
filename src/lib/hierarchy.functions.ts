@@ -77,6 +77,7 @@ const componentInput = z.object({
   catalogId: z.string().uuid().nullable().optional(),
   qty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
+  areaFunctionKey: z.string().optional(),
   position: z.number().int().optional(),
 });
 
@@ -86,6 +87,7 @@ const componentUpdateInput = z.object({
   catalogId: z.string().uuid().nullable().optional(),
   qty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
+  areaFunctionKey: z.string().optional(),
   position: z.number().int().optional(),
 });
 
@@ -125,7 +127,7 @@ export const loadHierarchy = createServerFn({ method: "POST" })
         .order("position"),
       (context as any).supabase
         .from("components")
-        .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, position")
+        .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, area_function_key, position")
         .eq("tenant_id", tid)
         .order("position"),
     ]);
@@ -439,6 +441,7 @@ export const addComponent = createServerFn({ method: "POST" })
         catalog_id: data.catalogId ?? null,
         qty: data.qty ?? 1,
         unit_of_measure: data.unitOfMeasure ?? "pcs",
+        area_function_key: data.areaFunctionKey ?? null,
         position: data.position ?? 0,
         tenant_id: ctx.tenantId,
       })
@@ -460,6 +463,7 @@ export const updateComponent = createServerFn({ method: "POST" })
     if (patch.catalogId !== undefined) updates.catalog_id = patch.catalogId;
     if (patch.qty !== undefined) updates.qty = patch.qty;
     if (patch.unitOfMeasure !== undefined) updates.unit_of_measure = patch.unitOfMeasure;
+    if (patch.areaFunctionKey !== undefined) updates.area_function_key = patch.areaFunctionKey;
     if (patch.position !== undefined) updates.position = patch.position;
 
     const { error } = await (context as any).supabase

@@ -667,6 +667,17 @@
       "veneer": "Veneer",
       "finish": "Finish"
     },
+    "surface": {
+      "label": "Surface",
+      "cabinet_side": "Cabinet Side",
+      "cabinet_top": "Cabinet Top",
+      "cabinet_bottom": "Cabinet Bottom",
+      "back_panel": "Back Panel",
+      "shelf": "Shelf",
+      "door_panel": "Door Panel",
+      "drawer_front": "Drawer Front",
+      "edge_band": "Edge Band"
+    },
     "linked": "Linked",
     "productAdded": "Product added",
     "productDeleted": "Product deleted",

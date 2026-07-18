@@ -668,6 +668,17 @@
       "veneer": "Placage",
       "finish": "Finition"
     },
+    "surface": {
+      "label": "Surface",
+      "cabinet_side": "Côté de placard",
+      "cabinet_top": "Dessus de placard",
+      "cabinet_bottom": "Dessous de placard",
+      "back_panel": "Panneau arrière",
+      "shelf": "Étagère",
+      "door_panel": "Panneau de porte",
+      "drawer_front": "Façade de tiroir",
+      "edge_band": "Bandeau de chant"
+    },
     "linked": "Lié",
     "productAdded": "Produit ajouté",
     "productDeleted": "Produit supprimé",

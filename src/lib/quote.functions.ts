@@ -276,10 +276,11 @@ const V2ProductInput = z.object({
       overrideFactorKeys: z.record(z.number()).optional(),
       position: z.number().int().default(0),
       components: z.array(z.object({
-        kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band"]),
+        kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band", "veneer", "finish"]),
         catalogId: z.string().uuid().nullable().optional(),
         qty: z.number().min(0).default(1),
         unitOfMeasure: z.string().default("pcs"),
+        areaFunctionKey: z.string().optional(),
         position: z.number().int().default(0),
       })).default([]),
     })).default([]),
@@ -403,6 +404,7 @@ export const saveV2Quote = createServerFn({ method: "POST" })
                 catalog_id: c.catalogId ?? null,
                 qty: c.qty,
                 unit_of_measure: c.unitOfMeasure,
+                area_function_key: c.areaFunctionKey ?? null,
                 position: c.position,
                 tenant_id: tid,
               }));

@@ -667,6 +667,17 @@
       "veneer": "تغليف",
       "finish": "تشطيب"
     },
+    "surface": {
+      "label": "السطح",
+      "cabinet_side": "جانب الخزانة",
+      "cabinet_top": "سطح الخزانة العلوي",
+      "cabinet_bottom": "سطح الخزانة السفلي",
+      "back_panel": "اللوحة الخلفية",
+      "shelf": "الرف",
+      "door_panel": "باب الخزانة",
+      "drawer_front": "واجهة الدرج",
+      "edge_band": "شريط الحافة"
+    },
     "linked": "مرتبط",
     "productAdded": "تمت إضافة المنتج",
     "productDeleted": "تم حذف المنتج",

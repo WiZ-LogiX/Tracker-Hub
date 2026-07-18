@@ -81,6 +81,7 @@ interface ComponentNode {
   catalog_id: string | null;
   qty: number;
   unit_of_measure: string;
+  area_function_key: string | null;
   position: number;
 }
 
@@ -120,7 +121,7 @@ interface ProductNode {
 
 type TreeData = ProductNode[];
 
-const COMPONENT_KINDS = ["material", "hardware", "accessory", "manufacturing"] as const;
+const COMPONENT_KINDS = ["material", "hardware", "accessory", "manufacturing", "veneer", "edge_band", "finish"] as const;
 
 const PRODUCT_TYPES = ["kitchen", "wardrobe", "living_room", "bedroom", "office", "bathroom", "custom"] as const;
 
@@ -711,13 +712,29 @@ export function TreeConfigurator({
         .find((u) => u.id === unitId);
       const pos = unit ? nextPosition(unit.components) : 0;
 
+      const areaBased = kind === "veneer" || kind === "finish";
+      const edgeBased = kind === "edge_band";
+      const defaultAreaFn: string | null = areaBased
+        ? "door_panel"
+        : edgeBased
+          ? "edge_band"
+          : null;
+
       const optimistic: ComponentNode = {
         id: `_optimistic_${Date.now()}`,
         unit_id: unitId,
         kind: kind as ComponentNode["kind"],
         catalog_id: catalogItem?.id ?? null,
         qty: 1,
-        unit_of_measure: kind === "manufacturing" ? "minute" : "pcs",
+        unit_of_measure:
+          kind === "manufacturing"
+            ? "minute"
+            : areaBased
+              ? "m2"
+              : edgeBased
+                ? "m"
+                : "pcs",
+        area_function_key: defaultAreaFn,
         position: pos,
       };
 
@@ -740,7 +757,14 @@ export function TreeConfigurator({
       try {
         if (quotationId) {
           await addComponentFn({
-            data: { unitId, kind: kind as any, catalogId: catalogItem?.id ?? null, position: pos },
+            data: {
+              unitId,
+              kind: kind as any,
+              catalogId: catalogItem?.id ?? null,
+              position: pos,
+              unitOfMeasure: optimistic.unit_of_measure,
+              areaFunctionKey: optimistic.area_function_key ?? undefined,
+            },
           });
           await queryClient.invalidateQueries({ queryKey });
         }
@@ -829,6 +853,10 @@ export function TreeConfigurator({
             catalogId: patch.catalog_id,
             qty: patch.qty,
             unitOfMeasure: patch.unit_of_measure,
+            areaFunctionKey:
+              patch.area_function_key === undefined
+                ? undefined
+                : patch.area_function_key,
             position: patch.position,
           },
         });
@@ -937,7 +965,7 @@ export function TreeConfigurator({
             catalog_id: c.catalog_id,
             qty: c.qty,
             unit_of_measure: c.unit_of_measure,
-            area_function_key: null,
+            area_function_key: c.area_function_key,
           })),
         })),
       })),
@@ -1771,7 +1799,27 @@ function ComponentNodeComponent({
     accessory: "bg-green-100 text-green-800",
     manufacturing: "bg-purple-100 text-purple-800",
     edge_band: "bg-rose-100 text-rose-800",
+    veneer: "bg-teal-100 text-teal-800",
+    finish: "bg-indigo-100 text-indigo-800",
   };
+
+  const SURFACE_KEYS = [
+    "cabinet_side",
+    "cabinet_top",
+    "cabinet_bottom",
+    "back_panel",
+    "shelf",
+    "door_panel",
+    "drawer_front",
+    "edge_band",
+  ] as const;
+
+  const needsSurface =
+    component.kind === "veneer" ||
+    component.kind === "finish" ||
+    component.kind === "edge_band";
+
+  const [surface, setSurface] = useState(component.area_function_key ?? "door_panel");
 
   return (
     <div className="flex items-center gap-2 px-2 py-1.5 rounded bg-muted/30 text-sm">
@@ -1787,6 +1835,20 @@ function ComponentNodeComponent({
 
       {editing ? (
         <>
+          {needsSurface && (
+            <select
+              value={surface}
+              onChange={(e) => setSurface(e.target.value)}
+              className="h-7 text-xs rounded border border-input bg-background px-1"
+              title={t("treeConfigurator.surface")}
+            >
+              {SURFACE_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {t(`treeConfigurator.surface.${k}`)}
+                </option>
+              ))}
+            </select>
+          )}
           <Input
             type="number"
             min={0}
@@ -1799,7 +1861,10 @@ function ComponentNodeComponent({
             size="sm"
             className="h-7 text-xs"
             onClick={() => {
-              onUpdate({ qty });
+              onUpdate({
+                qty,
+                ...(needsSurface ? { area_function_key: surface } : {}),
+              });
               setEditing(false);
             }}
           >
@@ -1819,6 +1884,11 @@ function ComponentNodeComponent({
           <span className="text-xs text-muted-foreground">
             {t("treeConfigurator.qty")}: {component.qty} {component.unit_of_measure}
           </span>
+          {needsSurface && component.area_function_key && (
+            <span className="text-xs text-muted-foreground font-mono">
+              {t(`treeConfigurator.surface.${component.area_function_key}`)}
+            </span>
+          )}
           <div className="flex-1" />
           <Button
             size="icon"
