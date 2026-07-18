@@ -285,11 +285,12 @@ The AI is a CTO, Product Owner, Business Strategist, and Senior Engineer capable
 
 ## Current State Notes
 
-Last refreshed: 2026-07-03.
+Last refreshed: 2026-07-18.
 
-- Typecheck: ✅ Clean. Tests: 591/591 ✅. i18n: 662 keys ✅. E2E: 3/3 ✅.
+- Typecheck: ✅ Clean. Tests: 591/591 ✅. i18n: 671 keys ✅. E2E: 3/3 ✅.
 - **T1.1–T8.2 complete**: Hierarchy (T1.1), unit types + BOM (T2.1), snapshots (T2.2), legacy VIEW (T2.3), catalog tables (T2.1), pricing levers (T2.2), area functions (T3.1), BOM resolution (T3.2), componentAmount leaf-pricing (T3.3), bottom-up pricing engine v3 (T4.1), factors + VAT + discount (T4.1), shadow comparison (T4.3), TreeConfigurator UI (T6.1), UnitEditor (T6.2), BreakdownPanel (T6.3), snapshot freezing (T5.1), rate-card import (T7.1), price history (T8.1), margin report (T8.2) — all applied to remote DB, tested, passing.
-- **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 7 kinds (material/hardware/accessory/manufacturing/edge_band/veneer/finish). Wired into both TreeConfigurator and UnitEditor: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows catalog code name (e.g. "ACRYLIC-W") via `CatalogLookupContext` — a `useQuery`-backed Map fetched by `listAllCatalogItems` server function (queries all 6 catalog types in parallel: materials, hardware, accessories, manufacturing ops, veneers, finishes). UnitEditor finish picker replaced with CommandDialog-based searchable picker (was plain `<Select>`).
+- **Catalog picker**: `CatalogPicker.tsx` — CommandDialog-based, searchable, 7 kinds (material/hardware/accessory/manufacturing/edge_band/veneer/finish). Wired into both TreeConfigurator and UnitEditor: "Add Material/Hardware/etc" buttons open picker. ComponentNode shows catalog code name (e.g. "ACRYLIC-W") via `CatalogLookupContext` — a `useQuery`-backed Map fetched by `listAllCatalogItems` server function (queries all 7 catalog types in parallel: materials, hardware, accessories, manufacturing ops, veneers, finishes). UnitEditor finish picker replaced with CommandDialog-based searchable picker (was plain `<Select>`).
+- **Unit component kinds**: All 7 component kinds (material, hardware, accessory, manufacturing, edge_band, veneer, finish) are selectable as unit components via TreeConfigurator `COMPONENT_KINDS`. Each kind has a distinct badge color. Veneer/finish/edge_band components include a **surface picker** (`area_function_key`): dropdown of 8 surface types (cabinet_side, cabinet_top, cabinet_bottom, back_panel, shelf, door_panel, drawer_front, edge_band). Defaults: `door_panel` for veneer/finish, `edge_band` for edge_band. `area_function_key` persists on save and feeds into pricing (areaFunctions.ts).
 - **Unit dimensions overhaul**: `units` table now has 4 dimensions — `length_mm` (int, default 0), `width_mm`, `height_mm`, `depth_mm` — plus `dimension_unit` enum (mm/m/m2, default mm). Internal storage always mm; `mmToUnit`/`unitToMm` conversion helpers in UnitEditor handle display. Engine-v3 works in mm.
 - **component_kind enum: 7 values**: material, hardware, accessory, manufacturing, edge_band, veneer, finish. Veneer and finish are now selectable as component kinds via CatalogPicker. Veneer priced per m² (price_per_m2 from catalog_veneers); finish priced per m² (price_per_unit from catalog_finishes). engine-v3 + componentAmount + shadow all updated to handle these kinds.
 - **Catalog seed data**: `scripts/seed-catalog.sql` — 86 rows: 12 materials, 14 hardware, 9 accessories, 8 manufacturing ops, 10 finishes, 8 veneers, 7 pricing factors, 8 wastage rules. Applied to remote DB.
@@ -612,6 +613,7 @@ The `DEFAULT_FORMULA` defines a 14-step pipeline. New quotes use the active `pri
 | `20260622_drop_legacy_customer_policies.sql` | ✅ Applied | RLS fix for customers |
 | `20260701_add_length_veneer_finish.sql` | ✅ Applied | Extends component_kind enum with veneer/finish; adds units.length_mm + units.dimension_unit (mm/m/m2) |
 | `20260704_fix_finish_price_per_unit.sql` | ✅ Applied | catalog_finishes: replace modifier_type/modifier_value with price_per_unit |
+| `20260718_fix_quotes_rls_insert.sql` | ✅ Applied | Quotes RLS: INSERT/UPDATE/DELETE policies via is_tenant_member (was missing, blocked V2 save) |
 
 Project Context Management
 

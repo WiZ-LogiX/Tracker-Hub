@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatEGP } from "@/lib/pricing";
 import { sendNotification } from "@/lib/notifications.functions";
 import { generatePdf } from "@/lib/pdf.functions";
@@ -15,6 +16,10 @@ import { toast } from "sonner";
 import { ArrowRight, Download } from "lucide-react";
 import { InternalNotes } from "@/components/admin/InternalNotes";
 import { convertQuoteToOrder } from "@/lib/transactional.functions";
+
+const TreeConfigurator = lazy(() =>
+  import("@/components/quote/TreeConfigurator").then((m) => ({ default: m.TreeConfigurator })),
+);
 
 export const Route = createFileRoute("/admin/quotes/$id")({ component: QuoteDetail });
 
@@ -26,10 +31,12 @@ function QuoteDetail() {
   const [items, setItems] = useState<any[]>([]);
   const [customer, setCustomer] = useState<any>(null);
   const [working, setWorking] = useState(false);
+  const [isV2, setIsV2] = useState<boolean | null>(null);
 
   useEffect(() => {
     load();
   }, [id]);
+
   async function load() {
     const { data: q } = await supabase.from("quotes").select("*").eq("id", id).single();
     setQuote(q);
@@ -40,8 +47,20 @@ function QuoteDetail() {
         .eq("id", q.customer_id)
         .single();
       setCustomer(c);
-      const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", id);
-      setItems(its ?? []);
+
+      // Check if this is a V2 quote (has hierarchy data)
+      const { data: products } = await supabase
+        .from("quotation_products")
+        .select("id")
+        .eq("quotation_id", id)
+        .limit(1);
+      const v2 = (products?.length ?? 0) > 0;
+      setIsV2(v2);
+
+      if (!v2) {
+        const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", id);
+        setItems(its ?? []);
+      }
     }
   }
 
@@ -92,7 +111,6 @@ function QuoteDetail() {
           }
         } catch (e) {
           console.warn("[quotes] quote→order conversion failed:", e);
-          /* continue to reload if conversion fails */
         }
       }
       toast.success(t("quotes.updated"));
@@ -154,36 +172,55 @@ function QuoteDetail() {
         <Badge className="text-base px-3 py-1">{quote.status}</Badge>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">{t("quotes.items")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {items.map((it, i) => {
-            const snap = quote.snapshot?.items?.[i] ?? {};
-            return (
-              <div key={it.id} className="border rounded-md p-3 text-sm">
-                <div className="flex justify-between font-medium">
-                  <span>{it.product_name}</span>
-                  <span>{formatEGP(Number(it.line_total))}</span>
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {it.material_name} • {it.finish_name} • {it.dimension_value} × {it.qty}
-                </div>
-                {(snap.supplier_name || snap.supplier_country) && (
-                  <div className="text-xs mt-1">
-                    <span className="text-muted-foreground">{t("quotes.supplierOrigin")}</span>{" "}
-                    <span className="font-medium">{snap.supplier_name ?? "—"}</span>
-                    {snap.supplier_country && (
-                      <span className="text-muted-foreground"> • {snap.supplier_country}</span>
-                    )}
+      {isV2 === null ? (
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-64 w-full" />
+          </CardContent>
+        </Card>
+      ) : isV2 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">{t("quotes.items")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+              <TreeConfigurator quotationId={id} />
+            </Suspense>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">{t("quotes.items")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {items.map((it, i) => {
+              const snap = quote.snapshot?.items?.[i] ?? {};
+              return (
+                <div key={it.id} className="border rounded-md p-3 text-sm">
+                  <div className="flex justify-between font-medium">
+                    <span>{it.product_name}</span>
+                    <span>{formatEGP(Number(it.line_total))}</span>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {it.material_name} • {it.finish_name} • {it.dimension_value} × {it.qty}
+                  </div>
+                  {(snap.supplier_name || snap.supplier_country) && (
+                    <div className="text-xs mt-1">
+                      <span className="text-muted-foreground">{t("quotes.supplierOrigin")}</span>{" "}
+                      <span className="font-medium">{snap.supplier_name ?? "—"}</span>
+                      {snap.supplier_country && (
+                        <span className="text-muted-foreground"> • {snap.supplier_country}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">
