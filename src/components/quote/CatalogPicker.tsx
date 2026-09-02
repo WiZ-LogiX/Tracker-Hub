@@ -16,6 +16,7 @@ import {
   listManufacturingOperations,
   listVeneers,
   listFinishes,
+  listEdgeBands,
 } from "@/lib/catalog-v2.functions";
 import { formatEGP } from "@/lib/pricing";
 import { Loader2 } from "lucide-react";
@@ -80,15 +81,20 @@ export function CatalogPicker({
   const fetchManufacturing = useServerFn(listManufacturingOperations);
   const fetchVeneers = useServerFn(listVeneers);
   const fetchFinishes = useServerFn(listFinishes);
+  const fetchEdgeBands = useServerFn(listEdgeBands);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
       let raw: any[] = [];
       switch (kind) {
-        case "material":
-        case "edge_band": {
+        case "material": {
           const res = await fetchMaterials({ data: {} });
+          raw = res ?? [];
+          break;
+        }
+        case "edge_band": {
+          const res = await fetchEdgeBands({ data: {} });
           raw = res ?? [];
           break;
         }

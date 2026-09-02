@@ -674,6 +674,8 @@ const MaterialCreate = z.object({
   pricePerUnit: z.coerce.number().min(0),
   defaultWastagePct: z.coerce.number().min(0).max(100).optional(),
   supplierId: z.string().uuid().optional(),
+  brand: z.string().trim().max(128).optional(),
+  countryOfOrigin: z.string().trim().max(128).optional(),
 }).strict();
 
 const MaterialUpdate = z.object({
@@ -684,50 +686,68 @@ const MaterialUpdate = z.object({
   pricePerUnit: z.coerce.number().min(0).optional(),
   defaultWastagePct: z.coerce.number().min(0).max(100).optional().nullable(),
   supplierId: z.string().uuid().optional().nullable(),
+  brand: z.string().trim().max(128).optional().nullable(),
+  countryOfOrigin: z.string().trim().max(128).optional().nullable(),
 }).strict();
 
 const FinishCreate = z.object({
   code: z.string().trim().min(1).max(64),
   pricePerUnit: z.coerce.number().min(0),
+  brand: z.string().trim().max(128).optional(),
+  countryOfOrigin: z.string().trim().max(128).optional(),
 }).strict();
 
 const FinishUpdate = z.object({
   id: z.string().uuid(),
   code: z.string().trim().min(1).max(64).optional(),
   pricePerUnit: z.coerce.number().min(0).optional(),
+  brand: z.string().trim().max(128).optional().nullable(),
+  countryOfOrigin: z.string().trim().max(128).optional().nullable(),
 }).strict();
 
 const VeneerCreate = z.object({
   code: z.string().trim().min(1).max(64),
   pricePerM2: z.coerce.number().min(0),
+  brand: z.string().trim().max(128).optional(),
+  countryOfOrigin: z.string().trim().max(128).optional(),
 }).strict();
 
 const VeneerUpdate = z.object({
   id: z.string().uuid(),
   code: z.string().trim().min(1).max(64).optional(),
   pricePerM2: z.coerce.number().min(0).optional(),
+  brand: z.string().trim().max(128).optional().nullable(),
+  countryOfOrigin: z.string().trim().max(128).optional().nullable(),
 }).strict();
 
 const HardwareCreate = z.object({
   code: z.string().trim().min(1).max(64),
   pricePerPiece: z.coerce.number().min(0),
+  brand: z.string().trim().max(128).optional(),
+  countryOfOrigin: z.string().trim().max(128).optional(),
 }).strict();
 
 const HardwareUpdate = z.object({
   id: z.string().uuid(),
   code: z.string().trim().min(1).max(64).optional(),
   pricePerPiece: z.coerce.number().min(0).optional(),
+  brand: z.string().trim().max(128).optional().nullable(),
+  countryOfOrigin: z.string().trim().max(128).optional().nullable(),
 }).strict();
 
 const AccessoryCreateV2 = z.object({
   code: z.string().trim().min(1).max(64),
   pricePerPiece: z.coerce.number().min(0),
+  brand: z.string().trim().max(128).optional(),
+  countryOfOrigin: z.string().trim().max(128).optional(),
 }).strict();
 
 const AccessoryUpdateV2 = z.object({
   id: z.string().uuid(),
   code: z.string().trim().min(1).max(64).optional(),
   pricePerPiece: z.coerce.number().min(0).optional(),
+  brand: z.string().trim().max(128).optional().nullable(),
+  countryOfOrigin: z.string().trim().max(128).optional().nullable(),
 }).strict();
 
 const MfgRateUnit = z.enum(["piece", "m", "m2", "minute"]);
@@ -736,6 +756,8 @@ const ManufacturingOpCreate = z.object({
   code: z.string().trim().min(1).max(64),
   rateUnit: MfgRateUnit,
   rate: z.coerce.number().min(0),
+  brand: z.string().trim().max(128).optional(),
+  countryOfOrigin: z.string().trim().max(128).optional(),
 }).strict();
 
 const ManufacturingOpUpdate = z.object({
@@ -743,19 +765,26 @@ const ManufacturingOpUpdate = z.object({
   code: z.string().trim().min(1).max(64).optional(),
   rateUnit: MfgRateUnit.optional(),
   rate: z.coerce.number().min(0).optional(),
+  brand: z.string().trim().max(128).optional().nullable(),
+  countryOfOrigin: z.string().trim().max(128).optional().nullable(),
 }).strict();
 
-const PricingFactorKey = z.enum(["labor", "overhead", "margin", "luxury", "complexity", "rush", "wastage"]);
+const PricingFactorKey = z.enum(["labor", "overhead", "margin", "luxury", "complexity", "rush", "packaging", "site_visit", "transport"]);
+const FactorValueType = z.enum(["percent", "fixed"]);
 
 const PricingFactorCreate = z.object({
   factorKey: PricingFactorKey,
-  percent: z.coerce.number().min(0).max(100),
+  valueType: FactorValueType.default("percent"),
+  percent: z.coerce.number().min(0).max(100).default(0),
+  fixedAmount: z.coerce.number().min(0).default(0),
 }).strict();
 
 const PricingFactorUpdate = z.object({
   id: z.string().uuid(),
   factorKey: PricingFactorKey.optional(),
+  valueType: FactorValueType.optional(),
   percent: z.coerce.number().min(0).max(100).optional(),
+  fixedAmount: z.coerce.number().min(0).optional(),
 }).strict();
 
 const WastageScope = z.enum(["material", "material_type"]);
@@ -837,11 +866,13 @@ export const createCatalogMaterial = createServerFn({ method: "POST" })
       price_per_unit: String(data.pricePerUnit),
       default_wastage_pct: data.defaultWastagePct != null ? String(data.defaultWastagePct) : null,
       supplier_id: data.supplierId ?? null,
+      brand: data.brand ?? null,
+      country_of_origin: data.countryOfOrigin ?? null,
     };
     const { data: row, error } = await client
       .from("catalog_materials")
       .insert(payload)
-      .select("id, code, label_i18n_key, pricing_unit, price_per_unit, default_wastage_pct, supplier_id, archived_at, created_at, updated_at")
+      .select("id, code, label_i18n_key, pricing_unit, price_per_unit, default_wastage_pct, supplier_id, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Material not created");
@@ -865,12 +896,14 @@ export const updateCatalogMaterial = createServerFn({ method: "POST" })
     if (fields.pricePerUnit !== undefined) payload.price_per_unit = String(fields.pricePerUnit);
     if (fields.defaultWastagePct !== undefined) payload.default_wastage_pct = fields.defaultWastagePct != null ? String(fields.defaultWastagePct) : null;
     if (fields.supplierId !== undefined) payload.supplier_id = fields.supplierId ?? null;
+    if (fields.brand !== undefined) payload.brand = fields.brand ?? null;
+    if (fields.countryOfOrigin !== undefined) payload.country_of_origin = fields.countryOfOrigin ?? null;
     const { data: row, error } = await client
       .from("catalog_materials")
       .update(payload)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId)
-      .select("id, code, label_i18n_key, pricing_unit, price_per_unit, default_wastage_pct, supplier_id, archived_at, created_at, updated_at")
+      .select("id, code, label_i18n_key, pricing_unit, price_per_unit, default_wastage_pct, supplier_id, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
 
@@ -926,11 +959,13 @@ export const createCatalogFinish = createServerFn({ method: "POST" })
       tenant_id: ctx.tenantId,
       code: data.code,
       price_per_unit: String(data.pricePerUnit),
+      brand: data.brand ?? null,
+      country_of_origin: data.countryOfOrigin ?? null,
     };
     const { data: row, error } = await client
       .from("catalog_finishes")
       .insert(payload)
-      .select("id, code, price_per_unit, archived_at, created_at, updated_at")
+      .select("id, code, price_per_unit, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Finish not created");
@@ -950,12 +985,14 @@ export const updateCatalogFinish = createServerFn({ method: "POST" })
     const payload: Record<string, unknown> = { updated_at: catalogNow() };
     if (fields.code !== undefined) payload.code = fields.code;
     if (fields.pricePerUnit !== undefined) payload.price_per_unit = String(fields.pricePerUnit);
+    if (fields.brand !== undefined) payload.brand = fields.brand ?? null;
+    if (fields.countryOfOrigin !== undefined) payload.country_of_origin = fields.countryOfOrigin ?? null;
     const { data: row, error } = await client
       .from("catalog_finishes")
       .update(payload)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId)
-      .select("id, code, price_per_unit, archived_at, created_at, updated_at")
+      .select("id, code, price_per_unit, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
 
@@ -1011,11 +1048,13 @@ export const createCatalogVeneer = createServerFn({ method: "POST" })
       tenant_id: ctx.tenantId,
       code: data.code,
       price_per_m2: String(data.pricePerM2),
+      brand: data.brand ?? null,
+      country_of_origin: data.countryOfOrigin ?? null,
     };
     const { data: row, error } = await client
       .from("catalog_veneers")
       .insert(payload)
-      .select("id, code, price_per_m2, archived_at, created_at, updated_at")
+      .select("id, code, price_per_m2, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Veneer not created");
@@ -1035,12 +1074,14 @@ export const updateCatalogVeneer = createServerFn({ method: "POST" })
     const payload: Record<string, unknown> = { updated_at: catalogNow() };
     if (fields.code !== undefined) payload.code = fields.code;
     if (fields.pricePerM2 !== undefined) payload.price_per_m2 = String(fields.pricePerM2);
+    if (fields.brand !== undefined) payload.brand = fields.brand ?? null;
+    if (fields.countryOfOrigin !== undefined) payload.country_of_origin = fields.countryOfOrigin ?? null;
     const { data: row, error } = await client
       .from("catalog_veneers")
       .update(payload)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId)
-      .select("id, code, price_per_m2, archived_at, created_at, updated_at")
+      .select("id, code, price_per_m2, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
 
@@ -1096,11 +1137,13 @@ export const createCatalogHardware = createServerFn({ method: "POST" })
       tenant_id: ctx.tenantId,
       code: data.code,
       price_per_piece: String(data.pricePerPiece),
+      brand: data.brand ?? null,
+      country_of_origin: data.countryOfOrigin ?? null,
     };
     const { data: row, error } = await client
       .from("catalog_hardware")
       .insert(payload)
-      .select("id, code, price_per_piece, archived_at, created_at, updated_at")
+      .select("id, code, price_per_piece, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Hardware not created");
@@ -1120,12 +1163,14 @@ export const updateCatalogHardware = createServerFn({ method: "POST" })
     const payload: Record<string, unknown> = { updated_at: catalogNow() };
     if (fields.code !== undefined) payload.code = fields.code;
     if (fields.pricePerPiece !== undefined) payload.price_per_piece = String(fields.pricePerPiece);
+    if (fields.brand !== undefined) payload.brand = fields.brand ?? null;
+    if (fields.countryOfOrigin !== undefined) payload.country_of_origin = fields.countryOfOrigin ?? null;
     const { data: row, error } = await client
       .from("catalog_hardware")
       .update(payload)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId)
-      .select("id, code, price_per_piece, archived_at, created_at, updated_at")
+      .select("id, code, price_per_piece, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
 
@@ -1181,11 +1226,13 @@ export const createCatalogAccessory = createServerFn({ method: "POST" })
       tenant_id: ctx.tenantId,
       code: data.code,
       price_per_piece: String(data.pricePerPiece),
+      brand: data.brand ?? null,
+      country_of_origin: data.countryOfOrigin ?? null,
     };
     const { data: row, error } = await client
       .from("catalog_accessories")
       .insert(payload)
-      .select("id, code, price_per_piece, archived_at, created_at, updated_at")
+      .select("id, code, price_per_piece, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Accessory not created");
@@ -1205,12 +1252,14 @@ export const updateCatalogAccessory = createServerFn({ method: "POST" })
     const payload: Record<string, unknown> = { updated_at: catalogNow() };
     if (fields.code !== undefined) payload.code = fields.code;
     if (fields.pricePerPiece !== undefined) payload.price_per_piece = String(fields.pricePerPiece);
+    if (fields.brand !== undefined) payload.brand = fields.brand ?? null;
+    if (fields.countryOfOrigin !== undefined) payload.country_of_origin = fields.countryOfOrigin ?? null;
     const { data: row, error } = await client
       .from("catalog_accessories")
       .update(payload)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId)
-      .select("id, code, price_per_piece, archived_at, created_at, updated_at")
+      .select("id, code, price_per_piece, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
 
@@ -1267,11 +1316,13 @@ export const createCatalogManufacturingOp = createServerFn({ method: "POST" })
       code: data.code,
       rate_unit: data.rateUnit,
       rate: String(data.rate),
+      brand: data.brand ?? null,
+      country_of_origin: data.countryOfOrigin ?? null,
     };
     const { data: row, error } = await client
       .from("catalog_manufacturing_operations")
       .insert(payload)
-      .select("id, code, rate_unit, rate, archived_at, created_at, updated_at")
+      .select("id, code, rate_unit, rate, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Manufacturing operation not created");
@@ -1292,12 +1343,14 @@ export const updateCatalogManufacturingOp = createServerFn({ method: "POST" })
     if (fields.code !== undefined) payload.code = fields.code;
     if (fields.rateUnit !== undefined) payload.rate_unit = fields.rateUnit;
     if (fields.rate !== undefined) payload.rate = String(fields.rate);
+    if (fields.brand !== undefined) payload.brand = fields.brand ?? null;
+    if (fields.countryOfOrigin !== undefined) payload.country_of_origin = fields.countryOfOrigin ?? null;
     const { data: row, error } = await client
       .from("catalog_manufacturing_operations")
       .update(payload)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId)
-      .select("id, code, rate_unit, rate, archived_at, created_at, updated_at")
+      .select("id, code, rate_unit, rate, brand, country_of_origin, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
 
@@ -1352,12 +1405,14 @@ export const createCatalogPricingFactor = createServerFn({ method: "POST" })
     const payload = {
       tenant_id: ctx.tenantId,
       factor_key: data.factorKey,
+      value_type: data.valueType,
       percent: String(data.percent),
+      fixed_amount: String(data.fixedAmount),
     };
     const { data: row, error } = await client
       .from("tenant_pricing_factors")
       .insert(payload)
-      .select("id, tenant_id, factor_key, percent, archived_at, created_at, updated_at")
+      .select("id, tenant_id, factor_key, value_type, percent, fixed_amount, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Pricing factor not created");
@@ -1376,13 +1431,15 @@ export const updateCatalogPricingFactor = createServerFn({ method: "POST" })
     blockIfArchived(archivedAt, "tenant_pricing_factors", id);
     const payload: Record<string, unknown> = { updated_at: catalogNow() };
     if (fields.factorKey !== undefined) payload.factor_key = fields.factorKey;
+    if (fields.valueType !== undefined) payload.value_type = fields.valueType;
     if (fields.percent !== undefined) payload.percent = String(fields.percent);
+    if (fields.fixedAmount !== undefined) payload.fixed_amount = String(fields.fixedAmount);
     const { data: row, error } = await client
       .from("tenant_pricing_factors")
       .update(payload)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId)
-      .select("id, tenant_id, factor_key, percent, archived_at, created_at, updated_at")
+      .select("id, tenant_id, factor_key, value_type, percent, fixed_amount, archived_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw new Error(error.message);
     return row;
@@ -1654,6 +1711,114 @@ export const archiveCatalogFeesCredit = createServerFn({ method: "POST" })
   });
 
 export const hardDeleteCatalogFeesCredit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d) => ArchiveInput.parse(d))
+  .handler(() => blockHardDelete());
+
+// ── Edge Bands ──────────────────────────────────────────────────────────────
+
+const EdgeBandCreate = z.object({
+  code: z.string().trim().min(1).max(64),
+  pricePerUnit: z.coerce.number().min(0),
+  brand: z.string().trim().max(128).optional(),
+  countryOfOrigin: z.string().trim().max(128).optional(),
+}).strict();
+
+const EdgeBandUpdate = z.object({
+  id: z.string().uuid(),
+  code: z.string().trim().min(1).max(64).optional(),
+  pricePerUnit: z.coerce.number().min(0).optional(),
+  brand: z.string().trim().max(128).optional().nullable(),
+  countryOfOrigin: z.string().trim().max(128).optional().nullable(),
+}).strict();
+
+export const listCatalogEdgeBands = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    const client = (context as any).supabase;
+    const { data, error } = await client
+      .from("catalog_edge_bands")
+      .select("id, code, price_per_unit, brand, country_of_origin, archived_at, created_at, updated_at")
+      .eq("tenant_id", ctx.tenantId)
+      .is("archived_at", null)
+      .order("code");
+    if (error) throw new Error(error.message);
+    return { items: data ?? [] };
+  });
+
+export const createCatalogEdgeBand = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d) => EdgeBandCreate.parse(d))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireWriteRole(ctx);
+    const client = (context as any).supabase;
+    const { data: row, error } = await client
+      .from("catalog_edge_bands")
+      .insert({
+        tenant_id: ctx.tenantId,
+        code: data.code,
+        price_per_unit: String(data.pricePerUnit),
+        brand: data.brand ?? null,
+        country_of_origin: data.countryOfOrigin ?? null,
+      })
+      .select("id, code, price_per_unit, brand, country_of_origin, archived_at, created_at, updated_at")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Edge band not created");
+    return row;
+  });
+
+export const updateCatalogEdgeBand = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d) => EdgeBandUpdate.parse(d))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireWriteRole(ctx);
+    const client = (context as any).supabase;
+    const { id, ...fields } = data;
+    const archivedAt = await getArchivedAt(client, "catalog_edge_bands", id, ctx.tenantId);
+    blockIfArchived(archivedAt, "catalog_edge_bands", id);
+    const payload: Record<string, unknown> = { updated_at: catalogNow() };
+    if (fields.code !== undefined) payload.code = fields.code;
+    if (fields.pricePerUnit !== undefined) payload.price_per_unit = String(fields.pricePerUnit);
+    if (fields.brand !== undefined) payload.brand = fields.brand ?? null;
+    if (fields.countryOfOrigin !== undefined) payload.country_of_origin = fields.countryOfOrigin ?? null;
+    const { data: row, error } = await client
+      .from("catalog_edge_bands")
+      .update(payload)
+      .eq("id", id)
+      .eq("tenant_id", ctx.tenantId)
+      .select("id, code, price_per_unit, brand, country_of_origin, archived_at, created_at, updated_at")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Edge band not found");
+    return row;
+  });
+
+export const archiveCatalogEdgeBand = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d) => ArchiveInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireAdminRole(ctx);
+    const client = (context as any).supabase;
+    const archivedAt = await getArchivedAt(client, "catalog_edge_bands", data.id, ctx.tenantId);
+    blockIfArchived(archivedAt, "catalog_edge_bands", data.id);
+    const { data: row, error } = await client
+      .from("catalog_edge_bands")
+      .update({ archived_at: catalogNow(), updated_at: catalogNow() })
+      .eq("id", data.id)
+      .eq("tenant_id", ctx.tenantId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Edge band not found");
+    return { archived: true };
+  });
+
+export const hardDeleteCatalogEdgeBand = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requireTenant])
   .inputValidator((d) => ArchiveInput.parse(d))
   .handler(() => blockHardDelete());

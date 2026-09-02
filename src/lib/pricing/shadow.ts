@@ -198,7 +198,7 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string, cl
   const { data: components } = unitIds.length > 0
     ? await client
         .from("components")
-        .select("id, unit_id, kind, catalog_id, qty, unit_of_measure")
+        .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, area_function_key")
         .in("unit_id", unitIds)
         .eq("tenant_id", tenantId)
     : { data: [] };
@@ -241,6 +241,7 @@ async function loadHierarchyAndCatalog(quotationId: string, tenantId: string, cl
                 catalogId: c.catalog_id,
                 qty: Number(c.qty),
                 unitOfMeasure: c.unit_of_measure,
+                areaFunctionKey: c.area_function_key ?? null,
               })),
             })),
         })),
@@ -292,6 +293,7 @@ function emptyCatalog(): CatalogLookup {
     manufacturingOps: {},
     veneers: {},
     finishes: {},
+    edgeBands: {},
     pricingFactors: [],
     wastageRules: [],
     feesCredits: [],
@@ -299,7 +301,7 @@ function emptyCatalog(): CatalogLookup {
 }
 
 async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup> {
-  const [materialsRes, hardwareRes, accessoriesRes, mfgOpsRes, veneersRes, finishesRes, factorsRes, wastageRes, feesRes] =
+  const [materialsRes, hardwareRes, accessoriesRes, mfgOpsRes, veneersRes, finishesRes, edgeBandsRes, factorsRes, wastageRes, feesRes] =
     await Promise.all([
       client
         .from("catalog_materials")
@@ -332,8 +334,13 @@ async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
       client
+        .from("catalog_edge_bands")
+        .select("id, price_per_unit")
+        .eq("tenant_id", tenantId)
+        .is("archived_at", null),
+      client
         .from("tenant_pricing_factors")
-        .select("factor_key, percent")
+        .select("factor_key, value_type, percent, fixed_amount")
         .eq("tenant_id", tenantId)
         .is("archived_at", null),
       client
@@ -355,6 +362,7 @@ async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup
     ["manufacturingOps", mfgOpsRes],
     ["veneers", veneersRes],
     ["finishes", finishesRes],
+    ["edgeBands", edgeBandsRes],
     ["pricingFactors", factorsRes],
     ["wastageRules", wastageRes],
     ["feesCredits", feesRes],
@@ -413,9 +421,22 @@ async function loadCatalog(tenantId: string, client: any): Promise<CatalogLookup
         },
       ]),
     ),
+    edgeBands: Object.fromEntries(
+      (edgeBandsRes.data ?? []).map((e: any) => [
+        e.id,
+        {
+          id: e.id,
+          pricingUnit: "m",
+          pricePerUnit: e.price_per_unit,
+          defaultWastagePct: 0,
+        },
+      ]),
+    ),
     pricingFactors: (factorsRes.data ?? []).map((f: any) => ({
       factorKey: f.factor_key,
-      percent: f.percent,
+      percent: Number(f.percent),
+      valueType: f.value_type ?? "percent",
+      fixedAmount: Number(f.fixed_amount ?? 0),
     })),
     wastageRules: (wastageRes.data ?? []).map((w: any) => ({
       scope: w.scope,

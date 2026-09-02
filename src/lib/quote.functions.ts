@@ -425,7 +425,16 @@ export const saveV2Quote = createServerFn({ method: "POST" })
         }
       }
 
-      // 3. Run shadow comparison if feature flag is on (non-blocking)
+      // 3. Compute pricing and update quotes row (so summary shows correct total)
+      try {
+        await computeAndPersistQuotePrices(tid, quoteId, client);
+      } catch (priceErr) {
+        log.error("saveV2Quote: pricing computation failed (non-blocking):", {
+          error: priceErr instanceof Error ? priceErr.message : String(priceErr),
+        });
+      }
+
+      // 4. Run shadow comparison if feature flag is on (non-blocking)
       try {
         const { data: tenantRow } = await client
           .from("tenants")
@@ -552,7 +561,7 @@ async function loadHierarchyRaw(quotationId: string, tenantId: string, client: a
       .order("position"),
     client
       .from("components")
-      .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, position")
+      .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, area_function_key, position")
       .eq("tenant_id", tenantId)
       .order("position"),
   ]);
@@ -600,28 +609,35 @@ async function loadHierarchyRaw(quotationId: string, tenantId: string, client: a
   }));
 }
 
-// ── Freeze snapshot + audit on state transition ─────────────────────────────
+// ── Shared: compute pricing + update quotes row ────────────────────────────
 
 /**
- * Load the hierarchy, price it via engine-v3, write a snapshot, and
- * record the transition in the audit log. Called from updateQuoteStatus
- * on transitions to `sent` or `accepted`.
+ * Load catalog, run engine-v3 pricing, and persist computed prices to the
+ * quotes table. Used by both saveV2Quote (on create) and freezeQuoteSnapshot
+ * (on status transition).
  *
- * Throws on failure — caller decides whether to block the transition.
+ * Returns the QuoteOutput breakdown for callers that need it (snapshots, etc).
  */
-async function freezeQuoteSnapshot(
+async function computeAndPersistQuotePrices(
   tenantId: string,
   quotationId: string,
-  state: string,
   client: any,
-): Promise<void> {
-  // 1. Load hierarchy tree
+): Promise<ReturnType<typeof priceQuote>> {
+  // 1. Load hierarchy
   const rawTree = await loadHierarchyRaw(quotationId, tenantId, client);
 
-  // 2. Load catalog lookup (same pattern as priceQuotationTree)
+  // 2. Load all catalog + pricing data in parallel
   const [
-    materialsRes, hardwareRes, accessoriesRes,
-    mfgOpsRes, veneersRes, finishesRes, factorsRes, wastageRes, feesRes,
+    materialsRes,
+    hardwareRes,
+    accessoriesRes,
+    mfgOpsRes,
+    veneersRes,
+    finishesRes,
+    edgeBandsRes,
+    factorsRes,
+    wastageRes,
+    feesRes,
   ] = await Promise.all([
     client.from("catalog_materials")
       .select("id, pricing_unit, price_per_unit, default_wastage_pct")
@@ -641,8 +657,11 @@ async function freezeQuoteSnapshot(
     client.from("catalog_finishes")
       .select("id, price_per_unit")
       .eq("tenant_id", tenantId).is("archived_at", null),
+    client.from("catalog_edge_bands")
+      .select("id, price_per_unit")
+      .eq("tenant_id", tenantId).is("archived_at", null),
     client.from("tenant_pricing_factors")
-      .select("factor_key, percent")
+      .select("factor_key, value_type, percent, fixed_amount")
       .eq("tenant_id", tenantId).is("archived_at", null),
     client.from("tenant_wastage_rules")
       .select("scope, ref, pct")
@@ -674,16 +693,92 @@ async function freezeQuoteSnapshot(
     finishes: Object.fromEntries(
       (finishesRes.data ?? []).map((f: any) => [f.id, { id: f.id, pricingUnit: "m2", pricePerUnit: f.price_per_unit, defaultWastagePct: 0 }]),
     ),
-    pricingFactors: (factorsRes.data ?? []).map((f: any) => ({ factorKey: f.factor_key, percent: f.percent })),
+    edgeBands: Object.fromEntries(
+      (edgeBandsRes.data ?? []).map((e: any) => [e.id, { id: e.id, pricingUnit: "m", pricePerUnit: e.price_per_unit, defaultWastagePct: 0 }]),
+    ),
+    pricingFactors: (factorsRes.data ?? []).map((f: any) => ({
+      factorKey: f.factor_key,
+      percent: Number(f.percent),
+      valueType: f.value_type ?? "percent",
+      fixedAmount: Number(f.fixed_amount ?? 0),
+    })),
     wastageRules: (wastageRes.data ?? []).map((w: any) => ({ scope: w.scope, ref: w.ref, pct: w.pct })),
     feesCredits: (feesRes.data ?? []).map((fc: any) => ({ code: fc.code, sign: fc.sign as "plus" | "minus", amount: fc.amount, formulaKey: fc.formula_key })),
   };
 
-  // 3. Compute pricing
-  const quoteInput: QuoteInput = { products: rawTree as any };
+  // 3. Run pricing engine
+  const quoteInput: QuoteInput = {
+    products: rawTree.map((p: any) => ({
+      id: p.id,
+      sections: (p.sections ?? []).map((s: any) => ({
+        id: s.id,
+        units: (s.units ?? []).map((u: any) => ({
+          id: u.id,
+          unitTypeId: u.unit_type_id ?? null,
+          widthMm: u.width_mm ?? 0,
+          heightMm: u.height_mm ?? 0,
+          depthMm: u.depth_mm ?? 0,
+          qty: u.qty ?? 1,
+          overrideFactorKeys: u.override_factor_keys ?? {},
+          components: (u.components ?? []).map((c: any) => ({
+            id: c.id,
+            kind: c.kind,
+            catalogId: c.catalog_id ?? null,
+            qty: Number(c.qty ?? 0),
+            unitOfMeasure: c.unit_of_measure ?? "pcs",
+            areaFunctionKey: c.area_function_key ?? null,
+          })),
+        })),
+      })),
+    })),
+  };
   const breakdown = priceQuote(quoteInput, catalog);
 
-  // 4. Load current rule version (latest active pricing rule)
+  // 4. Persist computed prices to quotes table
+  const b = breakdown.breakdown;
+  const { error: updateErr } = await client
+    .from("quotes")
+    .update({
+      subtotal: String(b.subTotal),
+      discount_amount: String(b.discount),
+      vat_amount: String(b.vatAmount),
+      total: String(b.total),
+    })
+    .eq("id", quotationId)
+    .eq("tenant_id", tenantId);
+
+  if (updateErr) {
+    log.error("computeAndPersistQuotePrices: failed to update quotes row", {
+      quoteId: quotationId,
+      error: updateErr.message,
+    });
+  }
+
+  return breakdown;
+}
+
+// ── Freeze snapshot + audit on state transition ─────────────────────────────
+
+/**
+ * Load the hierarchy, price it via engine-v3, write a snapshot, and
+ * record the transition in the audit log. Called from updateQuoteStatus
+ * on transitions to `sent` or `accepted`.
+ *
+ * Throws on failure — caller decides whether to block the transition.
+ */
+async function freezeQuoteSnapshot(
+  tenantId: string,
+  quotationId: string,
+  state: string,
+  client: any,
+): Promise<void> {
+  // 1. Compute pricing + update quotes row (shared helper)
+  const breakdown = await computeAndPersistQuotePrices(tenantId, quotationId, client);
+
+  // 2. Load hierarchy tree for snapshot
+  const rawTree = await loadHierarchyRaw(quotationId, tenantId, client);
+
+  // 3. Load current rule version (latest active pricing rule)
   const { data: ruleRow } = await client
     .from("pricing_rules")
     .select("id, version")
@@ -693,6 +788,20 @@ async function freezeQuoteSnapshot(
     .limit(1)
     .maybeSingle();
 
+  // 4. Load pricing factors for snapshot metadata
+  const { data: factorsData } = await client
+    .from("tenant_pricing_factors")
+    .select("factor_key, value_type, percent, fixed_amount")
+    .eq("tenant_id", tenantId)
+    .is("archived_at", null);
+
+  const factors = (factorsData ?? []).map((f: any) => ({
+    factorKey: f.factor_key,
+    percent: Number(f.percent),
+    valueType: f.value_type ?? "percent",
+    fixedAmount: Number(f.fixed_amount ?? 0),
+  }));
+
   // 5. Write snapshot
   await writeSnapshot({
     tenantId,
@@ -701,7 +810,7 @@ async function freezeQuoteSnapshot(
     tree: rawTree,
     breakdown: breakdown.breakdown,
     ruleVersionId: ruleRow?.id ?? null,
-    factors: catalog.pricingFactors,
+    factors,
   }, client);
 
   // 6. Write audit log
@@ -713,7 +822,7 @@ async function freezeQuoteSnapshot(
     details: {
       rule_version_id: ruleRow?.id ?? null,
       rule_version_number: ruleRow?.version ?? null,
-      factors: catalog.pricingFactors,
+      factors,
       breakdown_total: breakdown.breakdown.total,
     },
   });
@@ -778,6 +887,7 @@ export async function writeSnapshot(input: WriteSnapshotInput, client: any): Pro
 const PriceQuotationTreeInput = z.object({
   tree: z.object({
     products: z.array(z.any()),
+    discount: z.object({ amount: z.number(), maxValue: z.number().nullish() }).optional(),
   }),
 });
 
@@ -805,6 +915,7 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
       mfgOpsRes,
       veneersRes,
       finishesRes,
+      edgeBandsRes,
       factorsRes,
       wastageRes,
       feesRes,
@@ -840,8 +951,13 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
         .eq("tenant_id", tid)
         .is("archived_at", null),
       client
+        .from("catalog_edge_bands")
+        .select("id, price_per_unit")
+        .eq("tenant_id", tid)
+        .is("archived_at", null),
+      client
         .from("tenant_pricing_factors")
-        .select("factor_key, percent")
+      .select("factor_key, value_type, percent, fixed_amount")
         .eq("tenant_id", tid)
         .is("archived_at", null),
       client
@@ -864,6 +980,7 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
       ["manufacturingOps", mfgOpsRes],
       ["veneers", veneersRes],
       ["finishes", finishesRes],
+      ["edgeBands", edgeBandsRes],
       ["pricingFactors", factorsRes],
       ["wastageRules", wastageRes],
       ["feesCredits", feesRes],
@@ -926,9 +1043,22 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
           },
         ]),
       ),
+      edgeBands: Object.fromEntries(
+        (edgeBandsRes.data ?? []).map((e: any) => [
+          e.id,
+          {
+            id: e.id,
+            pricingUnit: "m",
+            pricePerUnit: e.price_per_unit,
+            defaultWastagePct: 0,
+          },
+        ]),
+      ),
       pricingFactors: (factorsRes.data ?? []).map((f: any) => ({
         factorKey: f.factor_key,
-        percent: f.percent,
+        percent: Number(f.percent),
+        valueType: f.value_type ?? "percent",
+        fixedAmount: Number(f.fixed_amount ?? 0),
       })),
       wastageRules: (wastageRes.data ?? []).map((w: any) => ({
         scope: w.scope,
@@ -943,6 +1073,34 @@ export const priceQuotationTree = createServerFn({ method: "POST" })
       })),
     };
 
+    // Convert snake_case client tree → camelCase for engine-v3
+    const tree: QuoteInput = {
+      products: data.tree.products.map((p: any) => ({
+        id: p.id,
+        sections: (p.sections ?? []).map((s: any) => ({
+          id: s.id,
+          units: (s.units ?? []).map((u: any) => ({
+            id: u.id,
+            unitTypeId: u.unit_type_id ?? u.unitTypeId ?? null,
+            widthMm: u.width_mm ?? u.widthMm ?? 0,
+            heightMm: u.height_mm ?? u.heightMm ?? 0,
+            depthMm: u.depth_mm ?? u.depthMm ?? 0,
+            qty: u.qty ?? 1,
+            overrideFactorKeys: u.override_factor_keys ?? u.overrideFactorKeys ?? {},
+            components: (u.components ?? []).map((c: any) => ({
+              id: c.id,
+              kind: c.kind,
+              catalogId: c.catalog_id ?? c.catalogId ?? null,
+              qty: Number(c.qty ?? 0),
+              unitOfMeasure: c.unit_of_measure ?? c.unitOfMeasure ?? "pcs",
+              areaFunctionKey: c.area_function_key ?? c.areaFunctionKey ?? null,
+            })),
+          })),
+        })),
+      })),
+      discount: data.tree.discount,
+    };
+
     // Run the pure pricing engine
-    return priceQuote(data.tree as QuoteInput, catalog);
+    return priceQuote(tree, catalog);
   });

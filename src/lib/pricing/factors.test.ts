@@ -13,7 +13,7 @@ import {
 // ── FACTOR_ORDER invariance ─────────────────────────────────────────────────
 
 describe("FACTOR_ORDER", () => {
-  it("contains exactly the 8 required keys in locked order", () => {
+  it("contains exactly the 10 required keys in locked order", () => {
     expect(FACTOR_ORDER).toEqual([
       "subtotal",
       "labor",
@@ -23,6 +23,8 @@ describe("FACTOR_ORDER", () => {
       "margin",
       "luxury",
       "packaging",
+      "site_visit",
+      "transport",
     ]);
   });
 
@@ -58,8 +60,8 @@ describe("applyUnitFactors", () => {
 
     // labor: 1000 × 0.15 = 150, margin: 1000 × 0.25 = 250
     expect(result.lines).toHaveLength(2);
-    expect(result.lines[0]).toEqual({ factorKey: "labor", percent: 15, amount: 150 });
-    expect(result.lines[1]).toEqual({ factorKey: "margin", percent: 25, amount: 250 });
+    expect(result.lines[0]).toEqual({ factorKey: "labor", percent: 15, amount: 150, valueType: "percent" });
+    expect(result.lines[1]).toEqual({ factorKey: "margin", percent: 25, amount: 250, valueType: "percent" });
     expect(result.finalPrice).toBe(1400); // 1000 + 150 + 250
   });
 
@@ -67,9 +69,9 @@ describe("applyUnitFactors", () => {
     const result = applyUnitFactors(1000, tenantFactors, { labor: 30 });
 
     // labor overridden to 30%: 1000 × 0.30 = 300
-    expect(result.lines[0]).toEqual({ factorKey: "labor", percent: 30, amount: 300 });
+    expect(result.lines[0]).toEqual({ factorKey: "labor", percent: 30, amount: 300, valueType: "percent" });
     // margin from tenant: 1000 × 0.25 = 250
-    expect(result.lines[1]).toEqual({ factorKey: "margin", percent: 25, amount: 250 });
+    expect(result.lines[1]).toEqual({ factorKey: "margin", percent: 25, amount: 250, valueType: "percent" });
     expect(result.finalPrice).toBe(1550); // 1000 + 300 + 250
   });
 
@@ -79,9 +81,9 @@ describe("applyUnitFactors", () => {
     // rush not in tenant → only override: 1000 × 0.20 = 200
     // labor from tenant: 150, margin from tenant: 250
     expect(result.lines).toHaveLength(3);
-    expect(result.lines[0]).toEqual({ factorKey: "labor", percent: 15, amount: 150 });
-    expect(result.lines[1]).toEqual({ factorKey: "rush", percent: 20, amount: 200 });
-    expect(result.lines[2]).toEqual({ factorKey: "margin", percent: 25, amount: 250 });
+    expect(result.lines[0]).toEqual({ factorKey: "labor", percent: 15, amount: 150, valueType: "percent" });
+    expect(result.lines[1]).toEqual({ factorKey: "rush", percent: 20, amount: 200, valueType: "percent" });
+    expect(result.lines[2]).toEqual({ factorKey: "margin", percent: 25, amount: 250, valueType: "percent" });
     expect(result.finalPrice).toBe(1600); // 1000 + 150 + 200 + 250
   });
 
@@ -122,6 +124,34 @@ describe("applyUnitFactors", () => {
     const lineKeys = result.lines.map((l) => l.factorKey);
     // packaging is not in allFactors → skipped (0%), so 6 lines
     expect(lineKeys).toEqual(["labor", "overhead", "complexity", "rush", "margin", "luxury"]);
+  });
+
+  it("fixed-amount factors (site_visit/transport) add flat EGP", () => {
+    const factors: PricingFactor[] = [
+      { factorKey: "labor", percent: 15 },
+      { factorKey: "site_visit", percent: 0, valueType: "fixed", fixedAmount: 1000 },
+      { factorKey: "transport", percent: 0, valueType: "fixed", fixedAmount: 2000 },
+    ];
+
+    const result = applyUnitFactors(10000, factors);
+
+    // labor: 10000 × 0.15 = 1500, site_visit: 1000, transport: 2000
+    const lineKeys = result.lines.map((l) => l.factorKey);
+    expect(lineKeys).toEqual(["labor", "site_visit", "transport"]);
+
+    const laborLine = result.lines.find((l) => l.factorKey === "labor")!;
+    expect(laborLine.amount).toBe(1500);
+    expect(laborLine.valueType).toBe("percent");
+
+    const svLine = result.lines.find((l) => l.factorKey === "site_visit")!;
+    expect(svLine.amount).toBe(1000);
+    expect(svLine.valueType).toBe("fixed");
+
+    const trLine = result.lines.find((l) => l.factorKey === "transport")!;
+    expect(trLine.amount).toBe(2000);
+    expect(trLine.valueType).toBe("fixed");
+
+    expect(result.finalPrice).toBe(14500); // 10000 + 1500 + 1000 + 2000
   });
 });
 

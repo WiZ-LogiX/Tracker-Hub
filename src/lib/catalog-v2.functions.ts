@@ -50,7 +50,7 @@ export const listMaterials = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
     return tenantQuery(client, ctx.tenantId, "catalog_materials",
-      "id, code, label_i18n_key, pricing_unit, price_per_unit, default_wastage_pct, supplier_id, archived_at, created_at, updated_at",
+      "id, code, label_i18n_key, pricing_unit, price_per_unit, default_wastage_pct, supplier_id, brand, country_of_origin, archived_at, created_at, updated_at",
       { order: "code" },
     );
   });
@@ -87,7 +87,22 @@ export const listFinishes = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
     return tenantQuery(client, ctx.tenantId, "catalog_finishes",
-      "id, code, price_per_unit, archived_at, created_at, updated_at",
+      "id, code, price_per_unit, brand, country_of_origin, archived_at, created_at, updated_at",
+      { order: "code" },
+    );
+  });
+
+// ── listEdgeBands ───────────────────────────────────────────────────────────
+
+export const listEdgeBands = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d) => z.object({}).parse(d))
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    const client = (context as any).supabase;
+    await setTenantGuc(ctx.tenantId);
+    return tenantQuery(client, ctx.tenantId, "catalog_edge_bands",
+      "id, code, price_per_unit, brand, country_of_origin, archived_at, created_at, updated_at",
       { order: "code" },
     );
   });
@@ -102,7 +117,7 @@ export const listVeneers = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
     return tenantQuery(client, ctx.tenantId, "catalog_veneers",
-      "id, code, price_per_m2, archived_at, created_at, updated_at",
+      "id, code, price_per_m2, brand, country_of_origin, archived_at, created_at, updated_at",
       { order: "code" },
     );
   });
@@ -117,7 +132,7 @@ export const listHardware = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
     return tenantQuery(client, ctx.tenantId, "catalog_hardware",
-      "id, code, price_per_piece, archived_at, created_at, updated_at",
+      "id, code, price_per_piece, brand, country_of_origin, archived_at, created_at, updated_at",
       { order: "code" },
     );
   });
@@ -132,7 +147,7 @@ export const listAccessories = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
     return tenantQuery(client, ctx.tenantId, "catalog_accessories",
-      "id, code, price_per_piece, archived_at, created_at, updated_at",
+      "id, code, price_per_piece, brand, country_of_origin, archived_at, created_at, updated_at",
       { order: "code" },
     );
   });
@@ -147,7 +162,7 @@ export const listManufacturingOperations = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
     return tenantQuery(client, ctx.tenantId, "catalog_manufacturing_operations",
-      "id, code, rate_unit, rate, archived_at, created_at, updated_at",
+      "id, code, rate_unit, rate, brand, country_of_origin, archived_at, created_at, updated_at",
       { order: "code" },
     );
   });
@@ -179,13 +194,14 @@ export const listAllCatalogItems = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
 
-    const [materials, hardware, accessories, manufacturing, veneers, finishes] = await Promise.all([
+    const [materials, hardware, accessories, manufacturing, veneers, finishes, edgeBands] = await Promise.all([
       tenantQuery(client, ctx.tenantId, "catalog_materials", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_hardware", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_accessories", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_manufacturing_operations", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_veneers", "id, code", { order: "code" }),
       tenantQuery(client, ctx.tenantId, "catalog_finishes", "id, code", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_edge_bands", "id, code", { order: "code" }),
     ]);
 
     return [
@@ -195,5 +211,6 @@ export const listAllCatalogItems = createServerFn({ method: "POST" })
       ...manufacturing.map((r: any) => ({ id: r.id, code: r.code, kind: "manufacturing" as const })),
       ...veneers.map((r: any) => ({ id: r.id, code: r.code, kind: "veneer" as const })),
       ...finishes.map((r: any) => ({ id: r.id, code: r.code, kind: "finish" as const })),
+      ...edgeBands.map((r: any) => ({ id: r.id, code: r.code, kind: "edge_band" as const })),
     ];
   });

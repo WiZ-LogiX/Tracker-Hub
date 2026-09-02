@@ -124,6 +124,7 @@ export interface CatalogLookup {
   manufacturingOps: Record<string, CatalogManufacturingOp>;
   veneers: Record<string, CatalogMaterial>;
   finishes: Record<string, CatalogMaterial>;
+  edgeBands: Record<string, CatalogMaterial>;
   pricingFactors: PricingFactor[];
   wastageRules: WastageRule[];
   feesCredits: FeesCredit[];
@@ -142,6 +143,7 @@ export interface UnitOutput {
   computedUnitCost: number;
   computedUnitPrice: number;
   components: ComponentOutput[];
+  factorLines?: UnitFactorLine[];
 }
 
 export interface SectionOutput {
@@ -259,8 +261,8 @@ function priceUnit(
             : null;
           break;
         case "edge_band":
-          entity = catalog.materials[comp.catalogId]
-            ? materialToEntity(catalog.materials[comp.catalogId])
+          entity = catalog.edgeBands[comp.catalogId]
+            ? materialToEntity(catalog.edgeBands[comp.catalogId])
             : null;
           break;
         case "veneer":
@@ -311,6 +313,7 @@ function priceUnit(
     computedUnitCost,
     computedUnitPrice: factorResult.finalPrice,
     components,
+    factorLines: factorResult.lines,
   };
 }
 

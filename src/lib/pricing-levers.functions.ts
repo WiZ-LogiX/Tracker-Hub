@@ -24,7 +24,7 @@ export const listTenantPricingFactors = createServerFn({ method: "POST" })
     await setTenantGuc(ctx.tenantId);
     const { data, error } = await client
       .from("tenant_pricing_factors" as any)
-      .select("id, tenant_id, factor_key, percent, archived_at, created_at, updated_at")
+      .select("id, tenant_id, factor_key, value_type, percent, fixed_amount, archived_at, created_at, updated_at")
       .eq("tenant_id", ctx.tenantId)
       .is("archived_at", null)
       .order("factor_key", { ascending: true });

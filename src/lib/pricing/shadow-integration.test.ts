@@ -205,13 +205,6 @@ function buildEgyptianCatalog(): CatalogLookup {
         pricePerUnit: 400,
         defaultWastagePct: 12,
       },
-      // Edge banding — 20 EGP per linear metre
-      "edgeband-20": {
-        id: "edgeband-20",
-        pricingUnit: "m",
-        pricePerUnit: 20,
-        defaultWastagePct: 0,
-      },
     },
     hardware: {
       "hinge-15": { id: "hinge-15", pricePerPiece: 15 },
@@ -226,6 +219,15 @@ function buildEgyptianCatalog(): CatalogLookup {
     },
     veneers: {},
     finishes: {},
+    edgeBands: {
+      // Edge banding — 20 EGP per linear metre
+      "edgeband-20": {
+        id: "edgeband-20",
+        pricingUnit: "m",
+        pricePerUnit: 20,
+        defaultWastagePct: 0,
+      },
+    },
     // Egyptian furniture pricing factors
     pricingFactors: [
       { factorKey: "labor", percent: 15 },

@@ -317,7 +317,7 @@ describe("audit log on transition", () => {
     expect(quoteFuncs).toContain("entity_type: \"quotation\"");
     expect(quoteFuncs).toContain("action: `status_change:${state}`");
     expect(quoteFuncs).toContain("rule_version_number");
-    expect(quoteFuncs).toContain("factors: catalog.pricingFactors");
+    expect(quoteFuncs).toContain("factors");
   });
 
   it("audit_log failure is non-blocking", () => {

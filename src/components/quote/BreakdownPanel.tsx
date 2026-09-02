@@ -113,6 +113,9 @@ const FACTOR_LABEL_KEYS: Record<string, string> = {
   rush: "breakdown.factor.rush",
   margin: "breakdown.factor.margin",
   luxury: "breakdown.factor.luxury",
+  packaging: "breakdown.factor.packaging",
+  site_visit: "breakdown.factor.site_visit",
+  transport: "breakdown.factor.transport",
 };
 
 // ── Unit override editor (inline) ──────────────────────────────────────────
@@ -120,7 +123,7 @@ const FACTOR_LABEL_KEYS: Record<string, string> = {
 interface UnitOverrideEditorProps {
   unitId: string;
   overrides: Record<string, number>;
-  tenantFactors: Array<{ factorKey: string; percent: number }>;
+  tenantFactors: Array<{ factorKey: string; percent: number; valueType?: string; fixedAmount?: number }>;
   onChange: (unitId: string, overrides: Record<string, number>) => void;
 }
 
@@ -135,8 +138,8 @@ function UnitOverrideEditor({
   const [localOverrides, setLocalOverrides] = useState({ ...overrides });
 
   const tenantMap = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const f of tenantFactors) m.set(f.factorKey, f.percent);
+    const m = new Map<string, { percent: number; valueType?: string; fixedAmount?: number }>();
+    for (const f of tenantFactors) m.set(f.factorKey, { percent: f.percent, valueType: f.valueType, fixedAmount: f.fixedAmount });
     return m;
   }, [tenantFactors]);
 
@@ -192,7 +195,9 @@ function UnitOverrideEditor({
         </div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
           {editableKeys.map((key) => {
-            const tenantPct = tenantMap.get(key) ?? 0;
+            const tenant = tenantMap.get(key);
+            const tenantPct = tenant?.percent ?? 0;
+            const isFixed = tenant?.valueType === "fixed";
             const overridePct = localOverrides[key];
             const isOverridden = overridePct !== undefined;
             return (
@@ -200,7 +205,7 @@ function UnitOverrideEditor({
                 <Label className="text-xs flex-1 truncate" title={t(FACTOR_LABEL_KEYS[key] ?? key)}>
                   {t(FACTOR_LABEL_KEYS[key] ?? key)}
                   <span className="text-muted-foreground ml-1">
-                    ({tenantPct}%)
+                    ({isFixed ? `${formatEGP(tenant?.fixedAmount ?? 0)}` : `${tenantPct}%`})
                   </span>
                 </Label>
                 <Input
@@ -289,7 +294,7 @@ function UnitBreakdown({
 }: {
   unit: UnitOutput;
   unitLabel: string;
-  tenantFactors: Array<{ factorKey: string; percent: number }>;
+  tenantFactors: Array<{ factorKey: string; percent: number; valueType?: string; fixedAmount?: number }>;
   onOverrideChange?: (
     unitId: string,
     overrides: Record<string, number>,
@@ -297,9 +302,7 @@ function UnitBreakdown({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const factorLines = (unit as any).factorLines as
-    | Array<{ factorKey: string; percent: number; amount: number }>
-    | undefined;
+  const factorLines = unit.factorLines;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -340,7 +343,9 @@ function UnitBreakdown({
               <div key={fl.factorKey} className="flex items-center justify-between text-xs pl-6">
                 <span className="text-muted-foreground">
                   {t(FACTOR_LABEL_KEYS[fl.factorKey] ?? fl.factorKey)}
-                  <span className="ml-1">({fl.percent}%)</span>
+                  <span className="ml-1">
+                    ({fl.valueType === "fixed" ? formatEGP(fl.amount) : `${fl.percent}%`})
+                  </span>
                 </span>
                 <span className="font-mono tabular-nums">+{formatEGP(fl.amount)}</span>
               </div>
@@ -378,7 +383,7 @@ function SectionBreakdown({
   section: SectionOutput;
   sectionLabel: string;
   inputUnits: BreakdownTree["products"][number]["sections"][number]["units"];
-  tenantFactors: Array<{ factorKey: string; percent: number }>;
+  tenantFactors: Array<{ factorKey: string; percent: number; valueType?: string; fixedAmount?: number }>;
   onOverrideChange?: (
     unitId: string,
     overrides: Record<string, number>,
@@ -434,7 +439,7 @@ function ProductBreakdown({
   product: ProductOutput;
   productLabel: string;
   inputSections: BreakdownTree["products"][number]["sections"];
-  tenantFactors: Array<{ factorKey: string; percent: number }>;
+  tenantFactors: Array<{ factorKey: string; percent: number; valueType?: string; fixedAmount?: number }>;
   onOverrideChange?: (
     unitId: string,
     overrides: Record<string, number>,
@@ -494,7 +499,7 @@ export function BreakdownPanel({
   const [loading, setLoading] = useState(false);
   const [stale, setStale] = useState(false);
   const [tenantFactors, setTenantFactors] = useState<
-    Array<{ factorKey: string; percent: number }>
+    Array<{ factorKey: string; percent: number; valueType?: string; fixedAmount?: number }>
   >([]);
 
   const priceTree = useServerFn(priceQuotationTree);
@@ -581,6 +586,8 @@ export function BreakdownPanel({
           (factors ?? []).map((f: any) => ({
             factorKey: f.factor_key,
             percent: f.percent,
+            valueType: f.value_type ?? "percent",
+            fixedAmount: f.fixed_amount ?? 0,
           })),
         );
       } catch {

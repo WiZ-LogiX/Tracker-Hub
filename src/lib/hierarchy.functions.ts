@@ -32,12 +32,18 @@ const productUpdateInput = z.object({
 const sectionInput = z.object({
   quotationProductId: z.string().uuid(),
   label: z.string().nullable().optional(),
+  materialId: z.string().uuid().nullable().optional(),
+  finishId: z.string().uuid().nullable().optional(),
+  veneerId: z.string().uuid().nullable().optional(),
   position: z.number().int().optional(),
 });
 
 const sectionUpdateInput = z.object({
   id: z.string().uuid(),
   label: z.string().nullable().optional(),
+  materialId: z.string().uuid().nullable().optional(),
+  finishId: z.string().uuid().nullable().optional(),
+  veneerId: z.string().uuid().nullable().optional(),
   position: z.number().int().optional(),
 });
 
@@ -122,7 +128,7 @@ export const loadHierarchy = createServerFn({ method: "POST" })
     const sectionsRes = productIds.length > 0
       ? await (context as any).supabase
           .from("sections")
-          .select("id, quotation_product_id, label, position")
+          .select("id, quotation_product_id, label, material_id, finish_id, veneer_id, position")
           .in("quotation_product_id", productIds)
           .eq("tenant_id", tid)
           .order("position")
@@ -289,6 +295,9 @@ export const addSection = createServerFn({ method: "POST" })
       .insert({
         quotation_product_id: data.quotationProductId,
         label: data.label ?? null,
+        material_id: data.materialId ?? null,
+        finish_id: data.finishId ?? null,
+        veneer_id: data.veneerId ?? null,
         position: data.position ?? 0,
         tenant_id: ctx.tenantId,
       })
@@ -307,6 +316,9 @@ export const updateSection = createServerFn({ method: "POST" })
     const { id, ...patch } = data;
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.label !== undefined) updates.label = patch.label;
+    if (patch.materialId !== undefined) updates.material_id = patch.materialId;
+    if (patch.finishId !== undefined) updates.finish_id = patch.finishId;
+    if (patch.veneerId !== undefined) updates.veneer_id = patch.veneerId;
     if (patch.position !== undefined) updates.position = patch.position;
 
     const { error } = await (context as any).supabase

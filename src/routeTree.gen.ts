@@ -16,9 +16,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
 import { Route as AdminWastageRulesRouteImport } from './routes/admin/wastage-rules'
-import { Route as AdminVeneersRouteImport } from './routes/admin/veneers'
 import { Route as AdminTeamRouteImport } from './routes/admin/team'
-import { Route as AdminSuppliersRouteImport } from './routes/admin/suppliers'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSeedRouteImport } from './routes/admin/seed'
 import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
@@ -29,13 +27,11 @@ import { Route as AdminPricingRulesRouteImport } from './routes/admin/pricing-ru
 import { Route as AdminPricingFactorsRouteImport } from './routes/admin/pricing-factors'
 import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
-import { Route as AdminMaterialsRouteImport } from './routes/admin/materials'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
-import { Route as AdminFinishesRouteImport } from './routes/admin/finishes'
 import { Route as AdminDiscountsRouteImport } from './routes/admin/discounts'
 import { Route as AdminCustomersRouteImport } from './routes/admin/customers'
 import { Route as AdminCostAnalysisRouteImport } from './routes/admin/cost-analysis'
-import { Route as AdminAccessoriesRouteImport } from './routes/admin/accessories'
+import { Route as AdminCatalogRouteImport } from './routes/admin/catalog'
 import { Route as AdminQuotesIndexRouteImport } from './routes/admin/quotes/index'
 import { Route as AdminQuotesNewRouteImport } from './routes/admin/quotes/new'
 import { Route as AdminQuotesConfiguratorRouteImport } from './routes/admin/quotes/configurator'
@@ -76,19 +72,9 @@ const AdminWastageRulesRoute = AdminWastageRulesRouteImport.update({
   path: '/wastage-rules',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminVeneersRoute = AdminVeneersRouteImport.update({
-  id: '/veneers',
-  path: '/veneers',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminTeamRoute = AdminTeamRouteImport.update({
   id: '/team',
   path: '/team',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminSuppliersRoute = AdminSuppliersRouteImport.update({
-  id: '/suppliers',
-  path: '/suppliers',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -141,19 +127,9 @@ const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminMaterialsRoute = AdminMaterialsRouteImport.update({
-  id: '/materials',
-  path: '/materials',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminHealthRoute = AdminHealthRouteImport.update({
   id: '/health',
   path: '/health',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminFinishesRoute = AdminFinishesRouteImport.update({
-  id: '/finishes',
-  path: '/finishes',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminDiscountsRoute = AdminDiscountsRouteImport.update({
@@ -171,9 +147,9 @@ const AdminCostAnalysisRoute = AdminCostAnalysisRouteImport.update({
   path: '/cost-analysis',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminAccessoriesRoute = AdminAccessoriesRouteImport.update({
-  id: '/accessories',
-  path: '/accessories',
+const AdminCatalogRoute = AdminCatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminQuotesIndexRoute = AdminQuotesIndexRouteImport.update({
@@ -202,13 +178,11 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/track': typeof TrackRoute
-  '/admin/accessories': typeof AdminAccessoriesRoute
+  '/admin/catalog': typeof AdminCatalogRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
-  '/admin/finishes': typeof AdminFinishesRoute
   '/admin/health': typeof AdminHealthRoute
-  '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
@@ -219,9 +193,7 @@ export interface FileRoutesByFullPath {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/team': typeof AdminTeamRoute
-  '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
@@ -234,13 +206,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/track': typeof TrackRoute
-  '/admin/accessories': typeof AdminAccessoriesRoute
+  '/admin/catalog': typeof AdminCatalogRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
-  '/admin/finishes': typeof AdminFinishesRoute
   '/admin/health': typeof AdminHealthRoute
-  '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
@@ -251,9 +221,7 @@ export interface FileRoutesByTo {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/team': typeof AdminTeamRoute
-  '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin': typeof AdminIndexRoute
@@ -268,13 +236,11 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRoute
   '/track': typeof TrackRoute
-  '/admin/accessories': typeof AdminAccessoriesRoute
+  '/admin/catalog': typeof AdminCatalogRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
-  '/admin/finishes': typeof AdminFinishesRoute
   '/admin/health': typeof AdminHealthRoute
-  '/admin/materials': typeof AdminMaterialsRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
@@ -285,9 +251,7 @@ export interface FileRoutesById {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/suppliers': typeof AdminSuppliersRoute
   '/admin/team': typeof AdminTeamRoute
-  '/admin/veneers': typeof AdminVeneersRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
@@ -303,13 +267,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/track'
-    | '/admin/accessories'
+    | '/admin/catalog'
     | '/admin/cost-analysis'
     | '/admin/customers'
     | '/admin/discounts'
-    | '/admin/finishes'
     | '/admin/health'
-    | '/admin/materials'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pricing-factors'
@@ -320,9 +282,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/settings'
-    | '/admin/suppliers'
     | '/admin/team'
-    | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
     | '/admin/'
@@ -335,13 +295,11 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/track'
-    | '/admin/accessories'
+    | '/admin/catalog'
     | '/admin/cost-analysis'
     | '/admin/customers'
     | '/admin/discounts'
-    | '/admin/finishes'
     | '/admin/health'
-    | '/admin/materials'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pricing-factors'
@@ -352,9 +310,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/settings'
-    | '/admin/suppliers'
     | '/admin/team'
-    | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
     | '/admin'
@@ -368,13 +324,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/track'
-    | '/admin/accessories'
+    | '/admin/catalog'
     | '/admin/cost-analysis'
     | '/admin/customers'
     | '/admin/discounts'
-    | '/admin/finishes'
     | '/admin/health'
-    | '/admin/materials'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pricing-factors'
@@ -385,9 +339,7 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/settings'
-    | '/admin/suppliers'
     | '/admin/team'
-    | '/admin/veneers'
     | '/admin/wastage-rules'
     | '/admin/workers'
     | '/admin/'
@@ -455,25 +407,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWastageRulesRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/veneers': {
-      id: '/admin/veneers'
-      path: '/veneers'
-      fullPath: '/admin/veneers'
-      preLoaderRoute: typeof AdminVeneersRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/team': {
       id: '/admin/team'
       path: '/team'
       fullPath: '/admin/team'
       preLoaderRoute: typeof AdminTeamRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/suppliers': {
-      id: '/admin/suppliers'
-      path: '/suppliers'
-      fullPath: '/admin/suppliers'
-      preLoaderRoute: typeof AdminSuppliersRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings': {
@@ -546,25 +484,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminNotificationsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/materials': {
-      id: '/admin/materials'
-      path: '/materials'
-      fullPath: '/admin/materials'
-      preLoaderRoute: typeof AdminMaterialsRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/health': {
       id: '/admin/health'
       path: '/health'
       fullPath: '/admin/health'
       preLoaderRoute: typeof AdminHealthRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/finishes': {
-      id: '/admin/finishes'
-      path: '/finishes'
-      fullPath: '/admin/finishes'
-      preLoaderRoute: typeof AdminFinishesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/discounts': {
@@ -588,11 +512,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCostAnalysisRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/accessories': {
-      id: '/admin/accessories'
-      path: '/accessories'
-      fullPath: '/admin/accessories'
-      preLoaderRoute: typeof AdminAccessoriesRouteImport
+    '/admin/catalog': {
+      id: '/admin/catalog'
+      path: '/catalog'
+      fullPath: '/admin/catalog'
+      preLoaderRoute: typeof AdminCatalogRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/quotes/': {
@@ -627,13 +551,11 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
-  AdminAccessoriesRoute: typeof AdminAccessoriesRoute
+  AdminCatalogRoute: typeof AdminCatalogRoute
   AdminCostAnalysisRoute: typeof AdminCostAnalysisRoute
   AdminCustomersRoute: typeof AdminCustomersRoute
   AdminDiscountsRoute: typeof AdminDiscountsRoute
-  AdminFinishesRoute: typeof AdminFinishesRoute
   AdminHealthRoute: typeof AdminHealthRoute
-  AdminMaterialsRoute: typeof AdminMaterialsRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
   AdminPricingFactorsRoute: typeof AdminPricingFactorsRoute
@@ -644,9 +566,7 @@ interface AdminRouteChildren {
   AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSeedRoute: typeof AdminSeedRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
-  AdminSuppliersRoute: typeof AdminSuppliersRoute
   AdminTeamRoute: typeof AdminTeamRoute
-  AdminVeneersRoute: typeof AdminVeneersRoute
   AdminWastageRulesRoute: typeof AdminWastageRulesRoute
   AdminWorkersRoute: typeof AdminWorkersRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -657,13 +577,11 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminAccessoriesRoute: AdminAccessoriesRoute,
+  AdminCatalogRoute: AdminCatalogRoute,
   AdminCostAnalysisRoute: AdminCostAnalysisRoute,
   AdminCustomersRoute: AdminCustomersRoute,
   AdminDiscountsRoute: AdminDiscountsRoute,
-  AdminFinishesRoute: AdminFinishesRoute,
   AdminHealthRoute: AdminHealthRoute,
-  AdminMaterialsRoute: AdminMaterialsRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminOrdersRoute: AdminOrdersRoute,
   AdminPricingFactorsRoute: AdminPricingFactorsRoute,
@@ -674,9 +592,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminRequestsRoute: AdminRequestsRoute,
   AdminSeedRoute: AdminSeedRoute,
   AdminSettingsRoute: AdminSettingsRoute,
-  AdminSuppliersRoute: AdminSuppliersRoute,
   AdminTeamRoute: AdminTeamRoute,
-  AdminVeneersRoute: AdminVeneersRoute,
   AdminWastageRulesRoute: AdminWastageRulesRoute,
   AdminWorkersRoute: AdminWorkersRoute,
   AdminIndexRoute: AdminIndexRoute,

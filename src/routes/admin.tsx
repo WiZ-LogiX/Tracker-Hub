@@ -5,8 +5,8 @@ import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, FileText, ClipboardList,
-  Package, Layers3, Palette, Wrench, Ticket, LogOut, Menu,
-  Truck, Trees, SlidersHorizontal, GitBranch, Sparkles, Bell,
+  Package, Ticket, LogOut, Menu,
+  SlidersHorizontal, GitBranch, Sparkles, Bell,
   Users, RefreshCcw, BarChart3, UserCircle, Database, Settings,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -23,11 +23,7 @@ const NAV = [
   { to: "/admin/orders", labelKey: "admin.nav.orders", icon: ClipboardList },
   { to: "/admin/customers", labelKey: "admin.nav.customers", icon: UserCircle },
   { to: "/admin/products", labelKey: "admin.nav.products", icon: Package },
-  { to: "/admin/materials", labelKey: "admin.nav.materials", icon: Layers3 },
-  { to: "/admin/suppliers", labelKey: "admin.nav.suppliers", icon: Truck },
-  { to: "/admin/finishes", labelKey: "admin.nav.finishes", icon: Palette },
-  { to: "/admin/veneers", labelKey: "admin.nav.veneers", icon: Trees },
-  { to: "/admin/accessories", labelKey: "admin.nav.accessories", icon: Wrench },
+  { to: "/admin/catalog", labelKey: "admin.nav.catalog", icon: Database },
   { to: "/admin/pricing-factors", labelKey: "admin.nav.pricingFactors", icon: SlidersHorizontal },
   { to: "/admin/wastage-rules", labelKey: "admin.nav.wastageRules", icon: SlidersHorizontal },
   { to: "/admin/pricing-rules", labelKey: "admin.nav.pricingRules", icon: GitBranch },

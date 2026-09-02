@@ -38,6 +38,8 @@ export const FACTOR_ORDER = [
   "margin",
   "luxury",
   "packaging",
+  "site_visit",
+  "transport",
 ] as const;
 
 export type FactorKey = (typeof FACTOR_ORDER)[number];
@@ -50,12 +52,18 @@ export const VAT_RATE = 0.14;
 export interface PricingFactor {
   factorKey: string;
   percent: number;
+  /** "percent" = baseCost × (percent/100), "fixed" = flat EGP amount added. */
+  valueType?: "percent" | "fixed";
+  /** Fixed EGP amount (used when valueType = "fixed"). */
+  fixedAmount?: number;
 }
 
 export interface UnitFactorLine {
   factorKey: string;
   percent: number;
   amount: number;
+  /** How this line was computed. */
+  valueType: "percent" | "fixed";
 }
 
 export interface UnitFactorResult {
@@ -71,12 +79,14 @@ export interface UnitFactorResult {
  * Apply pricing factors to a unit's base cost in locked order.
  *
  * For each factor in FACTOR_ORDER:
- *   1. Look up the tenant percent from `tenantFactors` (by factorKey).
- *   2. If the unit has an override for this key, use the override instead.
- *   3. Compute amount = baseCost × (percent / 100).
+ *   1. Look up the tenant factor from `tenantFactors` (by factorKey).
+ *   2. If the unit has an override for this key, use the override as a percent.
+ *   3. Compute amount based on valueType:
+ *      - "percent": baseCost × (percent / 100)
+ *      - "fixed":   fixedAmount (flat EGP)
  *   4. Add amount to running price.
  *
- * Factors not present in either tenantFactors or overrides are skipped (0%).
+ * Factors not present in either tenantFactors or overrides are skipped (0% / 0 EGP).
  * The order is ALWAYS the same — input order is irrelevant.
  */
 export function applyUnitFactors(
@@ -84,30 +94,47 @@ export function applyUnitFactors(
   tenantFactors: PricingFactor[],
   overrideFactorKeys?: Record<string, number>,
 ): UnitFactorResult {
-  // Build tenant factor map (key → percent)
-  const tenantMap = new Map<string, number>();
+  // Build tenant factor map (key → factor)
+  const tenantMap = new Map<string, PricingFactor>();
   for (const f of tenantFactors) {
-    tenantMap.set(f.factorKey, f.percent);
+    tenantMap.set(f.factorKey, f);
   }
 
   let runningPrice = baseCost;
   const lines: UnitFactorLine[] = [];
 
   for (const key of FACTOR_ORDER) {
-    // Resolve percent: override wins over tenant factor
+    const tenant = tenantMap.get(key);
+    const hasOverride = overrideFactorKeys !== undefined && key in overrideFactorKeys;
     const overridePct = overrideFactorKeys?.[key];
-    const pct = overridePct ?? tenantMap.get(key) ?? 0;
 
-    if (pct === 0) continue;
+    // Resolve effective factor
+    let valueType: "percent" | "fixed" = tenant?.valueType ?? "percent";
+    let percent = 0;
+    let fixedAmount = 0;
 
-    // Each factor is a percentage of the base cost (additive, not compounding).
-    // Order is locked for audit trail; math is commutative but the sequence
-    // in the breakdown is always the same.
-    const amount = round2(baseCost * (pct / 100));
+    if (hasOverride) {
+      if (overridePct === 0) continue; // explicit 0 override = skip factor
+      // Override always treated as percent (overrides the tenant percent)
+      valueType = "percent";
+      percent = overridePct!;
+    } else if (tenant) {
+      percent = tenant.percent;
+      fixedAmount = tenant.fixedAmount ?? 0;
+    }
+
+    // Compute amount
+    let amount: number;
+    if (valueType === "fixed") {
+      amount = round2(fixedAmount);
+    } else {
+      amount = round2(baseCost * (percent / 100));
+    }
+
     if (amount === 0) continue;
 
     runningPrice += amount;
-    lines.push({ factorKey: key, percent: pct, amount });
+    lines.push({ factorKey: key, percent, amount, valueType });
   }
 
   return {

@@ -106,6 +106,9 @@ interface SectionNode {
   id: string;
   quotation_product_id: string;
   label: string | null;
+  material_id: string | null;
+  finish_id: string | null;
+  veneer_id: string | null;
   position: number;
   units: UnitNode[];
 }
@@ -392,6 +395,9 @@ export function TreeConfigurator({
         id: `_optimistic_${Date.now()}`,
         quotation_product_id: productId,
         label: null,
+        material_id: null,
+        finish_id: null,
+        veneer_id: null,
         position: pos,
         units: [],
       };
@@ -459,7 +465,14 @@ export function TreeConfigurator({
 
       try {
         await updateSectionFn({
-          data: { id, label: patch.label, position: patch.position },
+          data: {
+            id,
+            label: patch.label,
+            materialId: patch.material_id,
+            finishId: patch.finish_id,
+            veneerId: patch.veneer_id,
+            position: patch.position,
+          },
         });
         if (quotationId) {
           await queryClient.invalidateQueries({ queryKey });
@@ -712,7 +725,7 @@ export function TreeConfigurator({
         .find((u) => u.id === unitId);
       const pos = unit ? nextPosition(unit.components) : 0;
 
-      const areaBased = kind === "veneer" || kind === "finish";
+      const areaBased = kind === "veneer" || kind === "finish" || kind === "material";
       const edgeBased = kind === "edge_band";
       const defaultAreaFn: string | null = areaBased
         ? "door_panel"
@@ -1050,6 +1063,7 @@ export function TreeConfigurator({
               onReorderComponents={handleReorderComponents}
               onOpenPicker={openPicker}
               tree={effectiveTree}
+              catalogLookup={catalogLookup}
             />
           ))}
         </div>
@@ -1109,6 +1123,7 @@ interface ProductNodeProps {
   onReorderComponents: (unitId: string, ids: string[]) => Promise<void>;
   onOpenPicker: (kind: string, unitId: string) => void;
   tree: TreeData;
+  catalogLookup: Map<string, string>;
 }
 
 function ProductNodeComponent({
@@ -1133,6 +1148,7 @@ function ProductNodeComponent({
   onReorderComponents,
   onOpenPicker,
   tree,
+  catalogLookup,
 }: ProductNodeProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
@@ -1275,6 +1291,7 @@ function ProductNodeComponent({
               onDeleteComponent={onDeleteComponent}
               onReorderComponents={onReorderComponents}
               onOpenPicker={onOpenPicker}
+              catalogLookup={catalogLookup}
             />
           ))}
 
@@ -1312,6 +1329,7 @@ interface SectionNodeProps {
   onDeleteComponent: (unitId: string, componentId: string) => Promise<void>;
   onReorderComponents: (unitId: string, ids: string[]) => Promise<void>;
   onOpenPicker: (kind: string, unitId: string) => void;
+  catalogLookup: Map<string, string>;
 }
 
 function SectionNodeComponent({
@@ -1332,13 +1350,19 @@ function SectionNodeComponent({
   onDeleteComponent,
   onReorderComponents,
   onOpenPicker,
+  catalogLookup,
 }: SectionNodeProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(section.label ?? "");
+  const [localMaterialId, setLocalMaterialId] = useState(section.material_id ?? "");
+  const [localFinishId, setLocalFinishId] = useState(section.finish_id ?? "");
+  const [localVeneerId, setLocalVeneerId] = useState(section.veneer_id ?? "");
 
   const isEmpty = section.units.length === 0;
+
+  const hasMaterials = section.material_id || section.finish_id || section.veneer_id;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -1357,6 +1381,21 @@ function SectionNodeComponent({
             <span className="font-medium text-sm flex-1 text-left">
               {section.label ?? `${t("treeConfigurator.section")} #${index + 1}`}
             </span>
+            {section.material_id && (
+              <Badge variant="outline" className="text-xs bg-blue-50">
+                {catalogLookup.get(section.material_id) ?? "Material"}
+              </Badge>
+            )}
+            {section.veneer_id && (
+              <Badge variant="outline" className="text-xs bg-teal-50">
+                {catalogLookup.get(section.veneer_id) ?? "Veneer"}
+              </Badge>
+            )}
+            {section.finish_id && (
+              <Badge variant="outline" className="text-xs bg-indigo-50">
+                {catalogLookup.get(section.finish_id) ?? "Finish"}
+              </Badge>
+            )}
             <span className="text-xs text-muted-foreground">
               {section.units.length} {t("treeConfigurator.units")}
             </span>
@@ -1369,26 +1408,90 @@ function SectionNodeComponent({
         </CollapsibleTrigger>
 
         {editing && (
-          <div className="px-3 pb-2 flex items-center gap-2 border-t">
-            <Input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder={t("treeConfigurator.labelPlaceholder")}
-              className="h-8 text-sm"
-              autoFocus
-            />
-            <Button
-              size="sm"
-              onClick={() => {
-                onUpdate(section.id, { label: label || null });
-                setEditing(false);
-              }}
-            >
-              {t("common.save")}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              {t("common.cancel")}
-            </Button>
+          <div className="px-3 pb-2 space-y-2 border-t">
+            <div className="flex items-center gap-2 pt-2">
+              <Input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder={t("treeConfigurator.labelPlaceholder")}
+                className="h-8 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">{t("treeConfigurator.kind.material")}</Label>
+                <Select value={localMaterialId || "none"} onValueChange={(v) => setLocalMaterialId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-8 w-48 text-xs">
+                    <SelectValue placeholder={t("treeConfigurator.kind.material")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("unitEditor.noFinish")}</SelectItem>
+                    {Array.from(catalogLookup.entries())
+                      .filter(([id]) => {
+                        // Show items that are materials (we can't filter by kind from the lookup map alone)
+                        // but we show all and let the user pick
+                        return true;
+                      })
+                      .sort((a, b) => a[1].localeCompare(b[1]))
+                      .map(([id, code]) => (
+                        <SelectItem key={id} value={id}>{code}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">{t("treeConfigurator.kind.veneer")}</Label>
+                <Select value={localVeneerId || "none"} onValueChange={(v) => setLocalVeneerId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-8 w-48 text-xs">
+                    <SelectValue placeholder={t("treeConfigurator.kind.veneer")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("unitEditor.noFinish")}</SelectItem>
+                    {Array.from(catalogLookup.entries())
+                      .sort((a, b) => a[1].localeCompare(b[1]))
+                      .map(([id, code]) => (
+                        <SelectItem key={id} value={id}>{code}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">{t("treeConfigurator.kind.finish")}</Label>
+                <Select value={localFinishId || "none"} onValueChange={(v) => setLocalFinishId(v === "none" ? "" : v)}>
+                  <SelectTrigger className="h-8 w-48 text-xs">
+                    <SelectValue placeholder={t("treeConfigurator.kind.finish")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("unitEditor.noFinish")}</SelectItem>
+                    {Array.from(catalogLookup.entries())
+                      .sort((a, b) => a[1].localeCompare(b[1]))
+                      .map(([id, code]) => (
+                        <SelectItem key={id} value={id}>{code}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  onUpdate(section.id, {
+                    label: label || null,
+                    material_id: localMaterialId || null,
+                    finish_id: localFinishId || null,
+                    veneer_id: localVeneerId || null,
+                  });
+                  setEditing(false);
+                }}
+              >
+                {t("common.save")}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                {t("common.cancel")}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -1817,7 +1920,8 @@ function ComponentNodeComponent({
   const needsSurface =
     component.kind === "veneer" ||
     component.kind === "finish" ||
-    component.kind === "edge_band";
+    component.kind === "edge_band" ||
+    component.kind === "material";
 
   const [surface, setSurface] = useState(component.area_function_key ?? "door_panel");
 
