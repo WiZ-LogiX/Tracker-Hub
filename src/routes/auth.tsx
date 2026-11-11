@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +12,19 @@ import { ArrowRight, UserCircle2 } from "lucide-react";
 import { ensureBootstrapAdmin, login as loginFn } from "@/lib/auth.functions";
 import { useTranslation } from "react-i18next";
 
-export const Route = createFileRoute("/auth")({ component: AuthPage });
+const authSearchSchema = z.object({
+  returnTo: z.string().optional(),
+});
+
+export const Route = createFileRoute("/auth")({
+  validateSearch: (search: Record<string, unknown>) => authSearchSchema.parse(search),
+  component: AuthPage,
+});
 
 function AuthPage() {
   const { t } = useTranslation();
   const nav = useNavigate();
+  const search = Route.useSearch();
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -79,7 +88,23 @@ function AuthPage() {
       }
 
       toast.success(t("auth.loginSuccess"));
-      nav({ to: "/admin" });
+      const userRole = res?.role ?? res?.result?.role ?? res?.profile?.role;
+      const defaultDest = userRole === "worker" ? "/admin/tasks" : "/admin";
+      let destination = search?.returnTo || defaultDest;
+      if (userRole === "worker" && (destination === "/admin" || !destination.startsWith("/admin/tasks"))) {
+        destination = "/admin/tasks";
+      }
+      if (destination.includes("?")) {
+        const [path, q] = destination.split("?");
+        const p = new URLSearchParams(q);
+        const searchObj: Record<string, string> = {};
+        p.forEach((v, k) => {
+          searchObj[k] = v;
+        });
+        nav({ to: path as any, search: searchObj as any });
+      } else {
+        nav({ to: destination as any });
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error(msg);

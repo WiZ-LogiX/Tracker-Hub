@@ -196,7 +196,7 @@ export const sendTrackingWhatsapp = createServerFn({ method: "POST" })
     const client = (context as any).supabase;
     let orderQuery = client
       .from("orders")
-      .select("id, order_number, current_stage, expected_delivery, tenant_id, customers(name, phone, email)");
+      .select("id, order_number, tracking_token, current_stage, expected_delivery, tenant_id, customers(name, phone, email)");
 
     if (data.orderId) {
       orderQuery = orderQuery.eq("id", data.orderId);
@@ -246,7 +246,8 @@ export const sendTrackingWhatsapp = createServerFn({ method: "POST" })
     }
 
     const orderNumber = (order as any).order_number as string;
-    const link = buildTrackingLink(orderNumber);
+    const trackingTokenOrNumber = (order as any).tracking_token || orderNumber;
+    const link = buildTrackingLink(trackingTokenOrNumber);
     const vars: Record<string, string> = {
       customer_name: customer.name ?? "",
       reference: orderNumber,

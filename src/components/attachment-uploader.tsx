@@ -24,7 +24,7 @@ export function AttachmentUploader({
   isPublic = false,
   onUploaded,
 }: {
-  entityType: "order" | "quote" | "invoice" | "customer";
+  entityType: "order" | "quote" | "invoice" | "customer" | "task" | "opportunity" | "project" | "service_case";
   entityId: string;
   isPublic?: boolean;
   onUploaded?: (rows: Array<{

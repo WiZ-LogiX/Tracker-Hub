@@ -182,35 +182,121 @@ export const listSuppliers = createServerFn({ method: "POST" })
     );
   });
 
-// ── listAllCatalogItems ─────────────────────────────────────────────────────
-// Lightweight lookup: returns {id, code, kind} for all non-archived catalog items.
-// Used by TreeConfigurator to show catalog names next to linked components.
+export interface DetailedCatalogItem {
+  id: string;
+  code: string;
+  name: string;
+  kind: "material" | "hardware" | "accessory" | "manufacturing" | "edge_band" | "veneer" | "finish";
+  pricingUnit: string;
+  unitPrice: number;
+  defaultWastagePct: number;
+  brand?: string | null;
+  countryOfOrigin?: string | null;
+}
 
 export const listAllCatalogItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requireTenant])
   .inputValidator((d) => z.object({}).parse(d))
-  .handler(async ({ context }) => {
+  .handler(async ({ context }): Promise<DetailedCatalogItem[]> => {
     const ctx = context.tenantContext as TenantContext;
     const client = (context as any).supabase;
     await setTenantGuc(ctx.tenantId);
 
     const [materials, hardware, accessories, manufacturing, veneers, finishes, edgeBands] = await Promise.all([
-      tenantQuery(client, ctx.tenantId, "catalog_materials", "id, code", { order: "code" }),
-      tenantQuery(client, ctx.tenantId, "catalog_hardware", "id, code", { order: "code" }),
-      tenantQuery(client, ctx.tenantId, "catalog_accessories", "id, code", { order: "code" }),
-      tenantQuery(client, ctx.tenantId, "catalog_manufacturing_operations", "id, code", { order: "code" }),
-      tenantQuery(client, ctx.tenantId, "catalog_veneers", "id, code", { order: "code" }),
-      tenantQuery(client, ctx.tenantId, "catalog_finishes", "id, code", { order: "code" }),
-      tenantQuery(client, ctx.tenantId, "catalog_edge_bands", "id, code", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_materials", "id, code, label_i18n_key, pricing_unit, price_per_unit, default_wastage_pct, brand, country_of_origin", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_hardware", "id, code, price_per_piece, brand, country_of_origin", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_accessories", "id, code, price_per_piece, brand, country_of_origin", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_manufacturing_operations", "id, code, rate_unit, rate, brand, country_of_origin", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_veneers", "id, code, price_per_m2, brand, country_of_origin", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_finishes", "id, code, price_per_unit, brand, country_of_origin", { order: "code" }),
+      tenantQuery(client, ctx.tenantId, "catalog_edge_bands", "id, code, price_per_unit, brand, country_of_origin", { order: "code" }),
     ]);
 
     return [
-      ...materials.map((r: any) => ({ id: r.id, code: r.code, kind: "material" as const })),
-      ...hardware.map((r: any) => ({ id: r.id, code: r.code, kind: "hardware" as const })),
-      ...accessories.map((r: any) => ({ id: r.id, code: r.code, kind: "accessory" as const })),
-      ...manufacturing.map((r: any) => ({ id: r.id, code: r.code, kind: "manufacturing" as const })),
-      ...veneers.map((r: any) => ({ id: r.id, code: r.code, kind: "veneer" as const })),
-      ...finishes.map((r: any) => ({ id: r.id, code: r.code, kind: "finish" as const })),
-      ...edgeBands.map((r: any) => ({ id: r.id, code: r.code, kind: "edge_band" as const })),
+      ...materials.map((r: any) => ({
+        id: r.id,
+        code: r.code,
+        name: r.label_i18n_key || r.code,
+        kind: "material" as const,
+        pricingUnit: r.pricing_unit || "m2",
+        unitPrice: Number(r.price_per_unit || 0),
+        defaultWastagePct: Number(r.default_wastage_pct || 0),
+        brand: r.brand ?? null,
+        countryOfOrigin: r.country_of_origin ?? null,
+      })),
+      ...hardware.map((r: any) => {
+        const code = String(r.code || "").toLowerCase();
+        const pricingUnit = r.pricing_unit || (code.includes("set") || code.includes("runner") ? "set" : code.includes("pair") ? "pair" : "piece");
+        return {
+          id: r.id,
+          code: r.code,
+          name: r.code,
+          kind: "hardware" as const,
+          pricingUnit,
+          unitPrice: Number(r.price_per_piece || 0),
+          defaultWastagePct: 0,
+          brand: r.brand ?? null,
+          countryOfOrigin: r.country_of_origin ?? null,
+        };
+      }),
+      ...accessories.map((r: any) => {
+        const code = String(r.code || "").toLowerCase();
+        const pricingUnit = r.pricing_unit || (code.includes("set") ? "set" : code.includes("pair") ? "pair" : "piece");
+        return {
+          id: r.id,
+          code: r.code,
+          name: r.code,
+          kind: "accessory" as const,
+          pricingUnit,
+          unitPrice: Number(r.price_per_piece || 0),
+          defaultWastagePct: 0,
+          brand: r.brand ?? null,
+          countryOfOrigin: r.country_of_origin ?? null,
+        };
+      }),
+      ...manufacturing.map((r: any) => ({
+        id: r.id,
+        code: r.code,
+        name: r.code,
+        kind: "manufacturing" as const,
+        pricingUnit: r.rate_unit || "piece",
+        unitPrice: Number(r.rate || 0),
+        defaultWastagePct: 0,
+        brand: r.brand ?? null,
+        countryOfOrigin: r.country_of_origin ?? null,
+      })),
+      ...veneers.map((r: any) => ({
+        id: r.id,
+        code: r.code,
+        name: r.code,
+        kind: "veneer" as const,
+        pricingUnit: "m2",
+        unitPrice: Number(r.price_per_m2 || 0),
+        defaultWastagePct: 0,
+        brand: r.brand ?? null,
+        countryOfOrigin: r.country_of_origin ?? null,
+      })),
+      ...finishes.map((r: any) => ({
+        id: r.id,
+        code: r.code,
+        name: r.code,
+        kind: "finish" as const,
+        pricingUnit: "m2",
+        unitPrice: Number(r.price_per_unit || 0),
+        defaultWastagePct: 0,
+        brand: r.brand ?? null,
+        countryOfOrigin: r.country_of_origin ?? null,
+      })),
+      ...edgeBands.map((r: any) => ({
+        id: r.id,
+        code: r.code,
+        name: r.code,
+        kind: "edge_band" as const,
+        pricingUnit: "m",
+        unitPrice: Number(r.price_per_unit || 0),
+        defaultWastagePct: 0,
+        brand: r.brand ?? null,
+        countryOfOrigin: r.country_of_origin ?? null,
+      })),
     ];
   });

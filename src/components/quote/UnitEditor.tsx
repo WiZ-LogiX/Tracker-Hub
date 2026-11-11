@@ -279,19 +279,25 @@ export function UnitEditor({
     (item: CatalogPickerItem | null) => {
       if (!item) return;
       const unitOfMeasure =
-        pickerKind === "manufacturing"
+        item.pricingUnit ||
+        (pickerKind === "manufacturing"
           ? "minute"
           : pickerKind === "edge_band"
             ? "m"
-            : "pcs";
+            : "pcs");
       const newComp: UnitEditorComponent = {
         _bomId: makeBomId(),
         kind: pickerKind as UnitEditorComponent["kind"],
         catalogId: item.id,
         qty: 1,
         unitOfMeasure,
-        areaFunctionKey: null,
-        label: item.code,
+        areaFunctionKey:
+          pickerKind === "material" && (unitOfMeasure === "m2" || unitOfMeasure === "m")
+            ? "door_panel"
+            : pickerKind === "edge_band"
+              ? "edge_band"
+              : null,
+        label: `${item.name} (${item.code})`,
       };
       onChange({ ...value, components: [...value.components, newComp] });
     },

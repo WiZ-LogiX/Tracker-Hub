@@ -47,12 +47,41 @@ export const convertQuoteToOrder = createServerFn({ method: "POST" })
         throw new Error("Quote not found or does not belong to your tenant");
       }
 
+      if (quoteRow.status === "converted") {
+        throw new Error("This quotation has already been converted to an order");
+      }
+
+      if (quoteRow.status !== "accepted") {
+        throw new Error(`Only an explicitly accepted quotation can be converted to an order (current status: ${quoteRow.status})`);
+      }
+
+      // Guard against duplicate orders for this quotation
+      const [existingOrder] = await tx
+        .select({ id: schema.orders.id, orderNumber: schema.orders.orderNumber })
+        .from(schema.orders)
+        .where(
+          and(
+            eq(schema.orders.quoteId, quoteRow.id),
+            eq(schema.orders.tenantId, tenantId),
+          ),
+        )
+        .limit(1);
+
+      if (existingOrder) {
+        throw new Error(`An order (${existingOrder.orderNumber}) has already been created for this quotation`);
+      }
+
       const items = await tx
         .select()
         .from(schema.quoteItems)
         .where(eq(schema.quoteItems.quoteId, quoteRow.id));
 
       // 2. Create invoice
+      const depositPctNum = Number(quoteRow.depositPct ?? 50);
+      if (isNaN(depositPctNum) || depositPctNum < 0 || depositPctNum > 100) {
+        throw new Error(`Invalid deposit percentage: ${quoteRow.depositPct}`);
+      }
+
       const depositAmount =
         (Number(quoteRow.total) * Number(quoteRow.depositPct)) / 100;
 
@@ -101,7 +130,44 @@ export const convertQuoteToOrder = createServerFn({ method: "POST" })
         .set({ status: "converted" })
         .where(eq(schema.quotes.id, quoteRow.id));
 
-      // 5. Return ids for notification (outside transaction)
+      // 5. If linked to an Opportunity, advance opportunity to "won"
+      const linkedOpportunityId = (quoteRow.snapshot as any)?.opportunityId as string | undefined;
+      if (linkedOpportunityId) {
+        await tx
+          .update(schema.opportunities)
+          .set({
+            stage: "won",
+            status: "won",
+            value: quoteRow.total,
+            lostReason: null,
+            nextAction: `أمر بيع قيد الإنتاج والتصنيع - ${quoteRow.quoteNumber}`,
+            nextActionDate: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(schema.opportunities.id, linkedOpportunityId),
+              eq(schema.opportunities.tenantId, tenantId),
+            ),
+          );
+
+        await tx.insert(schema.auditLog).values({
+          tenantId,
+          actorId: ctx.userId ?? "system",
+          action: "opportunity_won",
+          entityType: "opportunity",
+          entityId: linkedOpportunityId,
+          details: {
+            reason: "Converted quote to order",
+            orderId: order.id,
+            orderNumber: quoteRow.quoteNumber,
+            quoteId: quoteRow.id,
+            amount: quoteRow.total,
+          },
+        });
+      }
+
+      // 6. Return ids for notification (outside transaction)
       return {
         orderId: order.id,
         invoiceId: invoice.id,

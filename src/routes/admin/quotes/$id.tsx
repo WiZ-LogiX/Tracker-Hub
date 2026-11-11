@@ -3,7 +3,15 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
-import { updateQuoteStatus } from "@/lib/quote.functions";
+import {
+  updateQuoteStatus,
+  getQuoteCommercialContext,
+  approveQuoteAndRequestConfirmation,
+  recordCustomerQuoteConsent,
+  recordCustomerQuoteDecision,
+  getQuotationProgressiveStatus,
+} from "@/lib/quote.functions";
+import { QUOTATION_STAGE_LABEL_AR, type QuotationLifecycleStage } from "@/lib/stages";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +21,18 @@ import { formatEGP } from "@/lib/pricing";
 import { sendNotification } from "@/lib/notifications.functions";
 import { generatePdf } from "@/lib/pdf.functions";
 import { toast } from "sonner";
-import { ArrowRight, Download } from "lucide-react";
+import {
+  ArrowRight,
+  Download,
+  Briefcase,
+  ExternalLink,
+  Edit,
+  ShieldCheck,
+  Truck,
+  Calendar,
+  ImageIcon,
+  Sparkles,
+} from "lucide-react";
 import { InternalNotes } from "@/components/admin/InternalNotes";
 import { convertQuoteToOrder } from "@/lib/transactional.functions";
 
@@ -29,13 +48,17 @@ export const Route = createFileRoute("/admin/quotes/$id")({ component: QuoteDeta
 
 function QuoteDetail() {
   const { id } = Route.useParams();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language === "ar";
   const nav = useNavigate();
   const [quote, setQuote] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [customer, setCustomer] = useState<any>(null);
   const [working, setWorking] = useState(false);
   const [isV2, setIsV2] = useState<boolean | null>(null);
+  const [commercialContext, setCommercialContext] = useState<any>(null);
+
+  const getCommercialContextFn = useServerFn(getQuoteCommercialContext);
 
   useEffect(() => {
     load();
@@ -65,6 +88,14 @@ function QuoteDetail() {
         const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", id);
         setItems(its ?? []);
       }
+
+      // Fetch linked Opportunity commercial context
+      try {
+        const cc = await getCommercialContextFn({ data: { quoteId: id } });
+        setCommercialContext(cc);
+      } catch {
+        // Non-blocking
+      }
     }
   }
 
@@ -72,6 +103,59 @@ function QuoteDetail() {
   const convertFn = useServerFn(convertQuoteToOrder);
   const pdfFn = useServerFn(generatePdf);
   const updateStatusFn = useServerFn(updateQuoteStatus);
+  const approveAndRequestFn = useServerFn(approveQuoteAndRequestConfirmation);
+  const recordConsentFn = useServerFn(recordCustomerQuoteConsent);
+  const recordDecisionFn = useServerFn(recordCustomerQuoteDecision);
+
+  const [revisionNotes, setRevisionNotes] = useState("");
+  const [showRevisionDialog, setShowRevisionDialog] = useState(false);
+
+  const progStatus: QuotationLifecycleStage = quote ? getQuotationProgressiveStatus(quote) : "draft";
+
+  async function handleApproveAndRequest() {
+    setWorking(true);
+    try {
+      await approveAndRequestFn({ data: { quote_id: id } });
+      toast.success(isRtl ? "تم اعتماد عرض السعر وإرسال طلب التأكيد للعميل عبر واتساب" : "Quote approved & WhatsApp confirmation requested");
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل اعتماد عرض السعر");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function handleRecordConsent(consent: boolean) {
+    setWorking(true);
+    try {
+      await recordConsentFn({ data: { quoteId: id, consent } });
+      if (consent) {
+        toast.success(isRtl ? "تم تسجيل موافقة العميل وإرسال رابط ملف العرض عبر واتساب" : "Customer consent recorded & PDF link sent");
+      } else {
+        toast.info(isRtl ? "تم تسجيل عدم رغبة العميل في استلام العرض حالياً" : "Customer decline recorded");
+      }
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل تسجيل استجابة العميل");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function handleRecordDecision(decision: "accept" | "reject" | "revision_requested", notes?: string) {
+    setWorking(true);
+    try {
+      const res = await recordDecisionFn({ data: { quoteId: id, decision, notes } });
+      toast.success(res.message);
+      setShowRevisionDialog(false);
+      setRevisionNotes("");
+      load();
+    } catch (e: any) {
+      toast.error(e?.message ?? "فشل تسجيل قرار العميل");
+    } finally {
+      setWorking(false);
+    }
+  }
 
   async function handleGeneratePdf() {
     if (!quote) return;
@@ -98,25 +182,6 @@ function QuoteDetail() {
           console.warn("[quotes] quote_sent notification failed:", e);
         }
       }
-      if (status === "accepted" && quote) {
-        try {
-          const { orderId, orderNumber } = await convertFn({ data: { quoteId: quote.id } });
-          if (orderId) {
-            try {
-              await notify({
-                data: { event: "order_opened", entityType: "order", entityId: orderId },
-              });
-            } catch (e) {
-              console.warn("[quotes] order_opened notification failed:", e);
-            }
-            toast.success(t("quotes.convertedToOrder", { number: orderNumber }));
-            nav({ to: "/admin/orders" });
-            return;
-          }
-        } catch (e) {
-          console.warn("[quotes] quote→order conversion failed:", e);
-        }
-      }
       toast.success(t("quotes.updated"));
       load();
     } catch (e: any) {
@@ -128,6 +193,10 @@ function QuoteDetail() {
 
   async function convertToInvoice() {
     if (!quote) return;
+    if (quote.status !== "accepted") {
+      toast.error(isRtl ? "لا يمكن التحويل لأمر إنتاج إلا بعد اعتماد وقبول العميل لعرض السعر أولاً" : "Only accepted quotations can be converted to an order");
+      return;
+    }
     setWorking(true);
 
     try {
@@ -173,8 +242,112 @@ function QuoteDetail() {
             {customer?.name} • {customer?.phone}
           </p>
         </div>
-        <Badge className="text-base px-3 py-1">{quote.status}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge className="text-base px-3 py-1 bg-primary text-primary-foreground">
+            {QUOTATION_STAGE_LABEL_AR[progStatus] || quote.status}
+          </Badge>
+          {quote.snapshot?.version > 1 && (
+            <Badge variant="outline" className="text-xs font-mono">
+              إصدار V{quote.snapshot.version}
+            </Badge>
+          )}
+        </div>
       </div>
+
+      {/* Quotation Lifecycle Stepper */}
+      <Card className="border-muted bg-card">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span>{isRtl ? "مسار اعتماد وتأكيد عرض السعر" : "Quotation Lifecycle & Customer Confirmation"}</span>
+            </CardTitle>
+            <Badge variant="outline" className="text-xs font-semibold px-2.5 py-0.5">
+              {QUOTATION_STAGE_LABEL_AR[progStatus] || progStatus}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 text-center text-xs">
+            {[
+              { id: "draft", label: "المسودة" },
+              { id: "awaiting_customer_confirmation", label: "تأكيد واتساب" },
+              { id: "approved_for_delivery", label: "الموافقة ع الاستلام" },
+              { id: "pdf_sent", label: "إرسال المستند" },
+              { id: "awaiting_customer_decision", label: "قرار العميل" },
+              { id: "accepted", label: "معتمد تجارياً" },
+              { id: "converted", label: "أمر الإنتاج" },
+            ].map((step, idx) => {
+              const stagesOrder = [
+                "draft",
+                "awaiting_customer_confirmation",
+                "approved_for_delivery",
+                "pdf_sent",
+                "awaiting_customer_decision",
+                "accepted",
+                "converted",
+              ];
+              const curIdx = stagesOrder.indexOf(progStatus === "revision_requested" ? "draft" : progStatus);
+              const isPast = curIdx > idx;
+              const isCurrent = curIdx === idx;
+              return (
+                <div
+                  key={step.id}
+                  className={`p-2 rounded border flex flex-col items-center justify-center gap-1 ${
+                    isCurrent
+                      ? "border-primary bg-primary/10 text-primary font-bold shadow-xs"
+                      : isPast
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+                      : "border-muted bg-muted/20 text-muted-foreground opacity-60"
+                  }`}
+                >
+                  <span className="text-[10px]">{isPast ? "✓" : `0${idx + 1}`}</span>
+                  <span className="truncate w-full">{step.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {commercialContext?.opportunityId && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-primary">
+                <Briefcase className="h-4 w-4" />
+                <span>{t("quotes.commercialContext", "السياق التجاري والفرصة البيعية")}</span>
+              </CardTitle>
+              <Link to="/admin/crm" search={{ opportunityId: commercialContext.opportunityId }}>
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10">
+                  <ExternalLink className="h-3 w-3" />
+                  <span>{t("quotes.viewInCrm", "عرض في CRM")}</span>
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <span className="text-muted-foreground block text-[11px]">{t("quotes.opportunityNumber", "رقم الصفقة")}</span>
+              <span className="font-mono font-bold text-foreground">{commercialContext.opportunityNumber}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-[11px]">{t("quotes.dealTitle", "عنوان المشروع")}</span>
+              <span className="font-semibold text-foreground truncate block">{commercialContext.opportunityTitle}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-[11px]">{t("quotes.pipelineStage", "المرحلة البيعية")}</span>
+              <Badge variant="outline" className="text-[10px] capitalize mt-0.5">
+                {commercialContext.stage}
+              </Badge>
+            </div>
+            <div>
+              <span className="text-muted-foreground block text-[11px]">{t("quotes.salesOwner", "المسؤول التجاري")}</span>
+              <span className="font-medium text-foreground">{commercialContext.salesOwnerName || "—"}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isV2 === null ? (
         <Card>
@@ -190,7 +363,7 @@ function QuoteDetail() {
             </CardHeader>
             <CardContent>
               <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                <TreeConfigurator quotationId={id} />
+                <TreeConfigurator quotationId={id} onTreeChange={() => load()} />
               </Suspense>
             </CardContent>
           </Card>
@@ -207,36 +380,218 @@ function QuoteDetail() {
           </Card>
         </>
       ) : (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">{t("quotes.items")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {items.map((it, i) => {
-              const snap = quote.snapshot?.items?.[i] ?? {};
+        <>
+          {/* Check if Commercial Mode (Shaheen model) */}
+          {(() => {
+            const snap = (quote.snapshot as any) || {};
+            const isCommercial =
+              snap.quotationMode === "commercial" ||
+              (Array.isArray(snap.lines) && snap.lines.length > 0) ||
+              items.some((it) => it.breakdown?.technicalSpecs || it.breakdown?.category);
+
+            if (isCommercial) {
+              const commercialLines: any[] =
+                Array.isArray(snap.lines) && snap.lines.length > 0
+                  ? snap.lines
+                  : items.map((it) => {
+                      const bd = it.breakdown || {};
+                      const dims = bd.dimensions
+                        ? `${bd.dimensions.width ?? ""}${bd.dimensions.height ? ` × ${bd.dimensions.height}` : ""}${bd.dimensions.depth ? ` × ${bd.dimensions.depth}` : ""} ${bd.dimensions.unit || "مم"}`.trim()
+                        : (it.dimension_value || null);
+                      return {
+                        id: it.id,
+                        name: it.product_name,
+                        categoryNameAr: it.material_name || bd.categoryNameAr || "منتج",
+                        dimensions: dims,
+                        pricingUnitAr: it.finish_name || bd.pricingUnitAr || "عدد",
+                        quantity: it.qty,
+                        unitPrice: Number(it.unit_price),
+                        lineTotal: Number(it.line_total),
+                        imageUrl: bd.imageUrl || null,
+                        technicalSpecs: bd.technicalSpecs || null,
+                      };
+                    });
+
+              const termsData = snap.terms;
+
               return (
-                <div key={it.id} className="border rounded-md p-3 text-sm">
-                  <div className="flex justify-between font-medium">
-                    <span>{it.product_name}</span>
-                    <span>{formatEGP(Number(it.line_total))}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {it.material_name} • {it.finish_name} • {it.dimension_value} × {it.qty}
-                  </div>
-                  {(snap.supplier_name || snap.supplier_country) && (
-                    <div className="text-xs mt-1">
-                      <span className="text-muted-foreground">{t("quotes.supplierOrigin")}</span>{" "}
-                      <span className="font-medium">{snap.supplier_name ?? "—"}</span>
-                      {snap.supplier_country && (
-                        <span className="text-muted-foreground"> • {snap.supplier_country}</span>
-                      )}
-                    </div>
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                          <span>{isRtl ? "بنود عرض السعر التجاري (مواصفات مستر شاهين)" : "Commercial Quotation Items"}</span>
+                        </CardTitle>
+                      </div>
+                      <Badge variant="outline" className="text-xs border-emerald-600 text-emerald-700 bg-emerald-50">
+                        {isRtl ? "مواصفات راقية" : "Shaheen Style"}
+                      </Badge>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {commercialLines.map((line, idx) => (
+                        <div
+                          key={line.id || idx}
+                          className="border rounded-xl p-4 bg-muted/20 space-y-3"
+                        >
+                          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b pb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="font-mono text-xs font-bold">
+                                #{idx + 1}
+                              </Badge>
+                              <span className="font-bold text-base text-foreground">
+                                {line.categoryNameAr} — {line.name}
+                              </span>
+                              {(() => {
+                                const dimStr =
+                                  typeof line.dimensions === "object" && line.dimensions !== null
+                                    ? [line.dimensions.width, line.dimensions.height, line.dimensions.depth]
+                                        .filter((v) => v !== undefined && v !== null && v !== "")
+                                        .join(" × ") + (line.dimensions.unit ? ` ${line.dimensions.unit}` : "")
+                                    : typeof line.dimensions === "string"
+                                      ? line.dimensions
+                                      : null;
+                                return dimStr ? (
+                                  <Badge variant="outline" className="text-[11px]">
+                                    {dimStr}
+                                  </Badge>
+                                ) : null;
+                              })()}
+                            </div>
+                            <div className="text-sm font-semibold text-primary">
+                              {line.quantity} {line.pricingUnitAr || "عدد"} × {formatEGP(Number(line.unitPrice))} ={" "}
+                              <span className="font-serif text-lg font-bold">{formatEGP(Number(line.lineTotal))}</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                            {/* Design Photo */}
+                            <div className="md:col-span-1">
+                              {line.imageUrl ? (
+                                <div className="border rounded-lg p-1 bg-background h-32 flex items-center justify-center overflow-hidden">
+                                  <img
+                                    src={line.imageUrl}
+                                    alt={line.name}
+                                    className="max-h-full max-w-full object-contain rounded"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="border border-dashed rounded-lg p-3 h-32 flex flex-col items-center justify-center text-muted-foreground text-xs bg-background/50">
+                                  <ImageIcon className="h-6 w-6 mb-1 text-muted-foreground/40" />
+                                  <span>{isRtl ? "تصميم معتمد" : "Approved design"}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Technical Specs */}
+                            <div className="md:col-span-3 space-y-1">
+                              <span className="text-xs font-semibold text-muted-foreground block">
+                                {isRtl ? "المواصفات الفنية المعتمدة:" : "Technical Specifications:"}
+                              </span>
+                              <div className="text-xs leading-relaxed text-foreground whitespace-pre-line bg-background p-3 rounded-md border border-border/60">
+                                {line.technicalSpecs || isRtl ? "مواصفات قياسية معتمدة من المصنع." : "Standard factory specifications."}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  {/* Commercial Terms & Conditions */}
+                  {termsData && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4 text-primary" />
+                          <span>{isRtl ? "شروط التعاقد والدفع والضمان" : "Contract Terms & Milestones"}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/10">
+                            <Truck className="h-4 w-4 text-primary shrink-0" />
+                            <div>
+                              <span className="text-muted-foreground block text-[11px]">{isRtl ? "موعد التسليم" : "Delivery"}</span>
+                              <span className="font-semibold text-foreground">
+                                {termsData.deliveryDays || 30} {isRtl ? "يوم عمل من التعاقد" : "business days"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/10">
+                            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+                            <div>
+                              <span className="text-muted-foreground block text-[11px]">{isRtl ? "الضمان الفعلي" : "Warranty"}</span>
+                              <span className="font-semibold text-foreground">
+                                {termsData.warrantyYears || 5} {isRtl ? "سنوات ضمان فعلي" : "years warranty"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/10">
+                            <Calendar className="h-4 w-4 text-primary shrink-0" />
+                            <div>
+                              <span className="text-muted-foreground block text-[11px]">{isRtl ? "شروط الدفع" : "Payment Terms"}</span>
+                              <span className="font-semibold text-foreground">60% / 30% / 10%</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {termsData.notes && termsData.notes.length > 0 && (
+                          <div className="pt-1">
+                            <span className="font-semibold text-muted-foreground block mb-1">
+                              {isRtl ? "ملاحظات:" : "Notes:"}
+                            </span>
+                            <ul className="list-disc list-inside space-y-0.5 text-muted-foreground">
+                              {termsData.notes.map((n: string, i: number) => (
+                                <li key={i}>{n}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
               );
-            })}
-          </CardContent>
-        </Card>
+            }
+
+            // Legacy non-commercial item cards
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">{t("quotes.items")}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {items.map((it, i) => {
+                    const snapItem = quote.snapshot?.items?.[i] ?? {};
+                    return (
+                      <div key={it.id} className="border rounded-md p-3 text-sm">
+                        <div className="flex justify-between font-medium">
+                          <span>{it.product_name}</span>
+                          <span>{formatEGP(Number(it.line_total))}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {it.material_name} • {it.finish_name} • {it.dimension_value} × {it.qty}
+                        </div>
+                        {(snapItem.supplier_name || snapItem.supplier_country) && (
+                          <div className="text-xs mt-1">
+                            <span className="text-muted-foreground">{t("quotes.supplierOrigin")}</span>{" "}
+                            <span className="font-medium">{snapItem.supplier_name ?? "—"}</span>
+                            {snapItem.supplier_country && (
+                              <span className="text-muted-foreground"> • {snapItem.supplier_country}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })()}
+        </>
       )}
 
       <Card>
@@ -275,31 +630,157 @@ function QuoteDetail() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-2 flex-wrap">
-        {quote.status === "draft" && (
-          <Button onClick={() => changeStatus("sent")} disabled={working} className="gap-2">
-            {t("quotes.sendQuote")}
-          </Button>
-        )}
-        {quote.status === "sent" && (
-          <Button onClick={() => changeStatus("accepted")} disabled={working}>
-            {t("quotes.markAccepted")}
-          </Button>
-        )}
-        {quote.status === "sent" && (
-          <Button variant="outline" onClick={() => changeStatus("rejected")}>
-            {t("quotes.markRejected")}
-          </Button>
-        )}
-        {(quote.status === "accepted" || quote.status === "sent") && (
-          <Button variant="secondary" onClick={convertToInvoice} disabled={working}>
-            {t("quotes.convertToOrder")}
-          </Button>
-        )}
-        <Button variant="outline" onClick={handleGeneratePdf} disabled={working} className="gap-2">
-          <Download className="h-4 w-4" /> {t("quotes.downloadPdf")}
-        </Button>
-      </div>
+      {/* Progressive Lifecycle Actions Bar */}
+      <Card className="border-primary/20 bg-card">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center justify-between">
+            <span>{isRtl ? "إجراءات دورة حياة عرض السعر" : "Quotation Lifecycle Actions"}</span>
+            <span className="text-xs font-normal text-muted-foreground font-mono">
+              الحالة: {QUOTATION_STAGE_LABEL_AR[progStatus] || progStatus}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2 flex-wrap items-center">
+            {/* 1. Draft or Revision Requested */}
+            {(progStatus === "draft" || progStatus === "revision_requested") && (
+              <>
+                <Button asChild variant="outline" className="gap-1.5 cursor-pointer">
+                  <Link to="/admin/quotes/new" search={{ quoteId: id }}>
+                    <Edit className="h-4 w-4" />
+                    <span>{isRtl ? "تعديل عرض السعر" : "Edit Quote"}</span>
+                  </Link>
+                </Button>
+                <Button
+                  onClick={handleApproveAndRequest}
+                  disabled={working}
+                  className="bg-primary text-primary-foreground gap-2 font-medium cursor-pointer"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>{isRtl ? "اعتماد عرض السعر وطلب تأكيد العميل" : "Approve Quotation & Request Customer Confirmation"}</span>
+                </Button>
+              </>
+            )}
+
+            {/* 2. Awaiting Customer Confirmation */}
+            {progStatus === "awaiting_customer_confirmation" && (
+              <>
+                <Button
+                  onClick={() => handleRecordConsent(true)}
+                  disabled={working}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 cursor-pointer"
+                >
+                  <span>{isRtl ? "تسجيل موافقة العميل وإرسال الرابط" : "Record Consent & Send PDF Link"}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleRecordConsent(false)}
+                  disabled={working}
+                  className="text-muted-foreground cursor-pointer"
+                >
+                  <span>{isRtl ? "تسجيل عدم رغبة العميل" : "Record Customer Declined"}</span>
+                </Button>
+              </>
+            )}
+
+            {/* 3. Approved for Delivery / PDF Sent / Awaiting Decision */}
+            {(progStatus === "approved_for_delivery" || progStatus === "pdf_sent" || progStatus === "awaiting_customer_decision") && (
+              <>
+                <Button
+                  onClick={() => handleRecordDecision("accept")}
+                  disabled={working}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 cursor-pointer"
+                >
+                  <span>{isRtl ? "اعتماد قبول العميل" : "Record Acceptance"}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowRevisionDialog(true)}
+                  disabled={working}
+                  className="border-amber-500 text-amber-700 hover:bg-amber-50 dark:text-amber-400 gap-1.5 cursor-pointer"
+                >
+                  <span>{isRtl ? "طلب تعديل من العميل" : "Record Revision Request"}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleRecordDecision("reject")}
+                  disabled={working}
+                  className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1.5 cursor-pointer"
+                >
+                  <span>{isRtl ? "تسجيل رفض العميل" : "Record Rejection"}</span>
+                </Button>
+              </>
+            )}
+
+            {/* 4. Accepted — Ready to Convert to Order */}
+            {progStatus === "accepted" && (
+              <Button
+                variant="default"
+                onClick={convertToInvoice}
+                disabled={working}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold px-4 cursor-pointer"
+              >
+                <span>{t("quotes.convertToOrder", "تحويل إلى أمر إنتاج")}</span>
+              </Button>
+            )}
+
+            {/* 5. Converted */}
+            {progStatus === "converted" && (
+              <Button asChild variant="outline" className="border-emerald-300 text-emerald-700 dark:text-emerald-400">
+                <Link to="/admin/orders">
+                  <span>{isRtl ? "عرض في أوامر الإنتاج" : "View in Orders"}</span>
+                </Link>
+              </Button>
+            )}
+
+            {/* Guarded disabled convert button when not accepted */}
+            {progStatus !== "accepted" && progStatus !== "converted" && (
+              <Button
+                variant="secondary"
+                disabled
+                title={isRtl ? "لا يمكن التحويل لأمر إنتاج إلا بعد اعتماد وقبول العميل أولاً" : "Only accepted quotations can be converted to an order"}
+                className="opacity-50 cursor-not-allowed"
+              >
+                <span>{t("quotes.convertToOrder", "تحويل إلى أمر إنتاج")}</span>
+              </Button>
+            )}
+
+            {/* Always available download PDF */}
+            <Button variant="outline" onClick={handleGeneratePdf} disabled={working} className="gap-2 cursor-pointer">
+              <Download className="h-4 w-4" /> {t("quotes.downloadPdf")}
+            </Button>
+          </div>
+
+          {/* Revision Dialog / Form Box */}
+          {showRevisionDialog && (
+            <div className="p-3 border rounded-md bg-muted/40 space-y-2 mt-2">
+              <div className="text-xs font-semibold">
+                {isRtl ? "ملاحظات التعديل المطلوبة من العميل:" : "Customer revision notes:"}
+              </div>
+              <textarea
+                value={revisionNotes}
+                onChange={(e) => setRevisionNotes(e.target.value)}
+                placeholder="اكتب التعديلات المطلوبة (سيتم حفظ الإصدار الحالي والبدء في إصدار V2+)..."
+                className="w-full text-xs p-2 rounded border bg-background"
+                rows={3}
+              />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setShowRevisionDialog(false)}>
+                  إلغاء
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                  onClick={() => handleRecordDecision("revision_requested", revisionNotes)}
+                  disabled={working || !revisionNotes.trim()}
+                >
+                  حفظ طلب التعديل
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">

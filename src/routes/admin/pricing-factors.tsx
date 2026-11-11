@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
@@ -395,5 +395,10 @@ function PricingFactorsPage() {
 }
 
 export const Route = createFileRoute("/admin/pricing-factors")({
-  component: PricingFactorsPage,
+  beforeLoad: () => {
+    // Obsolete pricing section has been removed from admin navigation.
+    // Redirect direct/bookmarked visits to /admin.
+    throw redirect({ to: "/admin", replace: true });
+  },
+  component: () => null,
 });

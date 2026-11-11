@@ -40,6 +40,7 @@ import type {
   UnitOutput,
   SectionOutput,
   ProductOutput,
+  ComponentOutput,
 } from "@/lib/pricing/engine-v3";
 import { log } from "@/lib/log";
 
@@ -53,6 +54,17 @@ export interface BreakdownTree {
     sections: Array<{
       id: string;
       label?: string | null;
+      material_id?: string | null;
+      finish_id?: string | null;
+      veneer_id?: string | null;
+      components?: Array<{
+        id: string;
+        kind: string;
+        catalog_id: string | null;
+        qty: number;
+        unit_of_measure: string;
+        area_function_key?: string | null;
+      }>;
       units: Array<{
         id: string;
         unit_type_id?: string | null;
@@ -269,19 +281,39 @@ function UnitOverrideEditor({
 // ── Breakdown sub-components ───────────────────────────────────────────────
 
 function ComponentLine({
+  component,
   label,
   amount,
   isLast,
 }: {
+  component?: ComponentOutput;
   label: string;
   amount: number;
   isLast: boolean;
 }) {
   const { t } = useTranslation();
+  const isRequired = component?.pricingStatus === "pricing_required" || amount === 0;
   return (
-    <div className={`flex items-center justify-between text-xs ${!isLast ? "border-b border-dashed border-border/30" : ""} py-0.5 pl-6`}>
-      <span className="text-muted-foreground truncate">{label}</span>
-      <span className="font-mono tabular-nums whitespace-nowrap">{formatEGP(amount)}</span>
+    <div className={`flex items-center justify-between text-xs ${!isLast ? "border-b border-dashed border-border/30" : ""} py-0.5 pl-6 gap-2`}>
+      <div className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
+        <span className="text-muted-foreground truncate">{label}</span>
+        {component?.totalConsumption != null && component?.consumptionUnit && (
+          <span className="text-[10px] text-muted-foreground/80 font-mono">
+            ({component.totalConsumption} {component.consumptionUnit})
+          </span>
+        )}
+        {isRequired && (
+          <span
+            data-testid="pricing-required-warning"
+            className="text-[10px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium whitespace-nowrap"
+          >
+            {t("breakdown.pricingRequired", { defaultValue: "Pricing required" })}
+          </span>
+        )}
+      </div>
+      <span className={`font-mono tabular-nums whitespace-nowrap ${isRequired ? "text-amber-600 font-medium" : ""}`}>
+        {formatEGP(amount)}
+      </span>
     </div>
   );
 }
@@ -314,10 +346,12 @@ function UnitBreakdown({
             <ChevronRight className="h-3 w-3 shrink-0" />
           )}
           <span className="text-xs font-medium truncate flex-1">
-            {unitLabel}
+            {unitLabel} {unit.qty && unit.qty > 1 ? `(×${unit.qty})` : ""}
           </span>
           <span className="text-xs font-mono tabular-nums">
-            {formatEGP(unit.computedUnitPrice)}
+            {unit.qty && unit.qty > 1
+              ? formatEGP(unit.computedTotalPrice ?? unit.computedUnitPrice * unit.qty)
+              : formatEGP(unit.computedUnitPrice)}
           </span>
         </button>
       </CollapsibleTrigger>
@@ -326,6 +360,7 @@ function UnitBreakdown({
         {unit.components.map((comp, i) => (
           <ComponentLine
             key={comp.id}
+            component={comp}
             label={t(`treeConfigurator.kind.${comp.kind}`, { defaultValue: comp.kind })}
             amount={comp.computedAmount}
             isLast={i === unit.components.length - 1}
@@ -333,8 +368,14 @@ function UnitBreakdown({
         ))}
         {/* Unit cost subtotal */}
         <div className="flex items-center justify-between text-xs border-t border-border/50 pt-0.5 mt-0.5 pl-6">
-          <span className="text-muted-foreground">{t("breakdown.costSubtotal")}</span>
-          <span className="font-mono tabular-nums font-medium">{formatEGP(unit.computedUnitCost)}</span>
+          <span className="text-muted-foreground">
+            {unit.qty && unit.qty > 1 ? `${t("breakdown.costSubtotal")} (×${unit.qty})` : t("breakdown.costSubtotal")}
+          </span>
+          <span className="font-mono tabular-nums font-medium">
+            {unit.qty && unit.qty > 1
+              ? `${formatEGP(unit.computedTotalCost ?? unit.computedUnitCost * unit.qty)} (${unit.qty}× ${formatEGP(unit.computedUnitCost)})`
+              : formatEGP(unit.computedUnitCost)}
+          </span>
         </div>
         {/* Factor lines */}
         {factorLines && factorLines.length > 0 && (
@@ -354,8 +395,12 @@ function UnitBreakdown({
         )}
         {/* Unit price */}
         <div className="flex items-center justify-between text-xs border-t border-border/50 pt-0.5 pl-6 font-medium">
-          <span>{t("breakdown.unitPrice")}</span>
-          <span className="font-mono tabular-nums">{formatEGP(unit.computedUnitPrice)}</span>
+          <span>{unit.qty && unit.qty > 1 ? `${t("breakdown.unitPrice")} (×${unit.qty})` : t("breakdown.unitPrice")}</span>
+          <span className="font-mono tabular-nums">
+            {unit.qty && unit.qty > 1
+              ? `${formatEGP(unit.computedTotalPrice ?? unit.computedUnitPrice * unit.qty)} (${unit.qty}× ${formatEGP(unit.computedUnitPrice)})`
+              : formatEGP(unit.computedUnitPrice)}
+          </span>
         </div>
         {/* Override editor */}
         {onOverrideChange && (
@@ -411,6 +456,22 @@ function SectionBreakdown({
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent className="ml-4 space-y-1.5">
+        {section.components && section.components.length > 0 && (
+          <div className="space-y-0.5 border-b border-border/40 pb-1 mb-1 pl-2">
+            <div className="text-[11px] font-semibold text-muted-foreground">
+              {t("treeConfigurator.sectionComponents", { defaultValue: "Section Shared Components" })}
+            </div>
+            {section.components.map((comp, i) => (
+              <ComponentLine
+                key={comp.id}
+                component={comp}
+                label={t(`treeConfigurator.kind.${comp.kind}`, { defaultValue: comp.kind })}
+                amount={comp.computedAmount}
+                isLast={i === section.components!.length - 1}
+              />
+            ))}
+          </div>
+        )}
         {section.units.map((unit, idx) => (
           <UnitBreakdown
             key={unit.id}

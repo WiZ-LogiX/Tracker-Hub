@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { generatePLCId } from "@/lib/numbering";
-import type { TenantContext } from "@/lib/tenant-context";
+import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
 
 const CreateOrderInput = z.object({
   quoteId: z.string().uuid().optional().nullable(),
@@ -18,6 +18,7 @@ export const createOrder = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => CreateOrderInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    forbidWorker(ctx, "Orders Management");
     const tenantId = ctx.tenantId;
 
     // Grab the quote if an ID is provided and ensure it belongs to the tenant

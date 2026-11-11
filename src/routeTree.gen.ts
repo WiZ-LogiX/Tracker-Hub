@@ -15,8 +15,10 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminWorkersRouteImport } from './routes/admin/workers'
+import { Route as AdminWorkOrdersRouteImport } from './routes/admin/work-orders'
 import { Route as AdminWastageRulesRouteImport } from './routes/admin/wastage-rules'
 import { Route as AdminTeamRouteImport } from './routes/admin/team'
+import { Route as AdminTasksRouteImport } from './routes/admin/tasks'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSeedRouteImport } from './routes/admin/seed'
 import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
@@ -27,15 +29,24 @@ import { Route as AdminPricingRulesRouteImport } from './routes/admin/pricing-ru
 import { Route as AdminPricingFactorsRouteImport } from './routes/admin/pricing-factors'
 import { Route as AdminOrdersRouteImport } from './routes/admin/orders'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
+import { Route as AdminInvoicesRouteImport } from './routes/admin/invoices'
+import { Route as AdminInventoryRouteImport } from './routes/admin/inventory'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminDiscountsRouteImport } from './routes/admin/discounts'
+import { Route as AdminDeliveriesRouteImport } from './routes/admin/deliveries'
 import { Route as AdminCustomersRouteImport } from './routes/admin/customers'
 import { Route as AdminCostAnalysisRouteImport } from './routes/admin/cost-analysis'
 import { Route as AdminCatalogRouteImport } from './routes/admin/catalog'
 import { Route as AdminQuotesIndexRouteImport } from './routes/admin/quotes/index'
+import { Route as AdminProjectsIndexRouteImport } from './routes/admin/projects/index'
+import { Route as AdminCrmIndexRouteImport } from './routes/admin/crm/index'
 import { Route as AdminQuotesNewRouteImport } from './routes/admin/quotes/new'
 import { Route as AdminQuotesConfiguratorRouteImport } from './routes/admin/quotes/configurator'
 import { Route as AdminQuotesIdRouteImport } from './routes/admin/quotes/$id'
+import { Route as AdminProjectsIdRouteImport } from './routes/admin/projects/$id'
+import { Route as AdminCrmSalesRouteImport } from './routes/admin/crm/sales'
+import { Route as AdminCrmAnalyticsRouteImport } from './routes/admin/crm/analytics'
+import { Route as AdminCrmAfterSalesRouteImport } from './routes/admin/crm/after-sales'
 
 const TrackRoute = TrackRouteImport.update({
   id: '/track',
@@ -67,6 +78,11 @@ const AdminWorkersRoute = AdminWorkersRouteImport.update({
   path: '/workers',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminWorkOrdersRoute = AdminWorkOrdersRouteImport.update({
+  id: '/work-orders',
+  path: '/work-orders',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminWastageRulesRoute = AdminWastageRulesRouteImport.update({
   id: '/wastage-rules',
   path: '/wastage-rules',
@@ -75,6 +91,11 @@ const AdminWastageRulesRoute = AdminWastageRulesRouteImport.update({
 const AdminTeamRoute = AdminTeamRouteImport.update({
   id: '/team',
   path: '/team',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTasksRoute = AdminTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -127,6 +148,16 @@ const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminInvoicesRoute = AdminInvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminInventoryRoute = AdminInventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminHealthRoute = AdminHealthRouteImport.update({
   id: '/health',
   path: '/health',
@@ -135,6 +166,11 @@ const AdminHealthRoute = AdminHealthRouteImport.update({
 const AdminDiscountsRoute = AdminDiscountsRouteImport.update({
   id: '/discounts',
   path: '/discounts',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminDeliveriesRoute = AdminDeliveriesRouteImport.update({
+  id: '/deliveries',
+  path: '/deliveries',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCustomersRoute = AdminCustomersRouteImport.update({
@@ -157,6 +193,16 @@ const AdminQuotesIndexRoute = AdminQuotesIndexRouteImport.update({
   path: '/quotes/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminProjectsIndexRoute = AdminProjectsIndexRouteImport.update({
+  id: '/projects/',
+  path: '/projects/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCrmIndexRoute = AdminCrmIndexRouteImport.update({
+  id: '/crm/',
+  path: '/crm/',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminQuotesNewRoute = AdminQuotesNewRouteImport.update({
   id: '/quotes/new',
   path: '/quotes/new',
@@ -172,6 +218,26 @@ const AdminQuotesIdRoute = AdminQuotesIdRouteImport.update({
   path: '/quotes/$id',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminProjectsIdRoute = AdminProjectsIdRouteImport.update({
+  id: '/projects/$id',
+  path: '/projects/$id',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCrmSalesRoute = AdminCrmSalesRouteImport.update({
+  id: '/crm/sales',
+  path: '/crm/sales',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCrmAnalyticsRoute = AdminCrmAnalyticsRouteImport.update({
+  id: '/crm/analytics',
+  path: '/crm/analytics',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCrmAfterSalesRoute = AdminCrmAfterSalesRouteImport.update({
+  id: '/crm/after-sales',
+  path: '/crm/after-sales',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -181,8 +247,11 @@ export interface FileRoutesByFullPath {
   '/admin/catalog': typeof AdminCatalogRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
   '/admin/customers': typeof AdminCustomersRoute
+  '/admin/deliveries': typeof AdminDeliveriesRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/health': typeof AdminHealthRoute
+  '/admin/inventory': typeof AdminInventoryRoute
+  '/admin/invoices': typeof AdminInvoicesRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
@@ -193,13 +262,21 @@ export interface FileRoutesByFullPath {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/tasks': typeof AdminTasksRoute
   '/admin/team': typeof AdminTeamRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
+  '/admin/work-orders': typeof AdminWorkOrdersRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/crm/after-sales': typeof AdminCrmAfterSalesRoute
+  '/admin/crm/analytics': typeof AdminCrmAnalyticsRoute
+  '/admin/crm/sales': typeof AdminCrmSalesRoute
+  '/admin/projects/$id': typeof AdminProjectsIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
   '/admin/quotes/new': typeof AdminQuotesNewRoute
+  '/admin/crm/': typeof AdminCrmIndexRoute
+  '/admin/projects/': typeof AdminProjectsIndexRoute
   '/admin/quotes/': typeof AdminQuotesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -209,8 +286,11 @@ export interface FileRoutesByTo {
   '/admin/catalog': typeof AdminCatalogRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
   '/admin/customers': typeof AdminCustomersRoute
+  '/admin/deliveries': typeof AdminDeliveriesRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/health': typeof AdminHealthRoute
+  '/admin/inventory': typeof AdminInventoryRoute
+  '/admin/invoices': typeof AdminInvoicesRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
@@ -221,13 +301,21 @@ export interface FileRoutesByTo {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/tasks': typeof AdminTasksRoute
   '/admin/team': typeof AdminTeamRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
+  '/admin/work-orders': typeof AdminWorkOrdersRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/crm/after-sales': typeof AdminCrmAfterSalesRoute
+  '/admin/crm/analytics': typeof AdminCrmAnalyticsRoute
+  '/admin/crm/sales': typeof AdminCrmSalesRoute
+  '/admin/projects/$id': typeof AdminProjectsIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
   '/admin/quotes/new': typeof AdminQuotesNewRoute
+  '/admin/crm': typeof AdminCrmIndexRoute
+  '/admin/projects': typeof AdminProjectsIndexRoute
   '/admin/quotes': typeof AdminQuotesIndexRoute
 }
 export interface FileRoutesById {
@@ -239,8 +327,11 @@ export interface FileRoutesById {
   '/admin/catalog': typeof AdminCatalogRoute
   '/admin/cost-analysis': typeof AdminCostAnalysisRoute
   '/admin/customers': typeof AdminCustomersRoute
+  '/admin/deliveries': typeof AdminDeliveriesRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/health': typeof AdminHealthRoute
+  '/admin/inventory': typeof AdminInventoryRoute
+  '/admin/invoices': typeof AdminInvoicesRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pricing-factors': typeof AdminPricingFactorsRoute
@@ -251,13 +342,21 @@ export interface FileRoutesById {
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/seed': typeof AdminSeedRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/tasks': typeof AdminTasksRoute
   '/admin/team': typeof AdminTeamRoute
   '/admin/wastage-rules': typeof AdminWastageRulesRoute
+  '/admin/work-orders': typeof AdminWorkOrdersRoute
   '/admin/workers': typeof AdminWorkersRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/crm/after-sales': typeof AdminCrmAfterSalesRoute
+  '/admin/crm/analytics': typeof AdminCrmAnalyticsRoute
+  '/admin/crm/sales': typeof AdminCrmSalesRoute
+  '/admin/projects/$id': typeof AdminProjectsIdRoute
   '/admin/quotes/$id': typeof AdminQuotesIdRoute
   '/admin/quotes/configurator': typeof AdminQuotesConfiguratorRoute
   '/admin/quotes/new': typeof AdminQuotesNewRoute
+  '/admin/crm/': typeof AdminCrmIndexRoute
+  '/admin/projects/': typeof AdminProjectsIndexRoute
   '/admin/quotes/': typeof AdminQuotesIndexRoute
 }
 export interface FileRouteTypes {
@@ -270,8 +369,11 @@ export interface FileRouteTypes {
     | '/admin/catalog'
     | '/admin/cost-analysis'
     | '/admin/customers'
+    | '/admin/deliveries'
     | '/admin/discounts'
     | '/admin/health'
+    | '/admin/inventory'
+    | '/admin/invoices'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pricing-factors'
@@ -282,13 +384,21 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/settings'
+    | '/admin/tasks'
     | '/admin/team'
     | '/admin/wastage-rules'
+    | '/admin/work-orders'
     | '/admin/workers'
     | '/admin/'
+    | '/admin/crm/after-sales'
+    | '/admin/crm/analytics'
+    | '/admin/crm/sales'
+    | '/admin/projects/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
     | '/admin/quotes/new'
+    | '/admin/crm/'
+    | '/admin/projects/'
     | '/admin/quotes/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -298,8 +408,11 @@ export interface FileRouteTypes {
     | '/admin/catalog'
     | '/admin/cost-analysis'
     | '/admin/customers'
+    | '/admin/deliveries'
     | '/admin/discounts'
     | '/admin/health'
+    | '/admin/inventory'
+    | '/admin/invoices'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pricing-factors'
@@ -310,13 +423,21 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/settings'
+    | '/admin/tasks'
     | '/admin/team'
     | '/admin/wastage-rules'
+    | '/admin/work-orders'
     | '/admin/workers'
     | '/admin'
+    | '/admin/crm/after-sales'
+    | '/admin/crm/analytics'
+    | '/admin/crm/sales'
+    | '/admin/projects/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
     | '/admin/quotes/new'
+    | '/admin/crm'
+    | '/admin/projects'
     | '/admin/quotes'
   id:
     | '__root__'
@@ -327,8 +448,11 @@ export interface FileRouteTypes {
     | '/admin/catalog'
     | '/admin/cost-analysis'
     | '/admin/customers'
+    | '/admin/deliveries'
     | '/admin/discounts'
     | '/admin/health'
+    | '/admin/inventory'
+    | '/admin/invoices'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pricing-factors'
@@ -339,13 +463,21 @@ export interface FileRouteTypes {
     | '/admin/requests'
     | '/admin/seed'
     | '/admin/settings'
+    | '/admin/tasks'
     | '/admin/team'
     | '/admin/wastage-rules'
+    | '/admin/work-orders'
     | '/admin/workers'
     | '/admin/'
+    | '/admin/crm/after-sales'
+    | '/admin/crm/analytics'
+    | '/admin/crm/sales'
+    | '/admin/projects/$id'
     | '/admin/quotes/$id'
     | '/admin/quotes/configurator'
     | '/admin/quotes/new'
+    | '/admin/crm/'
+    | '/admin/projects/'
     | '/admin/quotes/'
   fileRoutesById: FileRoutesById
 }
@@ -400,6 +532,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWorkersRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/work-orders': {
+      id: '/admin/work-orders'
+      path: '/work-orders'
+      fullPath: '/admin/work-orders'
+      preLoaderRoute: typeof AdminWorkOrdersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/wastage-rules': {
       id: '/admin/wastage-rules'
       path: '/wastage-rules'
@@ -412,6 +551,13 @@ declare module '@tanstack/react-router' {
       path: '/team'
       fullPath: '/admin/team'
       preLoaderRoute: typeof AdminTeamRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/tasks': {
+      id: '/admin/tasks'
+      path: '/tasks'
+      fullPath: '/admin/tasks'
+      preLoaderRoute: typeof AdminTasksRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings': {
@@ -484,6 +630,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminNotificationsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/invoices': {
+      id: '/admin/invoices'
+      path: '/invoices'
+      fullPath: '/admin/invoices'
+      preLoaderRoute: typeof AdminInvoicesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/inventory': {
+      id: '/admin/inventory'
+      path: '/inventory'
+      fullPath: '/admin/inventory'
+      preLoaderRoute: typeof AdminInventoryRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/health': {
       id: '/admin/health'
       path: '/health'
@@ -496,6 +656,13 @@ declare module '@tanstack/react-router' {
       path: '/discounts'
       fullPath: '/admin/discounts'
       preLoaderRoute: typeof AdminDiscountsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/deliveries': {
+      id: '/admin/deliveries'
+      path: '/deliveries'
+      fullPath: '/admin/deliveries'
+      preLoaderRoute: typeof AdminDeliveriesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/customers': {
@@ -526,6 +693,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminQuotesIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/projects/': {
+      id: '/admin/projects/'
+      path: '/projects'
+      fullPath: '/admin/projects/'
+      preLoaderRoute: typeof AdminProjectsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/crm/': {
+      id: '/admin/crm/'
+      path: '/crm'
+      fullPath: '/admin/crm/'
+      preLoaderRoute: typeof AdminCrmIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/quotes/new': {
       id: '/admin/quotes/new'
       path: '/quotes/new'
@@ -547,6 +728,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminQuotesIdRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/projects/$id': {
+      id: '/admin/projects/$id'
+      path: '/projects/$id'
+      fullPath: '/admin/projects/$id'
+      preLoaderRoute: typeof AdminProjectsIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/crm/sales': {
+      id: '/admin/crm/sales'
+      path: '/crm/sales'
+      fullPath: '/admin/crm/sales'
+      preLoaderRoute: typeof AdminCrmSalesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/crm/analytics': {
+      id: '/admin/crm/analytics'
+      path: '/crm/analytics'
+      fullPath: '/admin/crm/analytics'
+      preLoaderRoute: typeof AdminCrmAnalyticsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/crm/after-sales': {
+      id: '/admin/crm/after-sales'
+      path: '/crm/after-sales'
+      fullPath: '/admin/crm/after-sales'
+      preLoaderRoute: typeof AdminCrmAfterSalesRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
@@ -554,8 +763,11 @@ interface AdminRouteChildren {
   AdminCatalogRoute: typeof AdminCatalogRoute
   AdminCostAnalysisRoute: typeof AdminCostAnalysisRoute
   AdminCustomersRoute: typeof AdminCustomersRoute
+  AdminDeliveriesRoute: typeof AdminDeliveriesRoute
   AdminDiscountsRoute: typeof AdminDiscountsRoute
   AdminHealthRoute: typeof AdminHealthRoute
+  AdminInventoryRoute: typeof AdminInventoryRoute
+  AdminInvoicesRoute: typeof AdminInvoicesRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
   AdminPricingFactorsRoute: typeof AdminPricingFactorsRoute
@@ -566,13 +778,21 @@ interface AdminRouteChildren {
   AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSeedRoute: typeof AdminSeedRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminTasksRoute: typeof AdminTasksRoute
   AdminTeamRoute: typeof AdminTeamRoute
   AdminWastageRulesRoute: typeof AdminWastageRulesRoute
+  AdminWorkOrdersRoute: typeof AdminWorkOrdersRoute
   AdminWorkersRoute: typeof AdminWorkersRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminCrmAfterSalesRoute: typeof AdminCrmAfterSalesRoute
+  AdminCrmAnalyticsRoute: typeof AdminCrmAnalyticsRoute
+  AdminCrmSalesRoute: typeof AdminCrmSalesRoute
+  AdminProjectsIdRoute: typeof AdminProjectsIdRoute
   AdminQuotesIdRoute: typeof AdminQuotesIdRoute
   AdminQuotesConfiguratorRoute: typeof AdminQuotesConfiguratorRoute
   AdminQuotesNewRoute: typeof AdminQuotesNewRoute
+  AdminCrmIndexRoute: typeof AdminCrmIndexRoute
+  AdminProjectsIndexRoute: typeof AdminProjectsIndexRoute
   AdminQuotesIndexRoute: typeof AdminQuotesIndexRoute
 }
 
@@ -580,8 +800,11 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCatalogRoute: AdminCatalogRoute,
   AdminCostAnalysisRoute: AdminCostAnalysisRoute,
   AdminCustomersRoute: AdminCustomersRoute,
+  AdminDeliveriesRoute: AdminDeliveriesRoute,
   AdminDiscountsRoute: AdminDiscountsRoute,
   AdminHealthRoute: AdminHealthRoute,
+  AdminInventoryRoute: AdminInventoryRoute,
+  AdminInvoicesRoute: AdminInvoicesRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminOrdersRoute: AdminOrdersRoute,
   AdminPricingFactorsRoute: AdminPricingFactorsRoute,
@@ -592,13 +815,21 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminRequestsRoute: AdminRequestsRoute,
   AdminSeedRoute: AdminSeedRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminTasksRoute: AdminTasksRoute,
   AdminTeamRoute: AdminTeamRoute,
   AdminWastageRulesRoute: AdminWastageRulesRoute,
+  AdminWorkOrdersRoute: AdminWorkOrdersRoute,
   AdminWorkersRoute: AdminWorkersRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminCrmAfterSalesRoute: AdminCrmAfterSalesRoute,
+  AdminCrmAnalyticsRoute: AdminCrmAnalyticsRoute,
+  AdminCrmSalesRoute: AdminCrmSalesRoute,
+  AdminProjectsIdRoute: AdminProjectsIdRoute,
   AdminQuotesIdRoute: AdminQuotesIdRoute,
   AdminQuotesConfiguratorRoute: AdminQuotesConfiguratorRoute,
   AdminQuotesNewRoute: AdminQuotesNewRoute,
+  AdminCrmIndexRoute: AdminCrmIndexRoute,
+  AdminProjectsIndexRoute: AdminProjectsIndexRoute,
   AdminQuotesIndexRoute: AdminQuotesIndexRoute,
 }
 

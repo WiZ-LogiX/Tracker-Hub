@@ -6,7 +6,6 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { createHash } from "crypto";
 
 interface R2Config {
   endpoint: string;
@@ -132,17 +131,14 @@ export async function objectExists(key: string): Promise<boolean> {
  */
 export function generateObjectKey(
   tenantId: string,
-  entityType: "production-photos" | "avatars" | "attachments" | "logos",
+  entityType: "production-photos" | "avatars" | "attachments" | "logos" | "quotes" | "invoices",
   entityId: string,
   originalFilename: string,
 ): string {
   if (!tenantId) throw new Error("tenantId is required for object key generation");
   const ext = (originalFilename.split(".").pop() || "bin").toLowerCase();
-  const hash = createHash("sha256")
-    .update(`${Date.now()}-${Math.random()}-${originalFilename}`)
-    .digest("hex")
-    .slice(0, 12);
-  return `${tenantId}/${entityType}/${entityId}/${hash}.${ext}`;
+  const rand = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-6);
+  return `${tenantId}/${entityType}/${entityId}/${rand}.${ext}`;
 }
 
 export function getPublicUrl(key: string): string {

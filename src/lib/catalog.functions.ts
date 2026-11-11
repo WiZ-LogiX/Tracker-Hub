@@ -1822,3 +1822,95 @@ export const hardDeleteCatalogEdgeBand = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requireTenant])
   .inputValidator((d) => ArchiveInput.parse(d))
   .handler(() => blockHardDelete());
+
+const ListQuotableProductsInput = z
+  .object({
+    search: z.string().optional(),
+    categoryId: z.string().optional(),
+  })
+  .optional()
+  .default({});
+
+export interface QuotableProduct {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn: string | null;
+  descriptionAr: string | null;
+  basePrice: number;
+  categoryId: string | null;
+  categoryNameAr: string | null;
+  categoryNameEn: string | null;
+  pricingUnit: string;
+  active: boolean;
+}
+
+export const listQuotableProducts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .validator((input: unknown) => ListQuotableProductsInput.parse(input ?? {}))
+  .handler(async ({ data, context }): Promise<QuotableProduct[]> => {
+    const ctx = context.tenantContext as TenantContext;
+    await setTenantGuc(ctx.tenantId);
+    const client = (context as any).supabase;
+
+    let query = client
+      .from("products")
+      .select(`
+        id,
+        code,
+        name_ar,
+        name_en,
+        description_ar,
+        base_price,
+        active,
+        category_id,
+        categories (
+          id,
+          name_ar,
+          name_en,
+          pricing_unit
+        )
+      `)
+      .eq("tenant_id", ctx.tenantId)
+      .eq("active", true)
+      .order("name_ar", { ascending: true });
+
+    if (data?.categoryId) {
+      query = query.eq("category_id", data.categoryId);
+    }
+
+    const { data: rows, error } = await query;
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    let products = (rows ?? []).map((p: any) => {
+      const cat = Array.isArray(p.categories) ? p.categories[0] : p.categories;
+      return {
+        id: p.id as string,
+        code: p.code as string,
+        nameAr: p.name_ar as string,
+        nameEn: (p.name_en as string) || null,
+        descriptionAr: (p.description_ar as string) || null,
+        basePrice: Number(p.base_price) || 0,
+        categoryId: p.category_id as string | null,
+        categoryNameAr: (cat?.name_ar as string) || null,
+        categoryNameEn: (cat?.name_en as string) || null,
+        pricingUnit: (cat?.pricing_unit as string) || "unit",
+        active: Boolean(p.active),
+      };
+    });
+
+    if (data?.search && data.search.trim().length > 0) {
+      const q = data.search.trim().toLowerCase();
+      products = products.filter(
+        (p: any) =>
+          p.code.toLowerCase().includes(q) ||
+          p.nameAr.toLowerCase().includes(q) ||
+          (p.nameEn && p.nameEn.toLowerCase().includes(q)) ||
+          (p.categoryNameAr && p.categoryNameAr.toLowerCase().includes(q)),
+      );
+    }
+
+    return products;
+  });

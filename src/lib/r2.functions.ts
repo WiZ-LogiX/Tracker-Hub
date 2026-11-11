@@ -60,6 +60,7 @@ interface SessionInfo {
   userId: string;
   email?: string | null;
   tenantId: string | null;
+  role: string;
 }
 
 async function sessionFromRequest(): Promise<SessionInfo> {
@@ -94,10 +95,21 @@ async function sessionFromRequest(): Promise<SessionInfo> {
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data?.user) throw new Error(error?.message ?? "Unauthorized");
 
+  // Check user status
+  const { data: profile } = await supabaseAdmin
+    .from("app_users")
+    .select("status")
+    .eq("id", data.user.id)
+    .maybeSingle();
+  if (profile && profile.status === "disabled") {
+    throw new Error("Forbidden: User account is disabled");
+  }
+
   const { data: member } = await supabaseAdmin
     .from("tenant_members")
-    .select("tenant_id")
+    .select("tenant_id, role")
     .eq("user_id", data.user.id)
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
@@ -105,6 +117,7 @@ async function sessionFromRequest(): Promise<SessionInfo> {
     userId: data.user.id,
     email: data.user.email ?? null,
     tenantId: typeof member?.tenant_id === "string" ? member.tenant_id : null,
+    role: member?.role || "viewer",
   };
 }
 
@@ -120,15 +133,13 @@ function requireEnvConfig(): void {
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
     "R2_BUCKET",
-    "R2_PUBLIC_URL",
   ];
   const missing = required.filter(
     (k) => !process.env[k] && !(k === "R2_BUCKET" && process.env.R2_BUCKET_NAME),
   );
   if (missing.length) {
     throw new Error(
-      `Missing required R2 env vars: ${missing.join(", ")}. ` +
-        `R2_PUBLIC_URL must point at the public bucket or custom CDN domain.`,
+      `Missing required R2 env vars: ${missing.join(", ")}.`,
     );
   }
 }
@@ -177,8 +188,42 @@ function generateObjectKey(
 }
 
 function getPublicUrl(key: string): string {
-  // Sprint 0: R2_PUBLIC_URL is always set after requireEnvConfig().
-  return `${process.env.R2_PUBLIC_URL!.replace(/\/$/, "")}/${key}`;
+  if (process.env.R2_PUBLIC_URL) {
+    return `${process.env.R2_PUBLIC_URL.replace(/\/$/, "")}/${key}`;
+  }
+  return key;
+}
+
+async function verifyWorkerUploadAllowed(
+  session: SessionInfo,
+  entityType: string,
+  entityId: string,
+): Promise<void> {
+  if (session.role !== "worker") return;
+  if (entityType === "avatars" && entityId === session.userId) {
+    return;
+  }
+  if (entityType !== "attachments") {
+    throw new Error("Forbidden: Task Workers can only upload task attachments");
+  }
+
+  const supabaseAdmin = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { storage: undefined, persistSession: false, autoRefreshToken: false } },
+  );
+
+  const { data: assignment } = await supabaseAdmin
+    .from("task_assignees")
+    .select("id")
+    .eq("task_id", entityId)
+    .eq("user_id", session.userId)
+    .eq("tenant_id", session.tenantId)
+    .maybeSingle();
+
+  if (!assignment) {
+    throw new Error("Forbidden: You can only upload files for tasks assigned to you");
+  }
 }
 
 export const getR2UploadUrl = createServerFn({ method: "POST" })
@@ -186,6 +231,7 @@ export const getR2UploadUrl = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await sessionFromRequest();
     if (!session.tenantId) throw new Error("Forbidden: no tenant");
+    await verifyWorkerUploadAllowed(session, data.entityType, data.entityId);
     requireEnvConfig();
 
     const key = generateObjectKey(session.tenantId, data.entityType, data.entityId, data.filename);
@@ -198,6 +244,7 @@ export const getR2BatchUploadUrls = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await sessionFromRequest();
     if (!session.tenantId) throw new Error("Forbidden: no tenant");
+    await verifyWorkerUploadAllowed(session, data.entityType, data.entityId);
     requireEnvConfig();
 
     const uploads = await Promise.all(
@@ -230,6 +277,33 @@ export const getR2DownloadUrl = createServerFn({ method: "POST" })
     if (!data.key.startsWith(`${session.tenantId}/`)) {
       throw new Error("Forbidden: key outside tenant");
     }
+
+    if (session.role === "worker") {
+      const supabaseAdmin = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { storage: undefined, persistSession: false, autoRefreshToken: false } },
+      );
+      const { data: att } = await supabaseAdmin
+        .from("attachments")
+        .select("entity_type, entity_id")
+        .eq("storage_key", data.key)
+        .eq("tenant_id", session.tenantId)
+        .maybeSingle();
+      if (att && att.entity_type === "task") {
+        const { data: assign } = await supabaseAdmin
+          .from("task_assignees")
+          .select("id")
+          .eq("task_id", att.entity_id)
+          .eq("user_id", session.userId)
+          .eq("tenant_id", session.tenantId)
+          .maybeSingle();
+        if (!assign) {
+          throw new Error("Forbidden: You can only access attachments for tasks assigned to you");
+        }
+      }
+    }
+
     requireEnvConfig();
 
     const cmd = new GetObjectCommand({
@@ -247,6 +321,9 @@ export const deleteR2Object = createServerFn({ method: "POST" })
     if (!session.tenantId) throw new Error("Forbidden: no tenant");
     if (!data.key.startsWith(`${session.tenantId}/`)) {
       throw new Error("Forbidden: key outside tenant");
+    }
+    if (session.role === "worker") {
+      throw new Error("Forbidden: Task Workers cannot directly delete raw R2 objects");
     }
     requireEnvConfig();
 

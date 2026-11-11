@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
@@ -19,7 +19,14 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, CheckCircle2, Archive, Trash2, Copy, GripVertical, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/admin/pricing-rules")({ component: PricingRulesPage });
+export const Route = createFileRoute("/admin/pricing-rules")({
+  beforeLoad: () => {
+    // Obsolete pricing section has been removed from admin navigation.
+    // Redirect direct/bookmarked visits to /admin.
+    throw redirect({ to: "/admin", replace: true });
+  },
+  component: () => null,
+});
 
 const OP_LABELS: Record<string, string> = {
   add: "إضافة بند",

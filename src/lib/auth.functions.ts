@@ -79,10 +79,23 @@ export const login = createServerFn({ method: "POST" })
     if (!profile) throw new Error("Account not provisioned yet");
     if (profile.status !== "active") throw new Error("Account is disabled");
 
+    const { data: member } = await supabaseAdmin
+      .from("tenant_members")
+      .select("role")
+      .eq("tenant_id", profile.tenant_id)
+      .eq("user_id", res.user.id)
+      .maybeSingle();
+
+    const role = member?.role ?? "viewer";
+
     return {
       session: res.session,
       user: res.user,
-      profile,
+      profile: {
+        ...profile,
+        role,
+      },
+      role,
     };
   });
 
@@ -211,13 +224,88 @@ export const listAppUsers = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     requireRole(ctx, ["owner", "admin"]);
 
-    const { data, error } = await supabaseAdmin
-      .from("app_users")
-      .select("id, tenant_id, username, display_name, avatar_key, status, created_at")
-      .eq("tenant_id", ctx.tenantId)
-      .order("created_at", { ascending: true });
-    if (error) throw new Error(error.message);
-    return { items: data ?? [] };
+    const [usersRes, membersRes] = await Promise.all([
+      supabaseAdmin
+        .from("app_users")
+        .select("id, tenant_id, username, display_name, avatar_key, status, created_at")
+        .eq("tenant_id", ctx.tenantId)
+        .order("created_at", { ascending: true }),
+      supabaseAdmin
+        .from("tenant_members")
+        .select("user_id, role")
+        .eq("tenant_id", ctx.tenantId),
+    ]);
+    if (usersRes.error) throw new Error(usersRes.error.message);
+    if (membersRes.error) throw new Error(membersRes.error.message);
+
+    const memberRoleMap = new Map<string, string>();
+    (membersRes.data ?? []).forEach((m) => {
+      memberRoleMap.set(m.user_id, m.role);
+    });
+
+    const items = (usersRes.data ?? []).map((u) => ({
+      ...u,
+      role: memberRoleMap.get(u.id) || "viewer",
+    }));
+
+    return { items };
+  });
+
+const UpdateUserInput = z.object({
+  userId: z.string().uuid(),
+  displayName: z.string().trim().min(1).max(128).optional(),
+  role: RoleSlug.optional(),
+  status: z.enum(["active", "disabled"]).optional(),
+});
+
+export const updateAppUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d) => UpdateUserInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireRole(ctx, ["owner", "admin"]);
+    await assertSameTenant(ctx.tenantId, data.userId);
+
+    // 1. Update role in tenant_members if provided
+    if (data.role) {
+      const { error: tmErr } = await supabaseAdmin
+        .from("tenant_members")
+        .upsert(
+          {
+            tenant_id: ctx.tenantId,
+            user_id: data.userId,
+            role: data.role as TenantRole,
+          },
+          { onConflict: "tenant_id,user_id" },
+        );
+      if (tmErr) throw new Error(tmErr.message);
+    }
+
+    // 2. Update display_name or status in app_users if provided
+    const updates: Record<string, any> = {};
+    if (data.displayName !== undefined) updates.display_name = data.displayName;
+    if (data.status !== undefined) updates.status = data.status;
+
+    if (Object.keys(updates).length > 0) {
+      const { error: profErr } = await supabaseAdmin
+        .from("app_users")
+        .update(updates)
+        .eq("id", data.userId)
+        .eq("tenant_id", ctx.tenantId);
+      if (profErr) throw new Error(profErr.message);
+
+      if (data.status !== undefined) {
+        try {
+          await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+            ban_duration: data.status === "disabled" ? "876000h" : "none",
+          });
+        } catch (banErr: any) {
+          console.warn("[updateAppUser] auth ban sync warning:", banErr?.message);
+        }
+      }
+    }
+
+    return { ok: true };
   });
 
 export const createAppUser = createServerFn({ method: "POST" })
@@ -276,6 +364,14 @@ export const setUserStatus = createServerFn({ method: "POST" })
       .eq("id", data.userId)
       .eq("tenant_id", ctx.tenantId);
     if (error) throw new Error(error.message);
+
+    try {
+      await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+        ban_duration: data.status === "disabled" ? "876000h" : "none",
+      });
+    } catch (banErr: any) {
+      console.warn("[setUserStatus] auth ban sync warning:", banErr?.message);
+    }
     return { ok: true };
   });
 

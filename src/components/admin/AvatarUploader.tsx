@@ -7,6 +7,7 @@ import { Upload, X } from "lucide-react";
 import { getR2BatchUploadUrls } from "@/lib/r2.functions";
 import { getR2PublicUrl } from "@/lib/r2.utils";
 import { updateUserAvatar } from "@/lib/auth.functions";
+import { useSignedR2Urls } from "@/lib/useSignedR2Urls";
 
 const MAX_DIMENSION = 512;
 
@@ -117,7 +118,8 @@ export function AvatarUploader({
     }
   }
 
-  const currentUrl = currentKey ? getR2PublicUrl(currentKey) : null;
+  const { data: signedMap } = useSignedR2Urls(currentKey ? [currentKey] : []);
+  const currentUrl = currentKey ? (signedMap?.get(currentKey) ?? getR2PublicUrl(currentKey)) : null;
 
   return (
     <div className="flex items-center gap-3">

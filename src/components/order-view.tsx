@@ -4,22 +4,28 @@ import { ORDER_STAGES, OrderStage, stageIndex, getStageLabelAr } from "@/lib/sta
 import { formatEGP } from "@/lib/pricing";
 import { ShareTrackingLink } from "@/components/share-tracking-link";
 import { buildTrackingUrl } from "@/lib/tracking-url";
+import { useSignedR2Urls } from "@/lib/useSignedR2Urls";
 
 export type OrderSummary = {
   order_number: string | null;
+  tracking_token?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;
   current_stage?: string | null;
+  expected_delivery?: string | null;
+  delivered_at?: string | null;
 };
 
 export type OrderViewData = {
   order: {
     order_number: string;
+    tracking_token?: string | null;
     customer_name?: string | null;
     customer_phone?: string | null;
     current_stage: string;
     total?: number | string | null;
     deposit?: number | string | null;
+    contract_date?: string | null;
     expected_delivery?: string | null;
     delivered_at?: string | null;
   };
@@ -35,6 +41,7 @@ export type OrderViewData = {
     photo_url: string;
     caption?: string | null;
   }>;
+  attachments?: Array<any>;
 };
 
 /**
@@ -47,7 +54,10 @@ export function OrderView({ data }: { data: OrderViewData }) {
   const { t } = useTranslation();
   const { order, logs, photos } = data;
   const idx = stageIndex(order.current_stage as OrderStage);
-  const trackingUrl = buildTrackingUrl(order.order_number);
+  const trackingUrl = buildTrackingUrl(order.tracking_token || order.order_number);
+
+  const photoUrls = (photos || []).map(p => p.photo_url);
+  const { data: signedMap } = useSignedR2Urls(photoUrls);
   return (
     <div className="space-y-6">
       <Card>
@@ -147,27 +157,30 @@ export function OrderView({ data }: { data: OrderViewData }) {
                       {getStageLabelAr(stage)} ({groups[stage].length})
                     </div>
                     <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {groups[stage].map((p: any) => (
-                        <a
-                          key={p.id}
-                          href={p.photo_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block group"
-                        >
-                          <img
-                            src={p.photo_url}
-                            alt={p.caption || ""}
-                            className="w-full aspect-square object-cover rounded-md border"
-                            loading="lazy"
-                          />
-                          {p.caption && (
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {p.caption}
-                            </div>
-                          )}
-                        </a>
-                      ))}
+                      {groups[stage].map((p: any) => {
+                        const src = signedMap?.get(p.photo_url) ?? p.photo_url;
+                        return (
+                          <a
+                            key={p.id}
+                            href={src}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="block group"
+                          >
+                            <img
+                              src={src}
+                              alt={p.caption || ""}
+                              className="w-full aspect-square object-cover rounded-md border"
+                              loading="lazy"
+                            />
+                            {p.caption && (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {p.caption}
+                              </div>
+                            )}
+                          </a>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}

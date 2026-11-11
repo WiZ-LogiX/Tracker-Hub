@@ -112,52 +112,42 @@ describe("TreeConfigurator component", () => {
   });
 });
 
-// ── Feature flag gate ──────────────────────────────────────────────────────
+// ── Configurator retirement & single workflow ──────────────────────────────
 
-describe("configurator feature flag gate", () => {
-  it("configurator.tsx imports TreeConfigurator via lazy", () => {
+describe("configurator retirement & single quotation workflow", () => {
+  it("configurator.tsx redirects to /admin/quotes/new with query params preserved", () => {
     const src = readFileSync(
       resolve("src/routes/admin/quotes/configurator.tsx"),
       "utf-8",
     );
 
-    // Must lazy-load TreeConfigurator
-    expect(src).toContain("lazy");
-    expect(src).toContain("TreeConfigurator");
-
-    // Must check feature_flags
-    expect(src).toContain("feature_flags");
-    expect(src).toContain("quotation_builder_v2");
-
-    // Must query tenants table for flags
-    expect(src).toContain('.from("tenants")');
-    expect(src).toContain("feature_flags");
+    expect(src).toContain("redirect");
+    expect(src).toContain('to: "/admin/quotes/new"');
+    expect(src).toContain("replace: true");
+    expect(src).toContain("customerId: search.customerId");
+    expect(src).toContain("opportunityId: search.opportunityId");
   });
 
-  it("configurator.tsx has conditional rendering for v2 vs legacy", () => {
+  it("configurator.tsx has retired the obsolete flat and V2 creation interfaces", () => {
     const src = readFileSync(
       resolve("src/routes/admin/quotes/configurator.tsx"),
       "utf-8",
     );
 
-    // Must have a conditional branch for useV2
-    expect(src).toContain("useV2");
-
-    // Must show legacy configurator when flag is off
-    expect(src).toContain("Flag OFF");
-
-    // Must render TreeConfigurator when flag is on
-    expect(src).toContain("<TreeConfigurator");
+    // Old creation configurators must no longer exist in configurator.tsx
+    expect(src).not.toContain("ConfiguratorBuilder");
+    expect(src).not.toContain("V2Configurator");
+    expect(src).not.toContain("TreeConfigurator");
   });
 
-  it("configurator.tsx shows loading skeleton while flag loads", () => {
+  it("commercial quote builder /admin/quotes/new is the authoritative quotation workflow", () => {
     const src = readFileSync(
-      resolve("src/routes/admin/quotes/configurator.tsx"),
+      resolve("src/routes/admin/quotes/new.tsx"),
       "utf-8",
     );
 
-    expect(src).toContain("Skeleton");
-    expect(src).toContain("useV2 === null");
+    expect(src).toContain("saveCommercialQuote");
+    expect(src).toContain("CommercialQuoteBuilder");
   });
 });
 
@@ -308,9 +298,9 @@ describe("empty section validation", () => {
     expect(src).toContain("errorEmptySection");
   });
 
-  it("configurator route validates before saving (onValidationError)", () => {
+  it("TreeConfigurator component validates before saving (onValidationError)", () => {
     const src = readFileSync(
-      resolve("src/routes/admin/quotes/configurator.tsx"),
+      resolve("src/components/quote/TreeConfigurator.tsx"),
       "utf-8",
     );
 

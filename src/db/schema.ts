@@ -199,6 +199,8 @@ export const customers = pgTable(
   (t) => [
     index("customers_tenant_id_idx").on(t.tenantId),
     index("customers_tenant_id_created_at_idx").on(t.tenantId, t.createdAt),
+    index("customers_tenant_name_idx").on(t.tenantId, t.name),
+    index("customers_tenant_phone_idx").on(t.tenantId, t.phone),
   ],
 );
 
@@ -464,6 +466,8 @@ export const quotes = pgTable(
   (t) => [
     index("quotes_tenant_id_idx").on(t.tenantId),
     index("quotes_tenant_id_created_at_idx").on(t.tenantId, t.createdAt),
+    index("quotes_tenant_status_idx").on(t.tenantId, t.status),
+    index("quotes_tenant_customer_idx").on(t.tenantId, t.customerId),
   ],
 );
 
@@ -670,16 +674,31 @@ export const remakes = pgTable(
   "remakes",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
+    remakeNumber: text("remake_number").notNull(),
     orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    qcInspectionId: uuid("qc_inspection_id").references(() => qcInspections.id, { onDelete: "set null" }),
+    componentId: uuid("component_id").references(() => components.id, { onDelete: "set null" }),
+    type: text("type").notNull().default("qc_failure"),
+    severity: text("severity").notNull().default("medium"),
+    status: text("status").notNull().default("reported"),
     reason: text("reason").notNull(),
-    status: text("status").notNull().default("open"),
+    defectDescription: text("defect_description"),
+    resolution: text("resolution"),
+    assignedTo: uuid("assigned_to"),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     createdBy: uuid("created_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     index("remakes_tenant_id_idx").on(t.tenantId),
-    index("remakes_tenant_id_created_at_idx").on(t.tenantId, t.createdAt),
+    index("remakes_tenant_status_idx").on(t.tenantId, t.status),
+    index("remakes_tenant_order_idx").on(t.tenantId, t.orderId),
+    index("remakes_tenant_customer_idx").on(t.tenantId, t.customerId),
+    uniqueIndex("remakes_tenant_number_idx").on(t.tenantId, t.remakeNumber),
   ],
 );
 
@@ -935,6 +954,9 @@ export const sections = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     quotationProductId: uuid("quotation_product_id").notNull().references(() => quotationProducts.id, { onDelete: "cascade" }),
     label: text("label"),
+    materialId: uuid("material_id").references(() => catalogMaterials.id, { onDelete: "set null" }),
+    finishId: uuid("finish_id").references(() => catalogFinishes.id, { onDelete: "set null" }),
+    veneerId: uuid("veneer_id").references(() => catalogVeneers.id, { onDelete: "set null" }),
     position: integer("position").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -947,6 +969,12 @@ export const sections = pgTable(
   ],
 );
 
+export const dimensionUnitEnum = pgEnum("dimension_unit", [
+  "mm",
+  "m",
+  "m2",
+]);
+
 export const units = pgTable(
   "units",
   {
@@ -956,6 +984,8 @@ export const units = pgTable(
     widthMm: integer("width_mm").notNull().default(600),
     heightMm: integer("height_mm").notNull().default(720),
     depthMm: integer("depth_mm").notNull().default(600),
+    lengthMm: integer("length_mm").notNull().default(0),
+    dimensionUnit: dimensionUnitEnum("dimension_unit").notNull().default("mm"),
     qty: integer("qty").notNull().default(1),
     overrideFactorKeys: jsonb("override_factor_keys").notNull().default({}),
     computedUnitCost: numeric("computed_unit_cost", { precision: 14, scale: 2 }).notNull().default("0"),
@@ -983,17 +1013,22 @@ export const componentKindEnum = pgEnum("component_kind", [
   "accessory",
   "manufacturing",
   "edge_band",
+  "veneer",
+  "finish",
 ]);
 
 export const components = pgTable(
   "components",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    unitId: uuid("unit_id").notNull().references(() => units.id, { onDelete: "cascade" }),
+    unitId: uuid("unit_id").references(() => units.id, { onDelete: "cascade" }),
+    sectionId: uuid("section_id").references(() => sections.id, { onDelete: "cascade" }),
     kind: componentKindEnum("kind").notNull(),
     catalogId: uuid("catalog_id"),
     qty: numeric("qty", { precision: 10, scale: 3 }).notNull().default("1"),
     unitOfMeasure: text("unit_of_measure").notNull().default("pcs"),
+    areaFunctionKey: text("area_function_key"),
+    multiplicationMode: text("multiplication_mode").notNull().default("one_time"),
     computedAmount: numeric("computed_amount", { precision: 14, scale: 2 }).notNull().default("0"),
     snapshotAmount: numeric("snapshot_amount", { precision: 14, scale: 2 }).notNull().default("0"),
     position: integer("position").notNull().default(0),
@@ -1004,6 +1039,7 @@ export const components = pgTable(
   (t) => [
     index("components_tenant_id_idx").on(t.tenantId),
     index("components_unit_id_idx").on(t.unitId),
+    index("components_section_id_idx").on(t.sectionId),
     index("components_tenant_id_created_at_idx").on(t.tenantId, t.createdAt),
   ],
 );
@@ -1195,6 +1231,19 @@ export const catalogVeneers = pgTable("catalog_veneers", {
   check("catalog_veneers_price_per_m2_positive", sql`${t.pricePerM2} >= 0`),
 ]);
 
+export const catalogEdgeBands = pgTable("catalog_edge_bands", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
+  code: text("code").notNull(),
+  pricePerUnit: numeric("price_per_unit", { precision: 14, scale: 2 }).notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("catalog_edge_bands_tenant_id_idx").on(t.tenantId),
+  check("catalog_edge_bands_price_per_unit_positive", sql`${t.pricePerUnit} >= 0`),
+]);
+
 export const catalogHardware = pgTable("catalog_hardware", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
@@ -1348,3 +1397,547 @@ export type FeesCredit = typeof feesCredits.$inferSelect;
 export type NewFeesCredit = typeof feesCredits.$inferInsert;
 export type PricingShadowRun = typeof pricingShadowRuns.$inferSelect;
 export type NewPricingShadowRun = typeof pricingShadowRuns.$inferInsert;
+export type Remake = typeof remakes.$inferSelect;
+export type NewRemake = typeof remakes.$inferInsert;
+
+// ── Tasks & Operations Management (Vertical Slice) ────────────────────────
+
+export const taskStatusEnum = pgEnum("task_status", [
+  "not_started",
+  "in_progress",
+  "waiting_review",
+  "completed",
+  "cancelled",
+]);
+
+export const taskPriorityEnum = pgEnum("task_priority", [
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
+export const tenantCounters = pgTable(
+  "tenant_counters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    counterType: text("counter_type").notNull(),
+    lastValue: integer("last_value").notNull().default(1000),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("tenant_counters_unique_idx").on(t.tenantId, t.counterType),
+  ],
+);
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    taskCode: text("task_code").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    status: taskStatusEnum("status").notNull().default("not_started"),
+    priority: taskPriorityEnum("priority").notNull().default("medium"),
+    category: text("category").notNull().default("general"),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdBy: uuid("created_by").notNull(),
+    customerId: uuid("customer_id").references(() => customers.id, {
+      onDelete: "set null",
+    }),
+    quoteId: uuid("quote_id").references(() => quotes.id, {
+      onDelete: "set null",
+    }),
+    orderId: uuid("order_id").references(() => orders.id, {
+      onDelete: "set null",
+    }),
+    productionStage: text("production_stage"),
+    workOrderId: uuid("work_order_id"),
+    remakeId: uuid("remake_id"),
+    deliveryId: uuid("delivery_id"),
+    opportunityId: uuid("opportunity_id"),
+    reviewNotes: text("review_notes"),
+    reviewedBy: uuid("reviewed_by"),
+    returnedAt: timestamp("returned_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("tasks_tenant_id_idx").on(t.tenantId),
+    index("tasks_tenant_status_idx").on(t.tenantId, t.status),
+    index("tasks_tenant_order_idx").on(t.tenantId, t.orderId),
+    index("tasks_tenant_quote_idx").on(t.tenantId, t.quoteId),
+    index("tasks_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("tasks_tenant_opportunity_idx").on(t.tenantId, t.opportunityId),
+    index("tasks_tenant_due_date_idx").on(t.tenantId, t.dueDate),
+    uniqueIndex("tasks_tenant_code_idx").on(t.tenantId, t.taskCode),
+  ],
+);
+
+export const taskAssignees = pgTable(
+  "task_assignees",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
+    assignedAt: timestamp("assigned_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("task_assignees_tenant_task_idx").on(t.tenantId, t.taskId),
+    index("task_assignees_tenant_user_idx").on(t.tenantId, t.userId),
+    uniqueIndex("task_assignees_unique_idx").on(t.taskId, t.userId),
+  ],
+);
+
+export type TenantCounter = typeof tenantCounters.$inferSelect;
+export type NewTenantCounter = typeof tenantCounters.$inferInsert;
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
+export type TaskAssignee = typeof taskAssignees.$inferSelect;
+export type NewTaskAssignee = typeof taskAssignees.$inferInsert;
+
+// ── Invoice Payments Ledger ────────────────────────────────────────────────
+
+export const invoicePayments = pgTable(
+  "invoice_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    paymentNumber: text("payment_number").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    paymentMethod: text("payment_method").notNull().default("bank_transfer"),
+    referenceNumber: text("reference_number"),
+    notes: text("notes"),
+    recordedBy: uuid("recorded_by").notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("invoice_payments_tenant_id_idx").on(t.tenantId),
+    index("invoice_payments_tenant_invoice_idx").on(t.tenantId, t.invoiceId),
+    index("invoice_payments_paid_at_idx").on(t.tenantId, t.paidAt),
+    uniqueIndex("invoice_payments_unique_number_idx").on(
+      t.tenantId,
+      t.paymentNumber,
+    ),
+  ],
+);
+
+export type InvoicePayment = typeof invoicePayments.$inferSelect;
+export type NewInvoicePayment = typeof invoicePayments.$inferInsert;
+
+// ── Inventory & Stock Allocation ──────────────────────────────────────────
+
+export const stockItems = pgTable(
+  "stock_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    catalogItemId: uuid("catalog_item_id").notNull(),
+    itemType: text("item_type").notNull(), // 'material' | 'hardware'
+    sku: text("sku").notNull(),
+    name: text("name").notNull(),
+    unit: text("unit").notNull(), // 'sheet' | 'pcs' | 'm2' | 'set' | 'pair'
+    physicalQuantity: numeric("physical_quantity", { precision: 12, scale: 3 })
+      .notNull()
+      .default("0"),
+    reservedQuantity: numeric("reserved_quantity", { precision: 12, scale: 3 })
+      .notNull()
+      .default("0"),
+    minReorderLevel: numeric("min_reorder_level", { precision: 12, scale: 3 })
+      .notNull()
+      .default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("stock_items_tenant_id_idx").on(t.tenantId),
+    index("stock_items_tenant_catalog_idx").on(t.tenantId, t.catalogItemId),
+    index("stock_items_tenant_sku_idx").on(t.tenantId, t.sku),
+    index("stock_items_tenant_type_idx").on(t.tenantId, t.itemType),
+    uniqueIndex("stock_items_tenant_catalog_unique_idx").on(
+      t.tenantId,
+      t.catalogItemId,
+      t.itemType,
+    ),
+  ],
+);
+
+export const stockReservations = pgTable(
+  "stock_reservations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    stockItemId: uuid("stock_item_id")
+      .notNull()
+      .references(() => stockItems.id, { onDelete: "cascade" }),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    remakeId: uuid("remake_id").references(() => remakes.id, {
+      onDelete: "set null",
+    }),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
+    unit: text("unit").notNull(),
+    status: text("status").notNull().default("reserved"), // 'reserved' | 'consumed' | 'released' | 'cancelled'
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("stock_reservations_tenant_id_idx").on(t.tenantId),
+    index("stock_reservations_tenant_order_idx").on(t.tenantId, t.orderId),
+    index("stock_reservations_tenant_item_idx").on(t.tenantId, t.stockItemId),
+    index("stock_reservations_tenant_status_idx").on(t.tenantId, t.status),
+  ],
+);
+
+export const stockAdjustments = pgTable(
+  "stock_adjustments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    stockItemId: uuid("stock_item_id")
+      .notNull()
+      .references(() => stockItems.id, { onDelete: "cascade" }),
+    quantityDelta: numeric("quantity_delta", { precision: 12, scale: 3 }).notNull(),
+    previousQuantity: numeric("previous_quantity", { precision: 12, scale: 3 }).notNull(),
+    newQuantity: numeric("new_quantity", { precision: 12, scale: 3 }).notNull(),
+    reason: text("reason").notNull(),
+    notes: text("notes"),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("stock_adjustments_tenant_id_idx").on(t.tenantId),
+    index("stock_adjustments_tenant_item_idx").on(t.tenantId, t.stockItemId),
+    index("stock_adjustments_tenant_created_idx").on(t.tenantId, t.createdAt),
+  ],
+);
+
+export type StockItemDb = typeof stockItems.$inferSelect;
+export type NewStockItemDb = typeof stockItems.$inferInsert;
+export type StockReservationDb = typeof stockReservations.$inferSelect;
+export type NewStockReservationDb = typeof stockReservations.$inferInsert;
+export type StockAdjustmentDb = typeof stockAdjustments.$inferSelect;
+export type NewStockAdjustmentDb = typeof stockAdjustments.$inferInsert;
+
+// ── Production Work Orders ────────────────────────────────────────────────
+
+export const productionWorkOrders = pgTable(
+  "production_work_orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    workOrderNumber: text("work_order_number").notNull(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    remakeId: uuid("remake_id").references(() => remakes.id, {
+      onDelete: "set null",
+    }),
+    status: text("status").notNull().default("ready"), // 'draft' | 'ready' | 'in_progress' | 'qc_pending' | 'completed' | 'cancelled'
+    priority: text("priority").notNull().default("medium"), // 'low' | 'medium' | 'high' | 'critical'
+    notes: text("notes"),
+    scheduledDate: date("scheduled_date"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("production_work_orders_tenant_id_idx").on(t.tenantId),
+    index("production_work_orders_tenant_order_idx").on(t.tenantId, t.orderId),
+    index("production_work_orders_tenant_status_idx").on(t.tenantId, t.status),
+    uniqueIndex("production_work_orders_unique_number_idx").on(
+      t.tenantId,
+      t.workOrderNumber,
+    ),
+  ],
+);
+
+export type ProductionWorkOrderDb = typeof productionWorkOrders.$inferSelect;
+export type NewProductionWorkOrderDb = typeof productionWorkOrders.$inferInsert;
+
+// ── Delivery, Installation & Customer Handover ───────────────────────────
+
+export const deliveryHandovers = pgTable(
+  "delivery_handovers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    deliveryNumber: text("delivery_number").notNull(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    status: text("status").notNull().default("ready_for_dispatch"), // 'ready_for_dispatch' | 'dispatched' | 'out_for_delivery' | 'delivered' | 'installation_pending' | 'installed' | 'handover_pending' | 'completed' | 'delivery_failed' | 'cancelled'
+    deliveryAddress: text("delivery_address").notNull(),
+    recipientName: text("recipient_name"),
+    recipientPhone: text("recipient_phone"),
+    scheduledDate: date("scheduled_date"),
+    dispatchedAt: timestamp("dispatched_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    installationRequired: boolean("installation_required").notNull().default(false),
+    installedAt: timestamp("installed_at", { withTimezone: true }),
+    installerName: text("installer_name"),
+    installerNotes: text("installer_notes"),
+    handedOverAt: timestamp("handed_over_at", { withTimezone: true }),
+    signerName: text("signer_name"),
+    customerNotes: text("customer_notes"),
+    handoverNotes: text("handover_notes"),
+    signatureDataUrl: text("signature_data_url"),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("delivery_handovers_tenant_id_idx").on(t.tenantId),
+    index("delivery_handovers_tenant_order_idx").on(t.tenantId, t.orderId),
+    index("delivery_handovers_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("delivery_handovers_tenant_status_idx").on(t.tenantId, t.status),
+    uniqueIndex("delivery_handovers_unique_number_idx").on(
+      t.tenantId,
+      t.deliveryNumber,
+    ),
+  ],
+);
+
+export type DeliveryHandoverDb = typeof deliveryHandovers.$inferSelect;
+export type NewDeliveryHandoverDb = typeof deliveryHandovers.$inferInsert;
+
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    leadNumber: text("lead_number").notNull(),
+    name: text("name").notNull(),
+    phone: text("phone"),
+    email: text("email"),
+    location: text("location"),
+    source: text("source").notNull().default("other"),
+    interestedProduct: text("interested_product"),
+    estimatedBudget: numeric("estimated_budget", { precision: 14, scale: 2 }),
+    notes: text("notes"),
+    assignedSalesperson: uuid("assigned_salesperson").references(
+      () => appUsers.id,
+      { onDelete: "set null" },
+    ),
+    status: text("status").notNull().default("new"),
+    nextAction: text("next_action"),
+    nextActionDate: timestamp("next_action_date", { withTimezone: true }),
+    convertedCustomerId: uuid("converted_customer_id").references(
+      () => customers.id,
+      { onDelete: "set null" },
+    ),
+    convertedOpportunityId: uuid("converted_opportunity_id"),
+    convertedAt: timestamp("converted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("leads_tenant_id_idx").on(t.tenantId),
+    index("leads_tenant_status_idx").on(t.tenantId, t.status),
+    index("leads_tenant_salesperson_idx").on(
+      t.tenantId,
+      t.assignedSalesperson,
+    ),
+    index("leads_tenant_phone_idx").on(t.tenantId, t.phone),
+    index("leads_tenant_email_idx").on(t.tenantId, t.email),
+    uniqueIndex("leads_unique_number_idx").on(t.tenantId, t.leadNumber),
+  ],
+);
+
+export const opportunities = pgTable(
+  "opportunities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    opportunityNumber: text("opportunity_number").notNull(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    leadId: uuid("lead_id").references(() => leads.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    projectType: text("project_type").notNull().default("residential"),
+    value: numeric("value", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    salesOwner: uuid("sales_owner").references(() => appUsers.id, {
+      onDelete: "set null",
+    }),
+    stage: text("stage").notNull().default("new_lead"),
+    source: text("source"),
+    expectedCloseDate: date("expected_close_date"),
+    nextAction: text("next_action"),
+    nextActionDate: timestamp("next_action_date", { withTimezone: true }),
+    siteAddress: text("site_address"),
+    notes: text("notes"),
+    status: text("status").notNull().default("open"),
+    lostReason: text("lost_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("opportunities_tenant_id_idx").on(t.tenantId),
+    index("opportunities_tenant_stage_idx").on(t.tenantId, t.stage),
+    index("opportunities_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("opportunities_tenant_sales_owner_idx").on(
+      t.tenantId,
+      t.salesOwner,
+    ),
+    index("opportunities_tenant_status_idx").on(t.tenantId, t.status),
+    uniqueIndex("opportunities_unique_number_idx").on(
+      t.tenantId,
+      t.opportunityNumber,
+    ),
+  ],
+);
+
+export type LeadDb = typeof leads.$inferSelect;
+export type NewLeadDb = typeof leads.$inferInsert;
+export type OpportunityDb = typeof opportunities.$inferSelect;
+export type NewOpportunityDb = typeof opportunities.$inferInsert;
+
+// ── After-Sales CRM: Service Cases & Warranty ──────────────────────────────
+
+export const serviceCases = pgTable(
+  "service_cases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    caseNumber: text("case_number").notNull(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id").references(() => opportunities.id, {
+      onDelete: "set null",
+    }),
+    orderId: uuid("order_id").references(() => orders.id, {
+      onDelete: "set null",
+    }),
+    remakeId: uuid("remake_id").references(() => remakes.id, {
+      onDelete: "set null",
+    }),
+    deliveryId: uuid("delivery_id").references(() => deliveryHandovers.id, {
+      onDelete: "set null",
+    }),
+    taskId: uuid("task_id").references(() => tasks.id, {
+      onDelete: "set null",
+    }),
+    type: text("type").notNull().default("complaint"), // warranty, complaint, service, maintenance, other
+    priority: text("priority").notNull().default("medium"), // low, medium, high, critical
+    status: text("status").notNull().default("new"), // new, under_review, assigned, in_progress, waiting_customer, resolved, closed
+    title: text("title").notNull(),
+    description: text("description"),
+    assignedTo: uuid("assigned_to").references(() => appUsers.id, {
+      onDelete: "set null",
+    }),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    resolution: text("resolution"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("service_cases_tenant_id_idx").on(t.tenantId),
+    index("service_cases_tenant_status_idx").on(t.tenantId, t.status),
+    index("service_cases_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("service_cases_tenant_order_idx").on(t.tenantId, t.orderId),
+    uniqueIndex("service_cases_unique_number_idx").on(
+      t.tenantId,
+      t.caseNumber,
+    ),
+  ],
+);
+
+export type ServiceCaseDb = typeof serviceCases.$inferSelect;
+export type NewServiceCaseDb = typeof serviceCases.$inferInsert;
+
+
+
+
+
+
+

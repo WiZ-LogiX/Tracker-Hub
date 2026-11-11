@@ -44,17 +44,24 @@ function bucket(): string {
 }
 
 function extractKey(url: string): string | null {
-  // Accept either a public-cdn URL or a stored R2 url. Pull the key tail.
+  if (!url) return null;
+
+  // Match any *.r2.dev public URL pattern
+  const r2DevMatch = url.match(/https?:\/\/[^/]+\.r2\.dev\/(.+)/);
+  if (r2DevMatch) return decodeURIComponent(r2DevMatch[1]);
+
+  // Accept configured public-cdn URL
   const publicBase = process.env.R2_PUBLIC_URL?.replace(/\/$/, "");
   if (publicBase && url.startsWith(`${publicBase}/`)) {
-    return url.slice(publicBase.length + 1);
+    return decodeURIComponent(url.slice(publicBase.length + 1));
   }
-  const r2Base = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket()}`;
-  if (url.startsWith(`${r2Base}/`)) {
-    return url.slice(r2Base.length + 1);
-  }
-  // Might be a bare key already.
-  if (!url.startsWith("http")) return url;
+
+  // Match direct S3 endpoint pattern
+  const s3Match = url.match(/https?:\/\/[^/]+\.r2\.cloudflarestorage\.com\/[^/]+\/(.+)/);
+  if (s3Match) return decodeURIComponent(s3Match[1]);
+
+  // Might be a bare key already (e.g. tenantId/...)
+  if (!url.startsWith("http")) return url.replace(/^\/+/, "");
   return null;
 }
 

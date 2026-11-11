@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/useAuth";
 import { sendNotification } from "@/lib/notifications.functions";
 import { InternalNotes } from "@/components/admin/InternalNotes";
+import { PhotoGrid } from "@/components/photo-grid";
 import { PhotoUploader } from "@/components/photo-uploader";
 import { AttachmentList } from "@/components/attachment-list";
 import { AttachmentUploader } from "@/components/attachment-uploader";
@@ -26,6 +27,13 @@ import { ShareTrackingLink } from "@/components/share-tracking-link";
 import { buildTrackingUrl } from "@/lib/tracking-url";
 import { sendTrackingWhatsapp } from "@/lib/whatsapp-share.functions";
 import { OrderView, type OrderSummary, type OrderViewData } from "@/components/order-view";
+import { OrderTasksWidget } from "@/components/admin/OrderTasksWidget";
+import { OrderFinancialWidget } from "@/components/admin/OrderFinancialWidget";
+import { OrderRemakesWidget } from "@/components/admin/OrderRemakesWidget";
+import { OrderMaterialAllocationWidget } from "@/components/admin/OrderMaterialAllocationWidget";
+import { OrderWorkOrdersWidget } from "@/components/admin/OrderWorkOrdersWidget";
+import { OrderDeliveryWidget } from "@/components/admin/OrderDeliveryWidget";
+import { createRemake } from "@/lib/remakes.functions";
 import {
   uploadProductionPhoto,
   deleteProductionPhoto,
@@ -62,7 +70,7 @@ function OrdersPage() {
   const updateAssignmentFn = useServerFn(updateProductionAssignment);
   const deleteAssignmentFn = useServerFn(deleteProductionAssignment);
   const recordQCFn = useServerFn(recordQCInspection);
-  const recordRemakeFn = useServerFn(recordRemake);
+  const createRemakeFn = useServerFn(createRemake);
   const deletePhotoFn = useServerFn(deleteProductionPhoto);
   const fetchPublicOrder = useServerFn(getPublicOrder);
   const fetchByRef = useServerFn(getPublicTrackingByRef);
@@ -306,12 +314,16 @@ function OrdersPage() {
         },
       });
       if (!passed) {
-        await recordRemakeFn({
+        await createRemakeFn({
           data: {
             orderId: selected.id,
-            reason: qcNotes || `QC failed: ${stage}`,
-            status: "open",
-            createdBy: user?.id ?? null,
+            customerId: selected.customer_id || null,
+            type: "qc_failure",
+            severity: "high",
+            reason: qcNotes || `QC failed at stage: ${stage}`,
+            defectDescription: qcNotes || `Quality check rejected at stage ${stage}`,
+            initialStatus: "reported",
+            createLinkedTask: true,
           },
         });
         toast.warning(t("orders.qcFail"));
@@ -472,7 +484,7 @@ function OrdersPage() {
                       >
                         <button
                           type="button"
-                          onClick={() => m.order_number && openTrackOrderFromList(m.order_number)}
+                          onClick={() => (m.tracking_token || m.order_number) && openTrackOrderFromList(m.tracking_token || m.order_number!)}
                           className="w-full text-right"
                         >
                           <div className="flex items-center justify-between text-sm">
@@ -489,17 +501,17 @@ function OrdersPage() {
                         </button>
                         <div className="flex items-center justify-between gap-2 pt-1 border-t">
                           <a
-                            href={buildTrackingUrl(m.order_number)}
+                            href={buildTrackingUrl(m.tracking_token || m.order_number)}
                             target="_blank"
                             rel="noreferrer"
                             className="text-[10px] font-mono text-muted-foreground truncate hover:text-secondary flex-1 text-left"
-                            title={buildTrackingUrl(m.order_number)}
+                            title={buildTrackingUrl(m.tracking_token || m.order_number)}
                             dir="ltr"
                           >
-                            {buildTrackingUrl(m.order_number)}
+                            {buildTrackingUrl(m.tracking_token || m.order_number)}
                           </a>
                           <ShareTrackingLink
-                            url={buildTrackingUrl(m.order_number)}
+                            url={buildTrackingUrl(m.tracking_token || m.order_number)}
                             ref={m.order_number}
                             recipientPhone={m.customer_phone ?? null}
                             customerName={m.customer_name ?? null}
@@ -638,6 +650,7 @@ function OrdersPage() {
                           t={t}
                           refreshAttach={refreshAttach}
                           triggerRefreshAttach={() => setRefreshAttach((n) => n + 1)}
+                          onRefreshOrders={load}
                         />
                       )}
                     </DialogContent>
@@ -702,7 +715,9 @@ function OrderDetail({
   t,
   refreshAttach,
   triggerRefreshAttach,
+  onRefreshOrders,
 }: any) {
+  const { currentRole } = useAuth();
   const idx = stageIndex(o.current_stage);
   const next = nextStage(o.current_stage);
   const gateOk =
@@ -865,47 +880,14 @@ function OrderDetail({
         <div className="text-xs text-muted-foreground">
           {t("orders.productionPhotos")} ({photos?.length || 0})
         </div>
-        {photos?.length > 0 &&
-          (() => {
-            const groups: Record<string, any[]> = {};
-            for (const p of photos) {
-              const k = p.stage || "unknown";
-              (groups[k] ||= []).push(p);
-            }
-            const order = ORDER_STAGES.filter(s => groups[s]);
-            return (
-              <div className="space-y-3 max-h-72 overflow-auto pr-1">
-                {order.map(stage => (
-                  <div key={stage} className="space-y-1">
-                    <div className="text-xs font-medium text-gold">
-                      {STAGE_LABEL_AR[stage]} ({groups[stage].length})
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {groups[stage].map((p: any) => (
-                        <div key={p.id} className="relative group">
-                          <img
-                            src={p.photo_url}
-                            className="w-full aspect-square object-cover rounded border"
-                            alt=""
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (confirm(t("common.confirmDelete"))) onDeletePhoto(p);
-                            }}
-                            className="absolute top-1 left-1 bg-destructive text-destructive-foreground text-[10px] rounded px-1.5 py-0.5 opacity-90 hover:opacity-100 shadow"
-                            aria-label={t("orders.delete")}
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
+        <div className="max-h-72 overflow-auto pr-1">
+          <PhotoGrid
+            photos={photos || []}
+            onDelete={(p) => {
+              if (confirm(t("common.confirmDelete"))) onDeletePhoto(p);
+            }}
+          />
+        </div>
         <PhotoUploader
           entityType="production-photos"
           entityId={o.id}
@@ -941,7 +923,7 @@ function OrderDetail({
           {t("orders.shareTrackingLink") ?? t("orders.sendTrackingLink")}
         </div>
         <ShareTrackingLink
-          url={buildTrackingUrl(o.order_number)}
+          url={buildTrackingUrl(o.tracking_token || o.order_number)}
           ref={o.order_number}
           recipientPhone={o.customers?.phone ?? null}
           customerName={o.customers?.name ?? null}
@@ -953,6 +935,44 @@ function OrderDetail({
           {t("orders.shareTrackingLinkHint")}
         </p>
       </div>
+
+      <OrderFinancialWidget
+        orderId={o.id}
+        invoiceId={o.invoice_id}
+        onPaymentRecorded={onRefreshOrders}
+      />
+
+      <OrderTasksWidget
+        orderId={o.id}
+        orderNumber={o.order_number}
+        customerId={o.customer_id || undefined}
+      />
+
+      <OrderMaterialAllocationWidget
+        orderId={o.id}
+        userRole={currentRole || undefined}
+        onMaterialsUpdated={onRefreshOrders}
+      />
+
+      <OrderWorkOrdersWidget
+        orderId={o.id}
+        orderNumber={o.order_number}
+        userRole={currentRole || undefined}
+      />
+
+      <OrderDeliveryWidget
+        orderId={o.id}
+        orderNumber={o.order_number}
+        customerName={o.customers?.name}
+        customerPhone={o.customers?.phone}
+        userRole={currentRole || undefined}
+      />
+
+      <OrderRemakesWidget
+        orderId={o.id}
+        customerId={o.customer_id}
+        userRole={currentRole || undefined}
+      />
 
       {next && (
         <div className="space-y-2 pt-2 border-t">

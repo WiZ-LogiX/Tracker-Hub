@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { getDownloadUrl, getPublicUrl } from "@/lib/r2.server";
 import { getR2PublicUrl } from "@/lib/r2.utils";
 
-const EntityType = z.enum(["order", "quote", "invoice", "customer"]);
+const EntityType = z.enum(["order", "quote", "invoice", "customer", "task", "opportunity", "project", "service_case"]);
 
 const ListInput = z.object({
   entityType: EntityType,
@@ -29,10 +29,10 @@ const SignInput = z.object({ id: z.string().uuid() });
 
 const SignedUrlTtl = 60 * 25;
 
-async function resolveTenantId(userId: string): Promise<string> {
+async function resolveTenantAndRole(userId: string): Promise<{ tenantId: string; role: string }> {
   const { data, error } = await supabaseAdmin
     .from("tenant_members")
-    .select("tenant_id")
+    .select("tenant_id, role")
     .eq("user_id", userId)
     .order("created_at", { ascending: true })
     .limit(1)
@@ -41,7 +41,30 @@ async function resolveTenantId(userId: string): Promise<string> {
   if (!data?.tenant_id) {
     throw new Error("Forbidden: no tenant membership for caller");
   }
-  return data.tenant_id;
+
+  const { data: profile } = await supabaseAdmin
+    .from("app_users")
+    .select("status")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profile && profile.status === "disabled") {
+    throw new Error("Forbidden: User account is disabled");
+  }
+
+  return { tenantId: data.tenant_id, role: data.role || "viewer" };
+}
+
+async function verifyWorkerTaskAssignment(taskId: string, userId: string, tenantId: string): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("task_assignees")
+    .select("id")
+    .eq("task_id", taskId)
+    .eq("user_id", userId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error("Forbidden: You can only access attachments for tasks assigned to you");
+  }
 }
 
 export interface AttachmentRow {
@@ -57,6 +80,7 @@ export interface AttachmentRow {
   caption: string | null;
   isPublic: boolean;
   createdAt: string;
+  downloadUrl?: string;
 }
 
 function shape(r: any): AttachmentRow {
@@ -85,7 +109,14 @@ export const listAttachments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => ListInput.parse(d))
   .handler(async ({ data, context }) => {
-    const tenantId = await resolveTenantId(context.userId);
+    const { tenantId, role } = await resolveTenantAndRole(context.userId);
+    if (role === "worker") {
+      if (data.entityType !== "task") {
+        throw new Error("Forbidden: Task Workers can only access task attachments");
+      }
+      await verifyWorkerTaskAssignment(data.entityId, context.userId, tenantId);
+    }
+
     const { data: rows, error } = await supabaseAdmin
       .from("attachments")
       .select("*")
@@ -94,7 +125,19 @@ export const listAttachments = createServerFn({ method: "POST" })
       .eq("entity_id", data.entityId)
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return { items: (rows ?? []).map(shape) };
+
+    const items = await Promise.all(
+      (rows ?? []).map(async (r) => {
+        const item = shape(r);
+        try {
+          item.downloadUrl = await getDownloadUrl(r.storage_key, SignedUrlTtl);
+        } catch {
+          // graceful fallback
+        }
+        return item;
+      }),
+    );
+    return { items };
   });
 
 /**
@@ -106,7 +149,16 @@ export const registerAttachment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => RegisterInput.parse(d))
   .handler(async ({ data, context }) => {
-    const tenantId = await resolveTenantId(context.userId);
+    const { tenantId, role } = await resolveTenantAndRole(context.userId);
+    if (role === "worker") {
+      if (data.entityType !== "task") {
+        throw new Error("Forbidden: Task Workers can only upload task attachments");
+      }
+      if (data.isPublic) {
+        throw new Error("Forbidden: Task Workers cannot set customer visibility");
+      }
+      await verifyWorkerTaskAssignment(data.entityId, context.userId, tenantId);
+    }
 
     const { data: row, error } = await supabaseAdmin
       .from("attachments")
@@ -133,15 +185,25 @@ export const deleteAttachment = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => DeleteInput.parse(d))
   .handler(async ({ data, context }) => {
-    const tenantId = await resolveTenantId(context.userId);
+    const { tenantId, role } = await resolveTenantAndRole(context.userId);
     const { data: row, error } = await supabaseAdmin
       .from("attachments")
-      .select("id, tenant_id, storage_key")
+      .select("id, tenant_id, storage_key, entity_type, entity_id, uploaded_by")
       .eq("id", data.id)
       .eq("tenant_id", tenantId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Not found");
+
+    if (role === "worker") {
+      if (row.entity_type !== "task") {
+        throw new Error("Forbidden: Task Workers can only delete task attachments");
+      }
+      if (row.uploaded_by !== context.userId) {
+        throw new Error("Forbidden: Task Workers can only delete attachments uploaded by themselves");
+      }
+      await verifyWorkerTaskAssignment(row.entity_id, context.userId, tenantId);
+    }
 
     const { error: delErr } = await supabaseAdmin
       .from("attachments")
@@ -170,21 +232,85 @@ export const getAttachmentUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => SignInput.parse(d))
   .handler(async ({ data, context }) => {
-    const tenantId = await resolveTenantId(context.userId);
+    const { tenantId, role } = await resolveTenantAndRole(context.userId);
     const { data: row, error } = await supabaseAdmin
       .from("attachments")
-      .select("id, storage_key, is_public, tenant_id")
+      .select("id, storage_key, is_public, tenant_id, entity_type, entity_id")
       .eq("id", data.id)
       .eq("tenant_id", tenantId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Not found");
 
-    if (row.is_public) {
-      return { url: getR2PublicUrl(row.storage_key) };
+    if (role === "worker") {
+      if (row.entity_type !== "task") {
+        throw new Error("Forbidden: Task Workers can only access task attachments");
+      }
+      await verifyWorkerTaskAssignment(row.entity_id, context.userId, tenantId);
     }
+
     const url = await getDownloadUrl(row.storage_key, SignedUrlTtl);
     return { url, expiresInSec: SignedUrlTtl };
+  });
+
+const UpdateVisibilityInput = z.object({
+  id: z.string().uuid(),
+  isPublic: z.boolean(),
+});
+
+/**
+ * Promote or demote an attachment's customer visibility status.
+ * Restricted to authenticated staff with verified tenant membership.
+ * Defaults all files to internal (is_public=false); only staff can set true.
+ */
+export const updateAttachmentVisibility = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => UpdateVisibilityInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { tenantId, role } = await resolveTenantAndRole(context.userId);
+    if (role === "worker") {
+      throw new Error("Forbidden: Task Workers cannot modify customer visibility");
+    }
+
+    const { data: row, error } = await supabaseAdmin
+      .from("attachments")
+      .update({ is_public: data.isPublic })
+      .eq("id", data.id)
+      .eq("tenant_id", tenantId)
+      .select("*")
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("Attachment not found or access denied");
+
+    return { item: shape(row) };
+  });
+
+const BulkUpdateVisibilityInput = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(50),
+  isPublic: z.boolean(),
+});
+
+/**
+ * Bulk update customer visibility for multiple attachments within caller tenant.
+ */
+export const bulkUpdateAttachmentVisibility = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => BulkUpdateVisibilityInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const { tenantId, role } = await resolveTenantAndRole(context.userId);
+    if (role === "worker") {
+      throw new Error("Forbidden: Task Workers cannot modify customer visibility");
+    }
+
+    const { error } = await supabaseAdmin
+      .from("attachments")
+      .update({ is_public: data.isPublic })
+      .in("id", data.ids)
+      .eq("tenant_id", tenantId);
+
+    if (error) throw new Error(error.message);
+    return { count: data.ids.length, isPublic: data.isPublic };
   });
 
 async function fetchR2Delete(key: string) {

@@ -33,7 +33,12 @@ export type CatalogPickerKind =
 export interface CatalogPickerItem {
   id: string;
   code: string;
+  name: string;
+  kind: CatalogPickerKind;
+  pricingUnit: string;
   price: number;
+  brand?: string | null;
+  defaultWastagePct?: number;
   /** Extra metadata for the pricing engine */
   extra?: Record<string, unknown>;
 }
@@ -53,16 +58,6 @@ const PRICE_FIELDS: Record<CatalogPickerKind, string> = {
   edge_band: "price_per_unit",
   veneer: "price_per_m2",
   finish: "price_per_unit",
-};
-
-const UNIT_LABELS: Record<CatalogPickerKind, string> = {
-  material: "/ m²",
-  hardware: "/ pc",
-  accessory: "/ pc",
-  manufacturing: "/ min",
-  edge_band: "/ m",
-  veneer: "/ m²",
-  finish: "/ m²",
 };
 
 export function CatalogPicker({
@@ -126,12 +121,29 @@ export function CatalogPicker({
       }
 
       const priceField = PRICE_FIELDS[kind];
-      const mapped: CatalogPickerItem[] = raw.map((r: any) => ({
-        id: r.id,
-        code: r.code,
-        price: Number(r[priceField] ?? 0),
-      }));
-      console.log(`[CatalogPicker] ${kind}: ${mapped.length} items loaded`);
+      const mapped: CatalogPickerItem[] = raw.map((r: any) => {
+        let pricingUnit = "piece";
+        if (kind === "material") pricingUnit = r.pricing_unit || "m2";
+        else if (kind === "edge_band") pricingUnit = "m";
+        else if (kind === "veneer" || kind === "finish") pricingUnit = "m2";
+        else if (kind === "manufacturing") pricingUnit = r.rate_unit || "piece";
+        else if (kind === "hardware" || kind === "accessory") {
+          const codeOrName = `${r.code || ""} ${r.label_i18n_key || ""}`.toLowerCase();
+          pricingUnit = r.pricing_unit || (codeOrName.includes("set") || codeOrName.includes("runner") ? "set" : codeOrName.includes("pair") ? "pair" : "piece");
+        }
+
+        return {
+          id: r.id,
+          code: r.code,
+          name: r.label_i18n_key || r.code,
+          kind,
+          pricingUnit,
+          price: Number(r[priceField] ?? 0),
+          brand: r.brand ?? null,
+          defaultWastagePct: Number(r.default_wastage_pct ?? 0),
+        };
+      });
+
       setItems(mapped);
     } catch (err) {
       console.error("[CatalogPicker] fetchItems failed:", err);
@@ -139,7 +151,16 @@ export function CatalogPicker({
     } finally {
       setLoading(false);
     }
-  }, [kind, fetchMaterials, fetchHardware, fetchAccessories, fetchManufacturing, fetchVeneers]);
+  }, [
+    kind,
+    fetchMaterials,
+    fetchHardware,
+    fetchAccessories,
+    fetchManufacturing,
+    fetchVeneers,
+    fetchFinishes,
+    fetchEdgeBands,
+  ]);
 
   useEffect(() => {
     if (open) {
@@ -186,14 +207,31 @@ export function CatalogPicker({
             {items.map((item) => (
               <CommandItem
                 key={item.id}
-                value={item.code}
+                value={`${item.code} ${item.name} ${item.brand ?? ""}`}
                 onSelect={() => handleSelect(item)}
-                className="flex items-center justify-between gap-4"
+                className="flex items-center justify-between gap-4 py-2 cursor-pointer"
               >
-                <span className="font-medium">{item.code}</span>
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  {formatEGP(item.price)} {UNIT_LABELS[kind]}
-                </span>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="font-medium text-sm truncate">
+                    {item.name !== item.code ? item.name : item.code}
+                  </span>
+                  <span className="text-xs text-muted-foreground font-mono">
+                    SKU: {item.code} {item.brand ? `· ${item.brand}` : ""}
+                  </span>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="font-mono text-sm font-semibold">
+                    {formatEGP(item.price)}
+                  </span>
+                  <span className="text-xs text-muted-foreground ml-1">
+                    / {item.pricingUnit}
+                  </span>
+                  {item.defaultWastagePct ? (
+                    <div className="text-[10px] text-amber-600 font-medium">
+                      +{item.defaultWastagePct}% wastage
+                    </div>
+                  ) : null}
+                </div>
               </CommandItem>
             ))}
           </CommandGroup>

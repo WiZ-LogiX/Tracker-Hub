@@ -78,12 +78,14 @@ const unitUpdateInput = z.object({
 });
 
 const componentInput = z.object({
-  unitId: z.string().uuid(),
+  unitId: z.string().uuid().optional(),
+  sectionId: z.string().uuid().optional(),
   kind: z.enum(["material", "hardware", "accessory", "manufacturing", "edge_band", "veneer", "finish"]),
   catalogId: z.string().uuid().nullable().optional(),
   qty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
   areaFunctionKey: z.string().optional(),
+  multiplicationMode: z.enum(["one_time", "per_unit"]).optional(),
   position: z.number().int().optional(),
 });
 
@@ -93,7 +95,8 @@ const componentUpdateInput = z.object({
   catalogId: z.string().uuid().nullable().optional(),
   qty: z.number().min(0).optional(),
   unitOfMeasure: z.string().optional(),
-  areaFunctionKey: z.string().optional(),
+  areaFunctionKey: z.string().nullable().optional(),
+  multiplicationMode: z.enum(["one_time", "per_unit"]).optional(),
   position: z.number().int().optional(),
 });
 
@@ -102,6 +105,41 @@ const deleteInput = z.object({ id: z.string().uuid() });
 const reorderInput = z.object({
   ids: z.array(z.string().uuid()),
 });
+
+// ── Catalog Tenant Validation Helper ───────────────────────────────────────
+
+export async function validateCatalogItemTenant(
+  supabase: any,
+  tenantId: string,
+  kind: string,
+  catalogId: string,
+): Promise<void> {
+  const tableMap: Record<string, string> = {
+    material: "catalog_materials",
+    hardware: "catalog_hardware",
+    accessory: "catalog_accessories",
+    manufacturing: "catalog_manufacturing_operations",
+    edge_band: "catalog_edge_bands",
+    veneer: "catalog_veneers",
+    finish: "catalog_finishes",
+  };
+
+  const tableName = tableMap[kind];
+  if (!tableName) return;
+
+  const { data, error } = await supabase
+    .from(tableName)
+    .select("id")
+    .eq("id", catalogId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new Error(
+      `Catalog item "${catalogId}" not found or does not belong to tenant "${tenantId}".`,
+    );
+  }
+}
 
 // ── Load full hierarchy tree ───────────────────────────────────────────────
 
@@ -151,16 +189,51 @@ export const loadHierarchy = createServerFn({ method: "POST" })
     const unitIds = (unitsRes.data ?? []).map((u: any) => u.id);
 
     // Step 4: Load components scoped to these units
-    const componentsRes = unitIds.length > 0
+    let componentsRes = unitIds.length > 0
       ? await (context as any).supabase
           .from("components")
-          .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, area_function_key, position")
+          .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, area_function_key, multiplication_mode, position")
           .in("unit_id", unitIds)
           .eq("tenant_id", tid)
           .order("position")
       : { data: [], error: null };
 
+    if (componentsRes.error) {
+      componentsRes = await (context as any).supabase
+        .from("components")
+        .select("id, unit_id, kind, catalog_id, qty, unit_of_measure, area_function_key, position")
+        .in("unit_id", unitIds)
+        .eq("tenant_id", tid)
+        .order("position");
+    }
+
     if (componentsRes.error) throw new Error(`Failed to load components: ${componentsRes.error.message}`);
+
+    // Step 4b: Load section-level components if supported
+    let sectionComponentsRes: { data: any[]; error: any } = { data: [], error: null };
+    if (sectionIds.length > 0) {
+      try {
+        let res = await (context as any).supabase
+          .from("components")
+          .select("id, section_id, kind, catalog_id, qty, unit_of_measure, area_function_key, multiplication_mode, position")
+          .in("section_id", sectionIds)
+          .eq("tenant_id", tid)
+          .order("position");
+        if (res.error) {
+          res = await (context as any).supabase
+            .from("components")
+            .select("id, section_id, kind, catalog_id, qty, unit_of_measure, area_function_key, position")
+            .in("section_id", sectionIds)
+            .eq("tenant_id", tid)
+            .order("position");
+        }
+        if (!res.error) {
+          sectionComponentsRes = res;
+        }
+      } catch {
+        // Fallback if section_id column not yet present in remote DB
+      }
+    }
 
     // Index children by parent id
     const sectionsByProduct = new Map<string, typeof sectionsRes.data>();
@@ -184,6 +257,13 @@ export const loadHierarchy = createServerFn({ method: "POST" })
       componentsByUnit.set(c.unit_id, list);
     }
 
+    const componentsBySection = new Map<string, any[]>();
+    for (const c of sectionComponentsRes.data ?? []) {
+      const list = componentsBySection.get(c.section_id) ?? [];
+      list.push(c);
+      componentsBySection.set(c.section_id, list);
+    }
+
     // Assemble tree
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tree = (productsRes.data ?? []).map((p: any) => ({
@@ -192,6 +272,8 @@ export const loadHierarchy = createServerFn({ method: "POST" })
         .sort((a: any, b: any) => a.position - b.position)
         .map((s: any) => ({
           ...s,
+          components: (componentsBySection.get(s.id) ?? [])
+            .sort((a: any, b: any) => a.position - b.position),
           units: (unitsBySection.get(s.id) ?? [])
             .sort((a: any, b: any) => a.position - b.position)
             .map((u: any) => ({
@@ -290,6 +372,16 @@ export const addSection = createServerFn({ method: "POST" })
   .inputValidator((d) => sectionInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    if (data.materialId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "material", data.materialId);
+    }
+    if (data.finishId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "finish", data.finishId);
+    }
+    if (data.veneerId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "veneer", data.veneerId);
+    }
+
     const { data: row, error } = await (context as any).supabase
       .from("sections")
       .insert({
@@ -314,6 +406,16 @@ export const updateSection = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     const { id, ...patch } = data;
+    if (patch.materialId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "material", patch.materialId);
+    }
+    if (patch.finishId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "finish", patch.finishId);
+    }
+    if (patch.veneerId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "veneer", patch.veneerId);
+    }
+
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.label !== undefined) updates.label = patch.label;
     if (patch.materialId !== undefined) updates.material_id = patch.materialId;
@@ -371,6 +473,10 @@ export const addUnit = createServerFn({ method: "POST" })
   .inputValidator((d) => unitInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    if (data.finishId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "finish", data.finishId);
+    }
+
     const { data: row, error } = await (context as any).supabase
       .from("units")
       .insert({
@@ -401,6 +507,10 @@ export const updateUnit = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     const { id, ...patch } = data;
+    if (patch.finishId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "finish", patch.finishId);
+    }
+
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.unitTypeId !== undefined) updates.unit_type_id = patch.unitTypeId;
     if (patch.widthMm !== undefined) updates.width_mm = patch.widthMm;
@@ -464,20 +574,39 @@ export const addComponent = createServerFn({ method: "POST" })
   .inputValidator((d) => componentInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const { data: row, error } = await (context as any).supabase
+    if (data.catalogId) {
+      await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, data.kind, data.catalogId);
+    }
+
+    const insertPayload: Record<string, any> = {
+      kind: data.kind,
+      catalog_id: data.catalogId ?? null,
+      qty: data.qty ?? 1,
+      unit_of_measure: data.unitOfMeasure ?? "pcs",
+      area_function_key: data.areaFunctionKey ?? null,
+      multiplication_mode: data.multiplicationMode ?? "one_time",
+      position: data.position ?? 0,
+      tenant_id: ctx.tenantId,
+    };
+    if (data.unitId) insertPayload.unit_id = data.unitId;
+    if (data.sectionId) insertPayload.section_id = data.sectionId;
+
+    let { data: row, error } = await (context as any).supabase
       .from("components")
-      .insert({
-        unit_id: data.unitId,
-        kind: data.kind,
-        catalog_id: data.catalogId ?? null,
-        qty: data.qty ?? 1,
-        unit_of_measure: data.unitOfMeasure ?? "pcs",
-        area_function_key: data.areaFunctionKey ?? null,
-        position: data.position ?? 0,
-        tenant_id: ctx.tenantId,
-      })
+      .insert(insertPayload)
       .select("id")
       .single();
+
+    if (error && error.message?.includes("multiplication_mode")) {
+      delete insertPayload.multiplication_mode;
+      const res = await (context as any).supabase
+        .from("components")
+        .insert(insertPayload)
+        .select("id")
+        .single();
+      row = res.data;
+      error = res.error;
+    }
 
     if (error) throw new Error(error.message);
     return { id: row.id };
@@ -489,19 +618,47 @@ export const updateComponent = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     const { id, ...patch } = data;
+
+    if (patch.catalogId) {
+      let compKind = patch.kind;
+      if (!compKind) {
+        const { data: existing } = await (context as any).supabase
+          .from("components")
+          .select("kind")
+          .eq("id", id)
+          .eq("tenant_id", ctx.tenantId)
+          .maybeSingle();
+        compKind = existing?.kind;
+      }
+      if (compKind) {
+        await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, compKind, patch.catalogId);
+      }
+    }
+
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.kind !== undefined) updates.kind = patch.kind;
     if (patch.catalogId !== undefined) updates.catalog_id = patch.catalogId;
     if (patch.qty !== undefined) updates.qty = patch.qty;
     if (patch.unitOfMeasure !== undefined) updates.unit_of_measure = patch.unitOfMeasure;
     if (patch.areaFunctionKey !== undefined) updates.area_function_key = patch.areaFunctionKey;
+    if (patch.multiplicationMode !== undefined) updates.multiplication_mode = patch.multiplicationMode;
     if (patch.position !== undefined) updates.position = patch.position;
 
-    const { error } = await (context as any).supabase
+    let { error } = await (context as any).supabase
       .from("components")
       .update(updates)
       .eq("id", id)
       .eq("tenant_id", ctx.tenantId);
+
+    if (error && error.message?.includes("multiplication_mode")) {
+      delete updates.multiplication_mode;
+      const res = await (context as any).supabase
+        .from("components")
+        .update(updates)
+        .eq("id", id)
+        .eq("tenant_id", ctx.tenantId);
+      error = res.error;
+    }
 
     if (error) throw new Error(error.message);
     return { ok: true };

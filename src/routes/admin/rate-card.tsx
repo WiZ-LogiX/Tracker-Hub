@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
@@ -20,7 +20,12 @@ import { importRateCard } from "@/lib/importRateCard.functions";
 import type { ImportDiff } from "@/lib/importRateCard.functions";
 
 export const Route = createFileRoute("/admin/rate-card")({
-  component: RateCardPage,
+  beforeLoad: () => {
+    // Obsolete rate card section ("Title") has been removed.
+    // Redirect direct/bookmarked visits to /admin/inventory.
+    throw redirect({ to: "/admin/inventory", replace: true });
+  },
+  component: () => null,
 });
 
 function RateCardPage() {

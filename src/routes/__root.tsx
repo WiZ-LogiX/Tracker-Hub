@@ -65,6 +65,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
+      { rel: "icon", href: "/favicon.ico" },
+      { rel: "apple-touch-icon", href: "/logo-192.png" },
       // Self-hosted Google Fonts (loaded via @fontsource) replace the
       // blocked fonts.googleapis.com link. See src/styles.css for the
       // @fontsource/cairo, /inter, /playfair-display imports.

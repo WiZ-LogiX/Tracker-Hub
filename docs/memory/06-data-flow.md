@@ -3,7 +3,7 @@
 ## 6.1 Quote → Order (the canonical business path)
 
 ```
-[Admin] /admin/quotes/new or /admin/quotes/configurator
+[Admin] /admin/quotes/new (legacy /admin/quotes/configurator redirects here)
   [Browser] compute total via runFormula / calculateLine using local pricing_factors + materials
   [Browser] inserts into `quotes` (quote_number = PLC-XXXXX, customer_id, total, snapshot)
   [Browser] inserts into `quote_items` (per-item breakdown JSON, accessories)
@@ -21,8 +21,7 @@
 ```
 
 ### 6.1.1 Code entry points
-- `src/routes/admin/quotes/new.tsx` — legacy product list + accessories builder
-- `src/routes/admin/quotes/configurator.tsx` — free-form template + wastage_rules lookup
+- `src/routes/admin/quotes/new.tsx` — commercial quotation builder (legacy `configurator.tsx` redirects here)
 - `src/routes/admin/quotes/$id.tsx` — detail + convertToInvoice+Order
 - `src/lib/invoice.functions.ts` — `createInvoiceFromQuote`
 - `src/lib/order.functions.ts` — `createOrder`

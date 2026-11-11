@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
@@ -15,7 +15,14 @@ import { toast } from "sonner";
 import { listWastageRules, upsertWastageRule, deleteWastageRule } from "@/lib/catalog.functions";
 import { listMaterials } from "@/lib/catalog.functions";
 
-export const Route = createFileRoute("/admin/wastage-rules")({ component: WastageRulesPage });
+export const Route = createFileRoute("/admin/wastage-rules")({
+  beforeLoad: () => {
+    // Obsolete pricing section has been removed from admin navigation.
+    // Redirect direct/bookmarked visits to /admin.
+    throw redirect({ to: "/admin", replace: true });
+  },
+  component: () => null,
+});
 
 function WastageRulesPage() {
   const { t } = useTranslation();

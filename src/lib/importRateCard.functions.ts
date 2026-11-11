@@ -5,7 +5,7 @@
  * and either returns the diff (dryRun=true) or commits the writes (dryRun=false).
  *
  * SECURITY: Requires owner/admin role for confirm writes.
- * All writes are tenant-scoped via requireTenant middleware.
+ * All writes and queries are strictly tenant-scoped via requireTenant middleware.
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -71,35 +71,8 @@ export interface ImportDiff {
 
 // ── Unit-type + finish → catalog table mapping ──────────────────────────────
 
-const UNIT_TYPE_FINISH_TO_TABLE: Record<
-  string,
-  Record<FinishCode, string>
-> = {
-  base: {
-    HPL: "catalog_finishes",
-    PVC: "catalog_finishes",
-    GLOSS_MAX: "catalog_finishes",
-    POLYLAC: "catalog_finishes",
-    EGGER_ALVIC: "catalog_finishes",
-  },
-  upper: {
-    HPL: "catalog_finishes",
-    PVC: "catalog_finishes",
-    GLOSS_MAX: "catalog_finishes",
-    POLYLAC: "catalog_finishes",
-    EGGER_ALVIC: "catalog_finishes",
-  },
-  tall: {
-    HPL: "catalog_finishes",
-    PVC: "catalog_finishes",
-    GLOSS_MAX: "catalog_finishes",
-    POLYLAC: "catalog_finishes",
-    EGGER_ALVIC: "catalog_finishes",
-  },
-};
-
-/** Map finish code + unit type to a material variant name for board-yield. */
-function variantName(finishCode: FinishCode, unitType: UnitTypeSlug): string {
+/** Map finish code + unit type to a material variant code for board-yield. */
+export function variantName(finishCode: FinishCode, unitType: UnitTypeSlug): string {
   return `${finishCode}_${unitType}`;
 }
 
@@ -121,7 +94,7 @@ async function queryExistingFinishes(
 
   const map = new Map<string, { id: string; code: string; price_per_unit: number }>();
   for (const row of data ?? []) {
-    map.set(row.code, row);
+    map.set(row.code, { ...row, price_per_unit: Number(row.price_per_unit) });
   }
   return map;
 }
@@ -129,16 +102,16 @@ async function queryExistingFinishes(
 async function queryExistingMaterials(
   client: any,
   tenantId: string,
-): Promise<Map<string, { id: string; name: string; price_per_unit: number }>> {
+): Promise<Map<string, { id: string; code: string; price_per_unit: number }>> {
   const { data } = await client
     .from("catalog_materials")
-    .select("id, name, price_per_unit")
+    .select("id, code, price_per_unit")
     .eq("tenant_id", tenantId)
     .is("archived_at", null);
 
-  const map = new Map<string, { id: string; name: string; price_per_unit: number }>();
+  const map = new Map<string, { id: string; code: string; price_per_unit: number }>();
   for (const row of data ?? []) {
-    map.set(row.name, row);
+    map.set(row.code, { ...row, price_per_unit: Number(row.price_per_unit) });
   }
   return map;
 }
@@ -146,16 +119,16 @@ async function queryExistingMaterials(
 async function queryExistingHardware(
   client: any,
   tenantId: string,
-): Promise<Map<string, { id: string; name: string; price_per_piece: number }>> {
+): Promise<Map<string, { id: string; code: string; price_per_piece: number }>> {
   const { data } = await client
     .from("catalog_hardware")
-    .select("id, name, price_per_piece")
+    .select("id, code, price_per_piece")
     .eq("tenant_id", tenantId)
     .is("archived_at", null);
 
-  const map = new Map<string, { id: string; name: string; price_per_piece: number }>();
+  const map = new Map<string, { id: string; code: string; price_per_piece: number }>();
   for (const row of data ?? []) {
-    map.set(row.name, row);
+    map.set(row.code, { ...row, price_per_piece: Number(row.price_per_piece) });
   }
   return map;
 }
@@ -163,16 +136,16 @@ async function queryExistingHardware(
 async function queryExistingAccessories(
   client: any,
   tenantId: string,
-): Promise<Map<string, { id: string; name: string; price_per_piece: number }>> {
+): Promise<Map<string, { id: string; code: string; price_per_piece: number }>> {
   const { data } = await client
     .from("catalog_accessories")
-    .select("id, name, price_per_piece")
+    .select("id, code, price_per_piece")
     .eq("tenant_id", tenantId)
     .is("archived_at", null);
 
-  const map = new Map<string, { id: string; name: string; price_per_piece: number }>();
+  const map = new Map<string, { id: string; code: string; price_per_piece: number }>();
   for (const row of data ?? []) {
-    map.set(row.name, row);
+    map.set(row.code, { ...row, price_per_piece: Number(row.price_per_piece) });
   }
   return map;
 }
@@ -180,22 +153,23 @@ async function queryExistingAccessories(
 async function queryExistingPricingFactors(
   client: any,
   tenantId: string,
-): Promise<Map<string, { id: string; key: string; pct: number }>> {
+): Promise<Map<string, { id: string; factor_key: string; percent: number }>> {
   const { data } = await client
     .from("tenant_pricing_factors")
-    .select("id, key, pct")
-    .eq("tenant_id", tenantId);
+    .select("id, factor_key, percent")
+    .eq("tenant_id", tenantId)
+    .is("archived_at", null);
 
-  const map = new Map<string, { id: string; key: string; pct: number }>();
+  const map = new Map<string, { id: string; factor_key: string; percent: number }>();
   for (const row of data ?? []) {
-    map.set(row.key, row);
+    map.set(row.factor_key, { ...row, percent: Number(row.percent) });
   }
   return map;
 }
 
 // ── Diff computation ────────────────────────────────────────────────────────
 
-async function computeDiff(
+export async function computeDiff(
   client: any,
   tenantId: string,
   prices: NormalizedPriceRecord[],
@@ -218,8 +192,6 @@ async function computeDiff(
   let pricesSkipped = 0;
 
   for (const rec of prices) {
-    // The price goes into catalog_finishes.price_per_unit for that finish
-    // We store per-unit-type prices in a separate mapping structure
     const key = `${rec.unitType}:${rec.finishCode}:${rec.widthTier}:${rec.isFixed ? "fixed" : rec.widthCm}`;
     const finishRec = existingFinishes.get(rec.finishCode);
 
@@ -239,8 +211,6 @@ async function computeDiff(
       continue;
     }
 
-    // For the diff, we compare against the finish's base price
-    // The actual per-width pricing is stored in material_variants
     const variantKey = variantName(rec.finishCode, rec.unitType);
     const existingVariant = existingMaterials.get(variantKey);
 
@@ -291,12 +261,7 @@ async function computeDiff(
   let addonsUpdated = 0;
 
   for (const addon of addons) {
-    // Try hardware first, then accessories
-    const existingHw = existingHardware.get(addon.label);
-    const existingAcc = existingAccessories.get(addon.label);
-
     if (addon.category === "fee") {
-      // Fees go to fees_credentials, skip for now
       addonDiff.push({
         action: "skip",
         slug: addon.slug,
@@ -308,9 +273,11 @@ async function computeDiff(
       continue;
     }
 
+    const existingHw = existingHardware.get(addon.slug);
+    const existingAcc = existingAccessories.get(addon.slug);
     const existing = existingHw ?? existingAcc;
+
     if (existing) {
-      const priceField = addon.category === "hardware" ? "price_per_piece" : "price_per_piece";
       if (existing.price_per_piece === addon.price) {
         addonDiff.push({
           action: "skip",
@@ -350,14 +317,15 @@ async function computeDiff(
   let coeffUpdated = 0;
 
   for (const coeff of coefficients) {
-    const existingFactor = existingFactors.get(coeff.finishCode);
+    const factorKey = coeff.finishCode.toLowerCase();
+    const existingFactor = existingFactors.get(factorKey);
 
     if (existingFactor) {
-      if (existingFactor.pct === coeff.coefficient * 100) {
+      if (existingFactor.percent === coeff.coefficient * 100) {
         coeffDiff.push({
           action: "skip",
           finishCode: coeff.finishCode,
-          currentCoefficient: existingFactor.pct / 100,
+          currentCoefficient: existingFactor.percent / 100,
           newCoefficient: coeff.coefficient,
           label: coeff.label,
         });
@@ -365,7 +333,7 @@ async function computeDiff(
         coeffDiff.push({
           action: "update",
           finishCode: coeff.finishCode,
-          currentCoefficient: existingFactor.pct / 100,
+          currentCoefficient: existingFactor.percent / 100,
           newCoefficient: coeff.coefficient,
           label: coeff.label,
         });
@@ -403,7 +371,7 @@ async function computeDiff(
 
 // ── Commit writes ───────────────────────────────────────────────────────────
 
-async function commitWrites(
+export async function commitWrites(
   client: any,
   tenantId: string,
   prices: NormalizedPriceRecord[],
@@ -421,27 +389,35 @@ async function commitWrites(
     // Check if variant exists
     const { data: existing } = await client
       .from("catalog_materials")
-      .select("id")
+      .select("id, price_per_unit")
       .eq("tenant_id", tenantId)
-      .eq("name", variantKey)
+      .eq("code", variantKey)
+      .is("archived_at", null)
       .maybeSingle();
 
     if (existing) {
-      await client
-        .from("catalog_materials")
-        .update({ price_per_unit: rec.price })
-        .eq("id", existing.id)
-        .eq("tenant_id", tenantId);
-      await recordPriceChange(client, tenantId, "material", existing.id, rec.price);
+      if (Number(existing.price_per_unit) !== rec.price) {
+        await client
+          .from("catalog_materials")
+          .update({ price_per_unit: rec.price, updated_at: new Date().toISOString() })
+          .eq("id", existing.id)
+          .eq("tenant_id", tenantId);
+        await recordPriceChange(client, tenantId, "material", existing.id, rec.price);
+      }
     } else {
-      const { data: inserted } = await client.from("catalog_materials").insert({
-        tenant_id: tenantId,
-        name: variantKey,
-        type: "board",
-        unit: "m²",
-        price_per_unit: rec.price,
-        active: true,
-      }).select("id").maybeSingle();
+      const { data: inserted } = await client
+        .from("catalog_materials")
+        .insert({
+          tenant_id: tenantId,
+          code: variantKey,
+          label_i18n_key: `catalog.material.${variantKey.toLowerCase()}`,
+          pricing_unit: "m2",
+          price_per_unit: rec.price,
+          default_wastage_pct: 10,
+        })
+        .select("id")
+        .maybeSingle();
+
       if (inserted) {
         await recordPriceChange(client, tenantId, "material", inserted.id, rec.price);
       }
@@ -453,72 +429,90 @@ async function commitWrites(
   for (const addon of addons) {
     if (addon.category === "fee") continue;
 
-    const table =
-      addon.category === "hardware" ? "catalog_hardware" : "catalog_accessories";
-    const priceCol =
-      addon.category === "hardware" ? "price_per_piece" : "price_per_piece";
+    const table = addon.category === "hardware" ? "catalog_hardware" : "catalog_accessories";
+    const entityType = addon.category === "hardware" ? ("hardware" as const) : ("accessory" as const);
 
     const { data: existing } = await client
       .from(table)
-      .select("id")
+      .select("id, price_per_piece")
       .eq("tenant_id", tenantId)
-      .eq("name", addon.label)
+      .eq("code", addon.slug)
+      .is("archived_at", null)
       .maybeSingle();
 
     if (existing) {
-      await client
-        .from(table)
-        .update({ [priceCol]: addon.price })
-        .eq("id", existing.id)
-        .eq("tenant_id", tenantId);
-      await recordPriceChange(
-        client, tenantId,
-        addon.category === "hardware" ? "hardware" : "accessory",
-        existing.id, addon.price,
-      );
+      if (Number(existing.price_per_piece) !== addon.price) {
+        await client
+          .from(table)
+          .update({ price_per_piece: addon.price, updated_at: new Date().toISOString() })
+          .eq("id", existing.id)
+          .eq("tenant_id", tenantId);
+        await recordPriceChange(client, tenantId, entityType, existing.id, addon.price);
+      }
     } else {
-      const insert: Record<string, any> = {
-        tenant_id: tenantId,
-        name: addon.label,
-        active: true,
-      };
-      insert[priceCol] = addon.price;
-      const { data: inserted } = await client.from(table).insert(insert).select("id").maybeSingle();
+      const { data: inserted } = await client
+        .from(table)
+        .insert({
+          tenant_id: tenantId,
+          code: addon.slug,
+          label_i18n_key: `catalog.${entityType}.${addon.slug.toLowerCase()}`,
+          price_per_piece: addon.price,
+        })
+        .select("id")
+        .maybeSingle();
+
       if (inserted) {
-        await recordPriceChange(
-          client, tenantId,
-          addon.category === "hardware" ? "hardware" : "accessory",
-          inserted.id, addon.price,
-        );
+        await recordPriceChange(client, tenantId, entityType, inserted.id, addon.price);
       }
     }
     addonsWritten++;
   }
 
   // Upsert pricing factors (coefficients)
-  for (const coeff of coefficients) {
-    const { data: existing } = await client
-      .from("tenant_pricing_factors")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .eq("key", coeff.finishCode)
-      .maybeSingle();
+  const validFactorKeys = new Set([
+    "labor",
+    "overhead",
+    "margin",
+    "luxury",
+    "complexity",
+    "rush",
+    "wastage",
+  ]);
 
-    if (existing) {
-      await client
+  for (const coeff of coefficients) {
+    const factorKey = coeff.finishCode.toLowerCase();
+    if (validFactorKeys.has(factorKey)) {
+      const { data: existing } = await client
         .from("tenant_pricing_factors")
-        .update({ pct: coeff.coefficient * 100 })
-        .eq("id", existing.id)
-        .eq("tenant_id", tenantId);
-    } else {
-      await client.from("tenant_pricing_factors").insert({
-        tenant_id: tenantId,
-        key: coeff.finishCode,
-        pct: coeff.coefficient * 100,
-        label: coeff.label,
-      });
+        .select("id, percent")
+        .eq("tenant_id", tenantId)
+        .eq("factor_key", factorKey)
+        .is("archived_at", null)
+        .maybeSingle();
+
+      if (existing) {
+        if (Number(existing.percent) !== coeff.coefficient * 100) {
+          await client
+            .from("tenant_pricing_factors")
+            .update({
+              percent: coeff.coefficient * 100,
+              value_type: "percent",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id)
+            .eq("tenant_id", tenantId);
+        }
+      } else {
+        await client.from("tenant_pricing_factors").insert({
+          tenant_id: tenantId,
+          factor_key: factorKey,
+          percent: coeff.coefficient * 100,
+          value_type: "percent",
+          fixed_amount: 0,
+        });
+      }
+      coefficientsWritten++;
     }
-    coefficientsWritten++;
   }
 
   return { pricesWritten, addonsWritten, coefficientsWritten };
@@ -549,7 +543,7 @@ export const importRateCard = createServerFn({ method: "POST" })
       requireRole(ctx, ["owner", "admin"]);
     }
 
-    const client = context.supabase;
+    const client = (context as any).supabase;
     const buf = decodeBase64(data.fileBufferBase64);
 
     // Parse the workbook

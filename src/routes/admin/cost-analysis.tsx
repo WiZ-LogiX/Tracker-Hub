@@ -1,100 +1,392 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/useAuth";
+import { getGlobalCostAnalysis } from "@/lib/cost-analysis.functions";
+import type { GlobalCostAnalysisSummary } from "@/lib/cost-analysis-types";
+import { formatEGP } from "@/lib/pricing";
+import { QuotationCostDrawer } from "@/components/cost-analysis/QuotationCostDrawer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatEGP } from "@/lib/pricing";
-import { BarChart3 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  BarChart3,
+  TrendingUp,
+  Percent,
+  Layers,
+  Sparkles,
+  Eye,
+  Loader2,
+  DollarSign,
+  PieChart,
+} from "lucide-react";
 
-export const Route = createFileRoute("/admin/cost-analysis")({ component: CostAnalysisPage });
-
-const LABELS: Record<string, string> = {
-  base_cost: "السعر الأساسي", material_cost: "الخامات", finish_cost: "التشطيب",
-  veneer_cost: "القشرة", accessories_cost: "الإكسسوارات", labor: "العمالة",
-  wastage: "الهدر", overhead: "المصاريف الإدارية", margin: "هامش الربح",
-  luxury: "الفخامة", complexity: "التعقيد", rush: "الاستعجال",
-};
+export const Route = createFileRoute("/admin/cost-analysis")({
+  component: CostAnalysisPage,
+});
 
 function CostAnalysisPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language === "ar";
+  const { currentRole } = useAuth();
+  const getGlobalCostAnalysisFn = useServerFn(getGlobalCostAnalysis);
+
   const [days, setDays] = useState("90");
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  useEffect(() => {
-    setLoading(true);
-    const since = days === "0" ? null : new Date(Date.now() - Number(days) * 86400_000).toISOString();
-    let q = supabase.from("quote_items").select("breakdown, line_total, unit_price, qty, material_name, accessories, created_at").order("created_at", { ascending: false }).limit(1000);
-    if (since) q = q.gte("created_at", since);
-    q.then(({ data }) => { setItems(data ?? []); setLoading(false); });
-  }, [days]);
+  // TanStack Query for V2 global cost analysis
+  const { data: analysis, isLoading } = useQuery({
+    queryKey: ["cost-analysis", days],
+    queryFn: async () => {
+      const res = await getGlobalCostAnalysisFn({
+        data: { days },
+      });
+      return (res as unknown as GlobalCostAnalysisSummary) || null;
+    },
+  });
 
-  const agg = useMemo(() => {
-    const byLabel = new Map<string, { label: string; total: number; count: number }>();
-    let totalRevenue = 0; let totalCount = 0;
-    const matCount = new Map<string, { name: string; qty: number; revenue: number }>();
-    const accCount = new Map<string, { name: string; uses: number; revenue: number }>();
-    for (const it of items) {
-      const bd = (it.breakdown ?? {}) as any;
-      const lines: { label: string; amount: number }[] = Array.isArray(bd.lines) ? bd.lines : [];
-      const qty = Number(it.qty || 1); const lineTotal = Number(it.line_total || 0);
-      totalRevenue += lineTotal; totalCount += 1;
-      for (const ln of lines) {
-        const cur = byLabel.get(ln.label) ?? { label: ln.label, total: 0, count: 0 };
-        cur.total += Number(ln.amount || 0) * qty; cur.count += 1; byLabel.set(ln.label, cur);
-      }
-      if (it.material_name) { const cur = matCount.get(it.material_name) ?? { name: it.material_name, qty: 0, revenue: 0 }; cur.qty += qty; cur.revenue += lineTotal; matCount.set(it.material_name, cur); }
-      const accs = Array.isArray(it.accessories) ? it.accessories : [];
-      for (const a of accs) { const name = a?.name ?? "—"; const cur = accCount.get(name) ?? { name, uses: 0, revenue: 0 }; cur.uses += 1; cur.revenue += Number(a?.price || 0) * qty; accCount.set(name, cur); }
-    }
-    const rows = Array.from(byLabel.values()).sort((a, b) => b.total - a.total);
-    const topMaterials = Array.from(matCount.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
-    const topAccessories = Array.from(accCount.values()).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
-    const grandTotal = rows.reduce((s, r) => s + r.total, 0);
-    const marginRow = rows.find(r => r.label === "margin");
-    const avgMarginShare = grandTotal > 0 && marginRow ? (marginRow.total / grandTotal) * 100 : 0;
-    return { rows, grandTotal, totalRevenue, totalCount, avgMarginShare, topMaterials, topAccessories };
-  }, [items]);
+  const handleOpenCostDrawer = (quoteId: string) => {
+    setSelectedQuoteId(quoteId);
+    setIsDrawerOpen(true);
+  };
 
   const ranges = [
-    { v: "30", l: t("costAnalysis.last30") },
-    { v: "90", l: t("costAnalysis.last90") },
-    { v: "365", l: t("costAnalysis.lastYear") },
-    { v: "0", l: t("costAnalysis.all") },
+    { v: "30", l: isRtl ? "آخر 30 يوماً" : "Last 30 days" },
+    { v: "90", l: isRtl ? "آخر 90 يوماً" : "Last 90 days" },
+    { v: "365", l: isRtl ? "آخر سنة" : "Last year" },
+    { v: "0", l: isRtl ? "كل الفترات" : "All time" },
   ];
 
+  const totalCat = analysis?.totalManufacturingCost && analysis.totalManufacturingCost > 0
+    ? analysis.totalManufacturingCost
+    : 1;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-        <div><h1 className="font-serif text-3xl font-bold flex items-center gap-2"><BarChart3 className="h-7 w-7" /> {t("costAnalysis.title")}</h1><p className="text-sm text-muted-foreground mt-1">{t("costAnalysis.subtitle")}</p></div>
-        <Select value={days} onValueChange={setDays}><SelectTrigger className="w-44"><SelectValue /></SelectTrigger><SelectContent>{ranges.map(r => <SelectItem key={r.v} value={r.v}>{r.l}</SelectItem>)}</SelectContent></Select>
+    <div className="space-y-6 pb-12">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 border-b pb-5">
+        <div>
+          <h1 className="font-serif text-3xl font-bold tracking-tight flex items-center gap-2.5">
+            <BarChart3 className="h-7 w-7 text-primary" />
+            <span>{isRtl ? "تحليل التكاليف وهامش الربحية (V2)" : "V2 Cost Analysis & Profitability"}</span>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isRtl
+              ? "تحليل تكاليف الخامات والمصنعيات وحساب هامش المساهمة لجميع المقايسات وأوامر الإنتاج"
+              : "Manufacturing cost breakdown, gross profit margins, and BOM cost drivers"}
+          </p>
+        </div>
+
+        <Select value={days} onValueChange={setDays}>
+          <SelectTrigger className="w-44 h-9 text-sm rounded-lg">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ranges.map((r) => (
+              <SelectItem key={r.v} value={r.v}>
+                {r.l}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">{t("costAnalysis.totalRevenue")}</div><div className="text-2xl font-bold font-serif mt-1">{formatEGP(agg.totalRevenue)}</div></CardContent></Card>
-        <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">{t("costAnalysis.itemsAnalyzed")}</div><div className="text-2xl font-bold font-serif mt-1">{agg.totalCount}</div></CardContent></Card>
-        <Card><CardContent className="p-5"><div className="text-xs text-muted-foreground">{t("costAnalysis.avgMargin")}</div><div className="text-2xl font-bold font-serif mt-1">{agg.avgMarginShare.toFixed(1)}%</div></CardContent></Card>
+
+      {/* Top Financial KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <Card className="border rounded-2xl shadow-xs">
+          <CardContent className="p-4 space-y-1">
+            <div className="text-xs text-muted-foreground uppercase font-semibold">
+              {isRtl ? "إجمالي قيمة البيع (قبل الضريبة)" : "Total Selling Value"}
+            </div>
+            <div className="text-2xl font-bold font-serif text-foreground">
+              {formatEGP(analysis?.totalSellingPrice || 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border rounded-2xl shadow-xs">
+          <CardContent className="p-4 space-y-1">
+            <div className="text-xs text-muted-foreground uppercase font-semibold">
+              {isRtl ? "إجمالي تكلفة التصنيع" : "Total Mfg Cost"}
+            </div>
+            <div className="text-2xl font-bold font-serif text-foreground">
+              {formatEGP(analysis?.totalManufacturingCost || 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border rounded-2xl shadow-xs bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-200/80">
+          <CardContent className="p-4 space-y-1">
+            <div className="text-xs text-emerald-700 dark:text-emerald-400 uppercase font-semibold">
+              {isRtl ? "إجمالي الربح التشغيلي" : "Total Gross Profit"}
+            </div>
+            <div className="text-2xl font-bold font-serif text-emerald-700 dark:text-emerald-400">
+              {formatEGP(analysis?.totalGrossProfit || 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border rounded-2xl shadow-xs">
+          <CardContent className="p-4 space-y-1">
+            <div className="text-xs text-primary uppercase font-semibold">
+              {isRtl ? "متوسط هامش الربح" : "Average Margin"}
+            </div>
+            <div className="text-2xl font-bold font-serif text-primary">
+              {(analysis?.averageGrossMarginPct || 0).toFixed(1)}%
+            </div>
+          </CardContent>
+        </Card>
       </div>
-      <Card><CardHeader><CardTitle className="text-lg font-serif">{t("costAnalysis.costComponents")}</CardTitle></CardHeader><CardContent className="space-y-3">
-        {loading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
-        {!loading && agg.rows.length === 0 && <p className="text-sm text-muted-foreground">{t("costAnalysis.noData")}</p>}
-        {agg.rows.map(r => { const pct = agg.grandTotal > 0 ? (r.total / agg.grandTotal) * 100 : 0; return (
-          <div key={r.label}>
-            <div className="flex justify-between text-sm mb-1"><span className="font-medium">{LABELS[r.label] ?? r.label}</span><span className="text-muted-foreground">{formatEGP(r.total)} • {pct.toFixed(1)}%</span></div>
-            <div className="h-2 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary" style={{ width: `${Math.min(100, pct)}%` }} /></div>
-          </div>
-        );})}
-      </CardContent></Card>
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card><CardHeader><CardTitle className="text-lg font-serif">{t("costAnalysis.topMaterials")}</CardTitle></CardHeader><CardContent className="space-y-2">
-          {agg.topMaterials.length === 0 && <p className="text-sm text-muted-foreground">{t("common.noData")}</p>}
-          {agg.topMaterials.map(m => <div key={m.name} className="flex justify-between text-sm p-2 rounded hover:bg-muted"><span>{m.name}</span><span className="text-muted-foreground">{m.qty.toFixed(1)} × {formatEGP(m.revenue)}</span></div>)}
-        </CardContent></Card>
-        <Card><CardHeader><CardTitle className="text-lg font-serif">{t("costAnalysis.topAccessories")}</CardTitle></CardHeader><CardContent className="space-y-2">
-          {agg.topAccessories.length === 0 && <p className="text-sm text-muted-foreground">{t("common.noData")}</p>}
-          {agg.topAccessories.map(a => <div key={a.name} className="flex justify-between text-sm p-2 rounded hover:bg-muted"><span>{a.name}</span><span className="text-muted-foreground">{a.uses} uses • {formatEGP(a.revenue)}</span></div>)}
-        </CardContent></Card>
+
+      {/* Category Cost Breakdown Bars */}
+      <Card className="border rounded-2xl shadow-xs">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-bold font-serif flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <PieChart className="h-4 w-4 text-primary" />
+              <span>{isRtl ? "هيكل التكلفة الصناعية الإجمالي" : "Overall Manufacturing Cost Structure"}</span>
+            </span>
+            <span className="font-mono text-sm text-muted-foreground font-normal">
+              {analysis?.totalQuotesAnalyzed || 0} {isRtl ? "مقايسة محللة" : "quotes analyzed"}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span>{isRtl ? "جاري تحميل تحليل التكاليف..." : "Loading cost analytics..."}</span>
+            </div>
+          ) : !analysis ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">
+              {isRtl ? "لا توجد بيانات متاحة في هذه الفترة" : "No cost data available for this period"}
+            </p>
+          ) : (
+            <div className="space-y-3 text-xs">
+              {/* Materials */}
+              <div className="space-y-1">
+                <div className="flex justify-between font-medium">
+                  <span>{isRtl ? "الألواح والخامات الرئيسية" : "Main Materials & Boards"}</span>
+                  <span className="font-mono">{formatEGP(analysis.categories.materials)} ({((analysis.categories.materials / totalCat) * 100).toFixed(1)}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${Math.min(100, (analysis.categories.materials / totalCat) * 100)}%` }} />
+                </div>
+              </div>
+
+              {/* Hardware */}
+              <div className="space-y-1">
+                <div className="flex justify-between font-medium">
+                  <span>{isRtl ? "المفصلات والميكانيزمات" : "Hardware & Mechanisms"}</span>
+                  <span className="font-mono">{formatEGP(analysis.categories.hardware)} ({((analysis.categories.hardware / totalCat) * 100).toFixed(1)}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.min(100, (analysis.categories.hardware / totalCat) * 100)}%` }} />
+                </div>
+              </div>
+
+              {/* Accessories */}
+              <div className="space-y-1">
+                <div className="flex justify-between font-medium">
+                  <span>{isRtl ? "المقابض والإكسسوارات" : "Accessories"}</span>
+                  <span className="font-mono">{formatEGP(analysis.categories.accessories)} ({((analysis.categories.accessories / totalCat) * 100).toFixed(1)}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-purple-600 rounded-full" style={{ width: `${Math.min(100, (analysis.categories.accessories / totalCat) * 100)}%` }} />
+                </div>
+              </div>
+
+              {/* Finishes */}
+              <div className="space-y-1">
+                <div className="flex justify-between font-medium">
+                  <span>{isRtl ? "التشطيب والقشرة وشريط الحرف" : "Finishes & Edge Banding"}</span>
+                  <span className="font-mono">{formatEGP(analysis.categories.finishes)} ({((analysis.categories.finishes / totalCat) * 100).toFixed(1)}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-amber-600 rounded-full" style={{ width: `${Math.min(100, (analysis.categories.finishes / totalCat) * 100)}%` }} />
+                </div>
+              </div>
+
+              {/* Manufacturing */}
+              <div className="space-y-1">
+                <div className="flex justify-between font-medium">
+                  <span>{isRtl ? "عمليات التصنيع والمصنعيات" : "Manufacturing Operations"}</span>
+                  <span className="font-mono">{formatEGP(analysis.categories.manufacturing)} ({((analysis.categories.manufacturing / totalCat) * 100).toFixed(1)}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-rose-600 rounded-full" style={{ width: `${Math.min(100, (analysis.categories.manufacturing / totalCat) * 100)}%` }} />
+                </div>
+              </div>
+
+              {/* Wastage */}
+              <div className="space-y-1">
+                <div className="flex justify-between font-medium text-destructive">
+                  <span>{isRtl ? "هدر الخامات الصناعي (Wastage)" : "Industrial Wastage"}</span>
+                  <span className="font-mono">{formatEGP(analysis.categories.wastage)} ({((analysis.categories.wastage / totalCat) * 100).toFixed(1)}%)</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-destructive rounded-full" style={{ width: `${Math.min(100, (analysis.categories.wastage / totalCat) * 100)}%` }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Top Cost Drivers Grid */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card className="border rounded-2xl shadow-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold font-serif">
+              {isRtl ? "أبرز بنود تكلفة الخامات" : "Top Material Cost Drivers"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {analysis?.topMaterials.map((m) => (
+              <div key={m.name} className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40 border">
+                <span className="font-medium text-foreground">{m.name}</span>
+                <span className="font-mono font-bold text-primary">{formatEGP(m.cost)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="border rounded-2xl shadow-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold font-serif">
+              {isRtl ? "أبرز بنود المستلزمات والمصنعيات" : "Top Hardware & Op Drivers"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {analysis?.topHardware.map((h) => (
+              <div key={h.name} className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40 border">
+                <span className="font-medium text-foreground">{h.name}</span>
+                <span className="font-mono font-bold text-primary">{formatEGP(h.cost)}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Quotations Margin Table */}
+      <Card className="border rounded-2xl shadow-xs overflow-hidden">
+        <CardHeader className="bg-muted/30 pb-3">
+          <CardTitle className="text-sm font-bold font-serif">
+            {isRtl ? "تفصيل ربحية المقايسات المسجلة" : "Quotation Margins & Unit Economics"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead>{isRtl ? "رقم المقايسة" : "Quote #"}</TableHead>
+                <TableHead>{isRtl ? "العميل" : "Customer"}</TableHead>
+                <TableHead>{isRtl ? "سعر البيع" : "Selling Price"}</TableHead>
+                <TableHead>{isRtl ? "تكلفة التصنيع" : "Mfg Cost"}</TableHead>
+                <TableHead>{isRtl ? "الربح الإجمالي" : "Gross Profit"}</TableHead>
+                <TableHead>{isRtl ? "هامش الربح" : "Margin %"}</TableHead>
+                <TableHead>{isRtl ? "الحالة" : "Status"}</TableHead>
+                <TableHead className="text-center w-24">{isRtl ? "التفاصيل" : "BOM"}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-10 text-muted-foreground text-xs">
+                    {isRtl ? "جاري تحميل المقايسات..." : "Loading quotations..."}
+                  </TableCell>
+                </TableRow>
+              ) : (!analysis?.quotes || analysis.quotes.length === 0) ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground text-xs">
+                    {isRtl ? "لا توجد مقايسات في هذه الفترة" : "No quotations in this period"}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                analysis.quotes.map((q) => (
+                  <TableRow
+                    key={q.id}
+                    className="hover:bg-muted/30 cursor-pointer transition-colors"
+                    onClick={() => handleOpenCostDrawer(q.id)}
+                  >
+                    <TableCell className="font-mono text-xs font-bold text-primary">
+                      {q.quoteNumber}
+                    </TableCell>
+
+                    <TableCell className="text-xs font-medium text-foreground">
+                      {q.customerName || "—"}
+                    </TableCell>
+
+                    <TableCell className="font-semibold text-xs text-foreground">
+                      {formatEGP(q.sellingPrice)}
+                    </TableCell>
+
+                    <TableCell className="font-semibold text-xs text-muted-foreground">
+                      {formatEGP(q.manufacturingCost)}
+                    </TableCell>
+
+                    <TableCell className="font-bold text-xs text-emerald-600">
+                      {formatEGP(q.grossProfit)}
+                    </TableCell>
+
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] font-mono font-bold ${
+                          q.grossMarginPct >= 25
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : q.grossMarginPct >= 15
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-rose-50 text-rose-700 border-rose-200"
+                        }`}
+                      >
+                        {q.grossMarginPct.toFixed(1)}%
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell>
+                      <Badge variant="outline" className="text-[10px] capitalize">
+                        {q.status}
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleOpenCostDrawer(q.id)}
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                        title={isRtl ? "عرض تفصيل التكاليف" : "View Cost Analysis"}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Quotation Cost Analysis Drawer */}
+      <QuotationCostDrawer
+        quoteId={selectedQuoteId}
+        open={isDrawerOpen}
+        onOpenChange={setIsDrawerOpen}
+      />
     </div>
   );
 }

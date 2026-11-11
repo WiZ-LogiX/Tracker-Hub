@@ -1,169 +1,137 @@
-import { test, expect, signIn, enableFeatureFlag } from "./fixtures/auth";
+import { test, expect, signIn, MOCK_CUSTOMER_ID, MOCK_TENANT_ID } from "./fixtures/auth";
 
-test.describe("Quote Builder — v2 TreeConfigurator", () => {
-  test("builds a hierarchical quote: product → section → unit → component → save", async ({
+test.describe("Quote Builder — Commercial Quotation Workflow & Legacy Configurator Retirement", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/rest/v1/customers**", async (route) => {
+      const isSingle = route.request().headers()["accept"]?.includes("vnd.pgrst.object+json");
+      const customerRecord = {
+        id: MOCK_CUSTOMER_ID,
+        tenant_id: MOCK_TENANT_ID,
+        name: "مستر شاهين",
+        phone: "+20 11 16322271",
+        email: "shaheen@example.com",
+        address: "القاهرة - التجمع الخامس",
+      };
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8", "content-range": "0-0/1" },
+        body: JSON.stringify(isSingle ? customerRecord : [customerRecord]),
+      });
+    });
+
+    await page.route("**/rest/v1/quotes**", async (route) => {
+      const isSingle = route.request().headers()["accept"]?.includes("vnd.pgrst.object+json");
+      const quoteRecord = {
+        id: "22222222-2222-2222-2222-222222222222",
+        tenant_id: MOCK_TENANT_ID,
+        quote_number: "PLC-00100",
+        customer_id: MOCK_CUSTOMER_ID,
+        status: "draft",
+        subtotal: 85000,
+        discount_amount: 0,
+        vat_amount: 0,
+        total: 85000,
+        deposit_pct: 60,
+        valid_until: "2026-11-28",
+        created_at: new Date().toISOString(),
+      };
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8", "content-range": "0-0/1" },
+        body: JSON.stringify(isSingle ? quoteRecord : [quoteRecord]),
+      });
+    });
+  });
+
+  test("retired configurator route automatically redirects to commercial builder", async ({
     page,
   }) => {
     await signIn(page);
-    await enableFeatureFlag(page, "quotation_builder_v2");
-
     await page.goto("/admin/quotes/configurator");
+    await page.waitForLoadState("domcontentloaded");
 
-    const kitchenBtn = page.getByRole("button", { name: "Kitchen", exact: true });
-    await kitchenBtn.waitFor({ state: "visible", timeout: 15_000 });
-
-    // ── 1. Add a product (starts OPEN by default) ─────────────────────
-    await kitchenBtn.click();
-    await expect(page.getByText("No products yet")).not.toBeVisible();
-
-    // "Add section" is visible immediately because product starts open
-    const addSectionBtn = page.getByRole("button", { name: /Add section/i });
-    await expect(addSectionBtn).toBeVisible({ timeout: 5_000 });
-
-    // ── 2. Add a section (starts OPEN by default) ─────────────────────
-    await addSectionBtn.click();
-
-    // "Add unit" is visible immediately because section starts open
-    const addUnitBtn = page.getByRole("button", { name: /Add unit/i });
-    await expect(addUnitBtn).toBeVisible({ timeout: 5_000 });
-
-    // ── 3. Add a unit (starts CLOSED — need to expand) ────────────────
-    await addUnitBtn.click();
-
-    // Unit appears — labeled "Unit #1" with "0 components" badge
-    // It's collapsed by default (open=false), click its trigger to expand
-    const unitTrigger = page.getByRole("button", { name: /Unit #1/ });
-    await expect(unitTrigger).toBeVisible({ timeout: 5_000 });
-    await unitTrigger.click();
-    await page.waitForTimeout(300);
-
-    // "Material" add button should be visible after expanding
-    const addMaterialBtn = page.getByRole("button", { name: /material/i }).first();
-    await expect(addMaterialBtn).toBeVisible({ timeout: 5_000 });
-    await addMaterialBtn.click();
-
-    // CatalogPicker dialog opens and loads items from database
-    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 5_000 });
-    // Wait for items to load — look for first material name from seed data
-    const firstItem = page.getByRole("option").first();
-    await expect(firstItem).toBeVisible({ timeout: 10_000 });
-    // Select the first item
-    await firstItem.click();
-    await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 5_000 });
-
-    // Verify component was added — should show catalog code (e.g. "ACRYLIC-W")
-    const catalogCode = page.locator("span.font-mono").first();
-    await expect(catalogCode).toBeVisible({ timeout: 5_000 });
-
-    // ── 4. Save the quote ─────────────────────────────────────────────
-    const saveBtn = page.getByRole("button", { name: /Save quote/i });
-    await saveBtn.click();
-
-    // Should show a success toast
-    await expect(page.getByText(/quote|saved|built/i).first()).toBeVisible({
-      timeout: 5_000,
-    });
-
-    // ── 5. Verify tree structure is still visible ─────────────────────
-    await expect(addSectionBtn).toBeVisible();
-  });
-
-  test("catalog picker loads data and links component", async ({ page }) => {
-    await signIn(page);
-    await enableFeatureFlag(page, "quotation_builder_v2");
-
-    await page.goto("/admin/quotes/configurator");
-
-    const kitchenBtn = page.getByRole("button", { name: "Kitchen", exact: true });
-    await kitchenBtn.waitFor({ state: "visible", timeout: 15_000 });
-
-    // Build tree: product → section → unit
-    await kitchenBtn.click();
-    const addSectionBtn = page.getByRole("button", { name: /Add section/i });
-    await expect(addSectionBtn).toBeVisible({ timeout: 5_000 });
-    await addSectionBtn.click();
-
-    const addUnitBtn = page.getByRole("button", { name: /Add unit/i });
-    await expect(addUnitBtn).toBeVisible({ timeout: 5_000 });
-    await addUnitBtn.click();
-
-    // Expand unit
-    const unitTrigger = page.getByRole("button", { name: /Unit #1/ });
-    await expect(unitTrigger).toBeVisible({ timeout: 5_000 });
-    await unitTrigger.click();
-    await page.waitForTimeout(300);
-
-    // Open catalog picker
-    const addMaterialBtn = page.getByRole("button", { name: /material/i }).first();
-    await expect(addMaterialBtn).toBeVisible({ timeout: 5_000 });
-    await addMaterialBtn.click();
-
-    // Verify dialog opens
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible({ timeout: 5_000 });
-
-    // Wait for items to load — look for CommandItem elements
-    const firstItem = page.getByRole("option").first();
-    await expect(firstItem).toBeVisible({ timeout: 10_000 });
-
-    // Get item text to verify real data loaded
-    const itemText = await firstItem.textContent();
-    console.log(`[TEST] First picker item: "${itemText}"`);
-
-    // Screenshot with picker open
-    await page.screenshot({ path: "test-results/picker-open.png" });
-
-    // Select first item
-    await firstItem.click();
-    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
-
-    // Verify catalog code appears in component node
-    const catalogCode = page.locator("span.font-mono").first();
-    await expect(catalogCode).toBeVisible({ timeout: 5_000 });
-
-    // Screenshot with linked component
-    await page.screenshot({ path: "test-results/component-linked.png" });
-
-    // Save the quote
-    const saveBtn = page.getByRole("button", { name: /Save quote/i });
-    await saveBtn.click();
-
-    // Should show success toast
-    await expect(page.getByText(/quote|saved|built/i).first()).toBeVisible({
-      timeout: 5_000,
-    });
-
-    // Final screenshot
-    await page.screenshot({ path: "test-results/quote-saved.png" });
-  });
-
-  test("validates empty section blocks save", async ({ page }) => {
-    await signIn(page);
-    await enableFeatureFlag(page, "quotation_builder_v2");
-
-    await page.goto("/admin/quotes/configurator");
-
-    const kitchenBtn = page.getByRole("button", { name: "Kitchen", exact: true });
-    await kitchenBtn.waitFor({ state: "visible", timeout: 15_000 });
-
-    // Add product (starts open)
-    await kitchenBtn.click();
-
-    // Add section (starts open)
-    const addSectionBtn = page.getByRole("button", { name: /Add section/i });
-    await expect(addSectionBtn).toBeVisible({ timeout: 5_000 });
-    await addSectionBtn.click();
-
-    // Section exists but has no units — labeled "Section #1" with "0 units" + "Empty" badge
-    await expect(page.getByText("Section #1").first()).toBeVisible();
-
-    // Try to save without adding any units to the section
-    const saveBtn = page.getByRole("button", { name: /Save quote/i });
-    await saveBtn.click();
-
-    // Should show a validation error toast about empty section
+    // Must be redirected to /admin/quotes/new
+    await expect(page).toHaveURL(/\/admin\/quotes\/new/);
     await expect(
-      page.getByText(/empty|no units|required|validation/i).first(),
+      page.getByText(/منشئ عروض الأسعار التجارية|Commercial Quotation Builder/i),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("builds a commercial quotation: select category → dimensions → specs → price → preview → save", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto(`/admin/quotes/new?customerId=${MOCK_CUSTOMER_ID}`);
+    await page.waitForLoadState("domcontentloaded");
+
+    await expect(
+      page.getByText(/منشئ عروض الأسعار التجارية|Commercial Quotation Builder/i),
+    ).toBeVisible({ timeout: 15_000 });
+
+    // ── 1. Select Product Category ────────────────────────────────────
+    const catTrigger = page
+      .locator('button[role="combobox"]')
+      .filter({ hasText: /اختر نوع المنتج|Select product category/i })
+      .first();
+    await expect(catTrigger).toBeVisible({ timeout: 10_000 });
+    await catTrigger.click();
+    await page.getByRole("option", { name: /مطبخ|Kitchen/i }).first().click();
+
+    // ── 2. Enter Dimensions ───────────────────────────────────────────
+    const widthInputs = page.locator('input[placeholder*="العرض"], input[placeholder*="Width"]');
+    const heightInputs = page.locator('input[placeholder*="الارتفاع"], input[placeholder*="Height"]');
+    await widthInputs.first().fill("3.5");
+    await heightInputs.first().fill("2.4");
+
+    // ── 3. Enter Price ────────────────────────────────────────────────
+    const priceInputs = page.locator('input[placeholder="0"]');
+    await priceInputs.first().fill("85000");
+
+    // ── 4. Open PDF Preview Modal ─────────────────────────────────────
+    const previewBtn = page.getByRole("button", { name: /معاينة عرض السعر|Preview/i }).first();
+    await expect(previewBtn).toBeVisible({ timeout: 5_000 });
+    await previewBtn.click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByText("PELECANON", { exact: true })).toBeVisible();
+
+    // Close preview modal
+    const closeBtn = dialog.getByRole("button", { name: /إغلاق المعاينة|Close Preview/i });
+    await closeBtn.click();
+    await expect(dialog).toBeHidden();
+
+    // ── 5. Save the Quote Draft ───────────────────────────────────────
+    const saveBtn = page.getByRole("button", { name: /حفظ كمسودة|Save as Draft/i }).first();
+    await expect(saveBtn).toBeVisible({ timeout: 5_000 });
+    await saveBtn.click();
+
+    // Should indicate save success or toast
+    await expect(
+      page.getByText(/تم حفظ|تم الحفظ|Saved successfully|مسودة|draft/i).first(),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("validates required customer selection before saving when customerId missing", async ({
+    page,
+  }) => {
+    await signIn(page);
+    await page.goto("/admin/quotes/new");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Initial state: category unselected
+    await expect(
+      page.getByText(/اختر نوع المنتج|Select product category/i).first(),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Try to save draft without selecting customer
+    const saveBtn = page.getByRole("button", { name: /حفظ كمسودة|Save as Draft/i }).first();
+    await expect(saveBtn).toBeVisible({ timeout: 5_000 });
+    await saveBtn.click();
+
+    // Should display validation notification about customer
+    await expect(
+      page.getByText(/يرجى تحديد العميل أولاً|Please select a customer first/i).first(),
     ).toBeVisible({ timeout: 5_000 });
   });
 });

@@ -10,6 +10,7 @@
 
 import {
   componentAmount,
+  componentAmountDetails,
   type ComponentLike,
   type CatalogEntityLike,
   type WastageLookup,
@@ -36,6 +37,10 @@ export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+export function round4(n: number): number {
+  return Math.round(n * 10000) / 10000;
+}
+
 // ── Input types ──────────────────────────────────────────────────────────────
 
 export interface ComponentInput {
@@ -45,6 +50,7 @@ export interface ComponentInput {
   qty: number;
   unitOfMeasure: string;
   areaFunctionKey?: string | null;
+  multiplicationMode?: "one_time" | "per_unit";
 }
 
 export interface UnitInput {
@@ -53,13 +59,20 @@ export interface UnitInput {
   widthMm: number;
   heightMm: number;
   depthMm: number;
+  lengthMm?: number;
   qty: number;
+  finishId?: string | null;
   overrideFactorKeys?: Record<string, number>;
   components: ComponentInput[];
 }
 
 export interface SectionInput {
   id: string;
+  label?: string | null;
+  materialId?: string | null;
+  finishId?: string | null;
+  veneerId?: string | null;
+  components?: ComponentInput[];
   units: UnitInput[];
 }
 
@@ -81,6 +94,7 @@ export interface QuoteInput {
 
 export interface CatalogMaterial {
   id: string;
+  name?: string;
   pricingUnit: string;
   pricePerUnit: number;
   defaultWastagePct: number;
@@ -90,16 +104,20 @@ export interface CatalogMaterial {
 
 export interface CatalogHardware {
   id: string;
+  name?: string;
   pricePerPiece: number;
+  pricingUnit?: string;
 }
 
 export interface CatalogAccessory {
   id: string;
+  name?: string;
   pricePerPiece: number;
 }
 
 export interface CatalogManufacturingOp {
   id: string;
+  name?: string;
   rateUnit: string;
   rate: number;
 }
@@ -136,12 +154,25 @@ export interface ComponentOutput {
   id: string;
   kind: string;
   computedAmount: number;
+  consumption?: number;
+  totalConsumption?: number;
+  consumptionUnit?: string;
+  unitPrice?: number;
+  pricingBasis?: string;
+  wastageCost?: number;
+  wastagePct?: number;
+  pricingStatus?: "priced" | "pricing_required";
+  errorMessage?: string;
+  multiplicationMode?: "one_time" | "per_unit";
 }
 
 export interface UnitOutput {
   id: string;
+  qty: number;
   computedUnitCost: number;
   computedUnitPrice: number;
+  computedTotalCost: number;
+  computedTotalPrice: number;
   components: ComponentOutput[];
   factorLines?: UnitFactorLine[];
 }
@@ -150,6 +181,7 @@ export interface SectionOutput {
   id: string;
   computedCost: number;
   computedPrice: number;
+  components?: ComponentOutput[];
   units: UnitOutput[];
 }
 
@@ -210,7 +242,7 @@ function materialToEntity(mat: CatalogMaterial): CatalogEntityLike {
 }
 
 function hardwareToEntity(hw: CatalogHardware): CatalogEntityLike {
-  return { pricePerPiece: hw.pricePerPiece };
+  return { pricePerPiece: hw.pricePerPiece, pricingUnit: hw.pricingUnit };
 }
 
 function accessoryToEntity(acc: CatalogAccessory): CatalogEntityLike {
@@ -221,12 +253,172 @@ function manufacturingToEntity(op: CatalogManufacturingOp): CatalogEntityLike {
   return { rateUnit: op.rateUnit, rate: op.rate };
 }
 
+// ── Component pricing helper ──────────────────────────────────────────────────
+
+function resolveCatalogEntity(
+  comp: ComponentInput,
+  catalog: CatalogLookup,
+): CatalogEntityLike | null {
+  let entity: CatalogEntityLike | null = null;
+
+  if (comp.catalogId) {
+    switch (comp.kind) {
+      case "material":
+        entity = catalog.materials[comp.catalogId]
+          ? materialToEntity(catalog.materials[comp.catalogId])
+          : null;
+        break;
+      case "hardware":
+        entity = catalog.hardware[comp.catalogId]
+          ? hardwareToEntity(catalog.hardware[comp.catalogId])
+          : null;
+        break;
+      case "accessory":
+        entity = catalog.accessories[comp.catalogId]
+          ? accessoryToEntity(catalog.accessories[comp.catalogId])
+          : null;
+        break;
+      case "manufacturing":
+        entity = catalog.manufacturingOps[comp.catalogId]
+          ? manufacturingToEntity(catalog.manufacturingOps[comp.catalogId])
+          : null;
+        break;
+      case "edge_band":
+        entity = catalog.edgeBands[comp.catalogId]
+          ? materialToEntity(catalog.edgeBands[comp.catalogId])
+          : null;
+        break;
+      case "veneer":
+        entity = catalog.veneers[comp.catalogId]
+          ? materialToEntity(catalog.veneers[comp.catalogId])
+          : null;
+        break;
+      case "finish":
+        entity = catalog.finishes[comp.catalogId]
+          ? materialToEntity(catalog.finishes[comp.catalogId])
+          : null;
+        break;
+    }
+  }
+
+  return entity;
+}
+
+function priceComponent(
+  comp: ComponentInput,
+  dims: { w: number; h: number; d: number },
+  catalog: CatalogLookup,
+  wastageLookup: WastageLookup,
+  isSectionComponent: boolean = false,
+  multiplier: number = 1,
+): ComponentOutput {
+  const entity = resolveCatalogEntity(comp, catalog);
+
+  if (!entity) {
+    return {
+      id: comp.id,
+      kind: comp.kind,
+      computedAmount: 0,
+      pricingStatus: "pricing_required",
+      errorMessage: "Pricing information required (unlinked catalog item)",
+      multiplicationMode: comp.multiplicationMode ?? "one_time",
+    };
+  }
+
+  // Determine area function:
+  // For section components: if no area function or "direct", use "direct" (Strategy A).
+  // If explicitly specified and not "direct", use Strategy C with aggregated dimensions.
+  // For unit components: default to standard area key if applicable.
+  let effectiveAreaKey = comp.areaFunctionKey;
+  if (!effectiveAreaKey) {
+    if (isSectionComponent) {
+      effectiveAreaKey = "direct";
+    } else {
+      effectiveAreaKey =
+        comp.kind === "edge_band"
+          ? "edge_band"
+          : (comp.kind === "material" && (comp.unitOfMeasure === "m2" || comp.unitOfMeasure === "m")) ||
+            comp.kind === "veneer" ||
+            comp.kind === "finish"
+          ? "door_panel"
+          : null;
+    }
+  }
+
+  const compLike: ComponentLike = {
+    kind: comp.kind,
+    catalogId: comp.catalogId,
+    qty: comp.qty,
+    unitOfMeasure: comp.unitOfMeasure,
+    areaFunctionKey: effectiveAreaKey,
+  };
+
+  // Dimensions check: If an area function (other than "direct") is used and dimensions are missing/non-positive,
+  // we do NOT fall back to dummy 1000x1000x600. We trigger explicit pricing_required.
+  const requiresDims =
+    effectiveAreaKey &&
+    effectiveAreaKey !== "direct" &&
+    (comp.kind === "material" ||
+      comp.kind === "edge_band" ||
+      comp.kind === "veneer" ||
+      comp.kind === "finish" ||
+      comp.kind === "manufacturing");
+
+  if (requiresDims && (dims.w <= 0 || dims.h <= 0)) {
+    return {
+      id: comp.id,
+      kind: comp.kind,
+      computedAmount: 0,
+      pricingStatus: "pricing_required",
+      errorMessage: isSectionComponent
+        ? "Section has no units with valid dimensions to calculate area-based component."
+        : "Unit dimensions must be positive to calculate area-based component.",
+      multiplicationMode: comp.multiplicationMode ?? "one_time",
+    };
+  }
+
+  try {
+    const details = componentAmountDetails(compLike, entity, dims, wastageLookup);
+    const effectiveMultiplier = Math.max(1, multiplier);
+    const amount = round2(details.amount * effectiveMultiplier);
+    const totalConsumption = round4((details.totalConsumption ?? 0) * effectiveMultiplier);
+    const wastageCost = round2((details.wastageCost ?? 0) * effectiveMultiplier);
+
+    return {
+      id: comp.id,
+      kind: comp.kind,
+      computedAmount: amount,
+      consumption: details.consumptionPerItem,
+      totalConsumption,
+      consumptionUnit: details.consumptionUnit,
+      unitPrice: details.unitPrice,
+      pricingBasis: details.pricingBasis,
+      wastageCost,
+      wastagePct: details.wastagePct,
+      pricingStatus: "priced",
+      multiplicationMode: comp.multiplicationMode ?? "one_time",
+    };
+  } catch (err: any) {
+    return {
+      id: comp.id,
+      kind: comp.kind,
+      computedAmount: 0,
+      pricingStatus: "pricing_required",
+      errorMessage: err?.message ?? "Pricing information required",
+      multiplicationMode: comp.multiplicationMode ?? "one_time",
+    };
+  }
+}
+
 // ── Unit pricing ─────────────────────────────────────────────────────────────
 
 function priceUnit(
   unit: UnitInput,
   catalog: CatalogLookup,
   wastageLookup: WastageLookup,
+  inheritedFinishId?: string | null,
+  inheritedMaterialId?: string | null,
+  inheritedVeneerId?: string | null,
 ): UnitOutput {
   const dims = { w: unit.widthMm, h: unit.heightMm, d: unit.depthMm };
 
@@ -236,65 +428,17 @@ function priceUnit(
   );
 
   const components: ComponentOutput[] = sortedComponents.map((comp) => {
-    let entity: CatalogEntityLike | null = null;
-
-    if (comp.catalogId) {
-      switch (comp.kind) {
-        case "material":
-          entity = catalog.materials[comp.catalogId]
-            ? materialToEntity(catalog.materials[comp.catalogId])
-            : null;
-          break;
-        case "hardware":
-          entity = catalog.hardware[comp.catalogId]
-            ? hardwareToEntity(catalog.hardware[comp.catalogId])
-            : null;
-          break;
-        case "accessory":
-          entity = catalog.accessories[comp.catalogId]
-            ? accessoryToEntity(catalog.accessories[comp.catalogId])
-            : null;
-          break;
-        case "manufacturing":
-          entity = catalog.manufacturingOps[comp.catalogId]
-            ? manufacturingToEntity(catalog.manufacturingOps[comp.catalogId])
-            : null;
-          break;
-        case "edge_band":
-          entity = catalog.edgeBands[comp.catalogId]
-            ? materialToEntity(catalog.edgeBands[comp.catalogId])
-            : null;
-          break;
-        case "veneer":
-          entity = catalog.veneers[comp.catalogId]
-            ? materialToEntity(catalog.veneers[comp.catalogId])
-            : null;
-          break;
-        case "finish":
-          entity = catalog.finishes[comp.catalogId]
-            ? materialToEntity(catalog.finishes[comp.catalogId])
-            : null;
-          break;
+    let resolvedComp = comp;
+    if (!comp.catalogId) {
+      if (comp.kind === "finish" && (unit.finishId || inheritedFinishId)) {
+        resolvedComp = { ...comp, catalogId: unit.finishId || inheritedFinishId || null };
+      } else if (comp.kind === "material" && inheritedMaterialId) {
+        resolvedComp = { ...comp, catalogId: inheritedMaterialId || null };
+      } else if (comp.kind === "veneer" && inheritedVeneerId) {
+        resolvedComp = { ...comp, catalogId: inheritedVeneerId || null };
       }
     }
-
-    if (!entity) {
-      return { id: comp.id, kind: comp.kind, computedAmount: 0 };
-    }
-
-    const compLike: ComponentLike = {
-      kind: comp.kind,
-      qty: comp.qty,
-      unitOfMeasure: comp.unitOfMeasure,
-      areaFunctionKey: comp.areaFunctionKey,
-    };
-
-    try {
-      const amount = componentAmount(compLike, entity, dims, wastageLookup);
-      return { id: comp.id, kind: comp.kind, computedAmount: round2(amount) };
-    } catch {
-      return { id: comp.id, kind: comp.kind, computedAmount: 0 };
-    }
+    return priceComponent(resolvedComp, dims, catalog, wastageLookup, false, 1);
   });
 
   const computedUnitCost = round2(
@@ -308,10 +452,17 @@ function priceUnit(
     unit.overrideFactorKeys,
   );
 
+  const qty = unit.qty > 0 ? unit.qty : 1;
+  const computedTotalCost = round2(computedUnitCost * qty);
+  const computedTotalPrice = round2(factorResult.finalPrice * qty);
+
   return {
     id: unit.id,
+    qty,
     computedUnitCost,
     computedUnitPrice: factorResult.finalPrice,
+    computedTotalCost,
+    computedTotalPrice,
     components,
     factorLines: factorResult.lines,
   };
@@ -329,19 +480,94 @@ function priceSection(
     a.id.localeCompare(b.id),
   );
 
-  const units = sortedUnits.map((u) => priceUnit(u, catalog, wastageLookup));
+  const units = sortedUnits.map((u) =>
+    priceUnit(
+      u,
+      catalog,
+      wastageLookup,
+      section.finishId,
+      section.materialId,
+      section.veneerId,
+    ),
+  );
 
-  const computedCost = round2(
-    units.reduce((sum, u) => sum + u.computedUnitCost, 0),
+  const sortedComponents = [...(section.components || [])].sort((a, b) =>
+    a.id.localeCompare(b.id),
   );
-  const computedPrice = round2(
-    units.reduce((sum, u) => sum + u.computedUnitPrice, 0),
+
+  // Derive section run dimensions from child units:
+  // w = sum(w_i * q_i), h = max(h_i), d = max(d_i)
+  let sectionW = 0;
+  let sectionH = 0;
+  let sectionD = 0;
+  let totalUnitQty = 0;
+
+  for (const u of section.units) {
+    const uQty = u.qty > 0 ? u.qty : 1;
+    totalUnitQty += uQty;
+    const w = u.widthMm || 0;
+    const h = u.heightMm || 0;
+    const d = u.depthMm || 0;
+    sectionW += w * uQty;
+    if (h > sectionH) sectionH = h;
+    if (d > sectionD) sectionD = d;
+  }
+
+  const sectionDims = { w: sectionW, h: sectionH, d: sectionD };
+
+  const components = sortedComponents.map((c) => {
+    let resolvedComp = c;
+    if (!c.catalogId) {
+      if (c.kind === "finish" && section.finishId) {
+        resolvedComp = { ...c, catalogId: section.finishId };
+      } else if (c.kind === "material" && section.materialId) {
+        resolvedComp = { ...c, catalogId: section.materialId };
+      } else if (c.kind === "veneer" && section.veneerId) {
+        resolvedComp = { ...c, catalogId: section.veneerId };
+      }
+    }
+
+    const mult =
+      c.multiplicationMode === "per_unit"
+        ? Math.max(1, totalUnitQty)
+        : 1;
+
+    return priceComponent(
+      resolvedComp,
+      sectionDims,
+      catalog,
+      wastageLookup,
+      true, // isSectionComponent
+      mult,
+    );
+  });
+
+  const sectionComponentCost = round2(
+    components.reduce((sum, c) => sum + c.computedAmount, 0),
   );
+
+  const factorResult = applyUnitFactors(
+    sectionComponentCost,
+    catalog.pricingFactors,
+    {},
+  );
+  const sectionComponentPrice = factorResult.finalPrice;
+
+  const unitsCost = round2(
+    units.reduce((sum, u) => sum + u.computedTotalCost, 0),
+  );
+  const unitsPrice = round2(
+    units.reduce((sum, u) => sum + u.computedTotalPrice, 0),
+  );
+
+  const computedCost = round2(unitsCost + sectionComponentCost);
+  const computedPrice = round2(unitsPrice + sectionComponentPrice);
 
   return {
     id: section.id,
     computedCost,
     computedPrice,
+    components,
     units,
   };
 }

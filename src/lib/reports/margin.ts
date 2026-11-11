@@ -164,7 +164,7 @@ export const getMarginReport = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    const client = context.supabase;
+    const client = (context as any).supabase;
 
     const fromDate = new Date(data.from);
     const toDate = new Date(data.to);

@@ -51,7 +51,7 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 - Steps: `add` → `snapshot` → `mul_pct`. Immutable rule versions.
 - Default formula supports labor / wastage / overhead / margin / luxury / complexity / rush.
 - Wastage rules with material_type + dimension range lookups.
-- `/admin/quotes/new` (legacy builder) and `/admin/quotes/configurator` (free-form builder).
+- `/admin/quotes/new` (commercial quotation builder; legacy `/admin/quotes/configurator` redirects here).
 - Unified PLC ID (PLC-XXXXX) ties quote → invoice → order chain.
 
 ### Phase 5 — Production Tracking (100%)
@@ -134,8 +134,7 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 | i18n locales | `src/i18n/locales/{ar,en,fr}.json` |
 | Public tracking | `src/routes/track.tsx`, `src/lib/tracking.functions.ts` |
 | Admin orders | `src/routes/admin/orders.tsx` |
-| Quote builder (legacy) | `src/routes/admin/quotes/new.tsx` |
-| Quote builder (configurator) | `src/routes/admin/quotes/configurator.tsx` |
+| Commercial quotation builder | `src/routes/admin/quotes/new.tsx` (legacy `configurator.tsx` redirects here) |
 | Production stages | `src/lib/stages.ts` |
 | R2 docs | `docs/R2.md` |
 

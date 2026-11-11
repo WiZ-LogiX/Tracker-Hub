@@ -97,6 +97,18 @@ export function requireRole(
 }
 
 /**
+ * Guard that strictly forbids Task Workers from accessing administrative or
+ * non-task ERP modules.
+ */
+export function forbidWorker(ctx: TenantContext, moduleName?: string): void {
+  if (ctx.role === "worker") {
+    throw new Error(
+      `Forbidden: Task Workers do not have access to ${moduleName || "this module"}`,
+    );
+  }
+}
+
+/**
  * Check whether a loaded UserPermissions set includes the given slug.
  * The owner role always has all permissions (bypass check).
  */
