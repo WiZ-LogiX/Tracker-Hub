@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "postinstall": "node scripts/patch-textkit.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",

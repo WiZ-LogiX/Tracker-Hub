@@ -8,31 +8,47 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTranslation } from "react-i18next";
-import { LANG_META, SUPPORTED_LANGS, type SupportedLang } from "@/i18n";
+import { LANG_META, SUPPORTED_LANGS, type SupportedLang, changeAppLanguage, normalizeLang } from "@/i18n";
 
 export function LanguageSwitcher() {
-  const { i18n, t, ready } = useTranslation();
-  const current = i18n.language as SupportedLang;
-  // Avoid hydration mismatch: aria-label must match between SSR and first client render.
-  // i18n's `ready` is true once loaded — until then render a stable fallback (the same
-  // string the server emits).
+  const { i18n, t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const ariaLabel = mounted ? t("common.language") : "Language";
+
+  const current = normalizeLang(i18n.language);
+  const ariaLabel = mounted ? t("common.language", "Language") : "Language";
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={ariaLabel}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 px-2.5 flex items-center gap-1.5 text-xs font-medium cursor-pointer"
+          aria-label={ariaLabel}
+        >
           <Globe className="h-4 w-4" />
+          <span className="uppercase text-[11px] font-semibold tracking-wider">
+            {current}
+          </span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {SUPPORTED_LANGS.map((lng) => (
-          <DropdownMenuItem key={lng} onClick={() => i18n.changeLanguage(lng)}>
-            <span className="flex-1">{LANG_META[lng].label}</span>
-            {current === lng && <Check className="h-4 w-4 ms-2" />}
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent align="end" className="min-w-[140px]">
+        {SUPPORTED_LANGS.map((lng) => {
+          const isSelected = current === lng;
+          return (
+            <DropdownMenuItem
+              key={lng}
+              onClick={() => changeAppLanguage(lng)}
+              className={`flex items-center justify-between cursor-pointer ${
+                isSelected ? "font-bold text-primary" : ""
+              }`}
+            >
+              <span>{LANG_META[lng].label}</span>
+              {isSelected && <Check className="h-4 w-4 ms-2 text-primary" />}
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

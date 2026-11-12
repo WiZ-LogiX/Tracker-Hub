@@ -13,6 +13,7 @@ import type {
 } from "@/lib/quote-list-types";
 import { formatEGP } from "@/lib/pricing";
 import { QuotationCostDrawer } from "@/components/cost-analysis/QuotationCostDrawer";
+import { Customer360Drawer } from "@/components/customers/Customer360Drawer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,9 +67,10 @@ function QuotesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Cost Drawer state
+  // Cost Drawer & Customer 360 state
   const [costQuoteId, setCostQuoteId] = useState<string | null>(null);
   const [isCostDrawerOpen, setIsCostDrawerOpen] = useState(false);
+  const [customer360Id, setCustomer360Id] = useState<string | null>(null);
 
   // TanStack Query for paginated quotes
   const { data: paginationResult, isLoading, refetch } = useQuery({
@@ -162,7 +164,7 @@ function QuotesPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b pb-5">
         <div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight flex items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5 text-foreground">
             <FileText className="h-7 w-7 text-primary" />
             <span>{isRtl ? "المقايسات وعروض الأسعار" : "Quotations & Estimates"}</span>
           </h1>
@@ -238,13 +240,13 @@ function QuotesPage() {
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>{isRtl ? "رقم المقايسة" : "Quote #"}</TableHead>
+                <TableHead className="w-40">{isRtl ? "رقم المقايسة" : "Quote #"}</TableHead>
                 <TableHead>{isRtl ? "العميل" : "Customer"}</TableHead>
-                <TableHead>{isRtl ? "القيمة قبل الضريبة" : "Subtotal"}</TableHead>
-                <TableHead>{isRtl ? "الإجمالي" : "Total (incl. VAT)"}</TableHead>
+                <TableHead className="text-end">{isRtl ? "القيمة قبل الضريبة" : "Subtotal"}</TableHead>
+                <TableHead className="text-end">{isRtl ? "الإجمالي" : "Total (incl. VAT)"}</TableHead>
                 <TableHead>{isRtl ? "الحالة" : "Status"}</TableHead>
                 <TableHead>{isRtl ? "تاريخ الإنشاء" : "Created Date"}</TableHead>
-                <TableHead className="text-center w-32">{isRtl ? "الإجراءات" : "Actions"}</TableHead>
+                <TableHead className="text-center w-28">{isRtl ? "الإجراءات" : "Actions"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -280,11 +282,16 @@ function QuotesPage() {
                     {/* Quote Number */}
                     <TableCell className="font-mono text-xs font-bold text-primary">
                       <div className="space-y-0.5">
-                        <Link to="/admin/quotes/$id" params={{ id: q.id }} className="hover:underline flex items-center gap-1">
-                          <span>{q.quoteNumber}</span>
+                        <Link to="/admin/quotes/$id" params={{ id: q.id }} className="hover:underline flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs sm:text-sm">{q.quoteNumber}</span>
                           {q.orderId && (
-                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-primary/10 text-primary border-primary/20">
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border-primary/20 font-bold">
                               ORD
+                            </Badge>
+                          )}
+                          {(q.opportunityId || q.orderId) && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 font-bold">
+                              PRJ
                             </Badge>
                           )}
                         </Link>
@@ -293,10 +300,10 @@ function QuotesPage() {
                             to="/admin/crm"
                             search={{ opportunityId: q.opportunityId }}
                             onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors font-sans"
+                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors font-sans"
                             title={q.opportunityTitle || undefined}
                           >
-                            <Briefcase className="h-2.5 w-2.5 text-primary/70" />
+                            <Briefcase className="h-3 w-3 text-primary/70" />
                             <span>{q.opportunityNumber || "OPP"}</span>
                           </Link>
                         )}
@@ -305,13 +312,27 @@ function QuotesPage() {
 
                     {/* Customer */}
                     <TableCell className="text-xs font-medium text-foreground">
-                      <div>
-                        <div>{q.customerName || "—"}</div>
+                      <div className="space-y-0.5">
+                        {q.customerId ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCustomer360Id(q.customerId);
+                            }}
+                            className="text-xs sm:text-sm font-semibold text-primary hover:underline cursor-pointer text-start block truncate max-w-[200px]"
+                            title={isRtl ? "فتح ملف العميل 360°" : "Open Customer 360 profile"}
+                          >
+                            {q.customerName || "—"}
+                          </button>
+                        ) : (
+                          <div className="text-xs sm:text-sm font-semibold">{q.customerName || "—"}</div>
+                        )}
                         {q.customerPhone && (
-                          <div className="font-mono text-[11px] text-muted-foreground">{q.customerPhone}</div>
+                          <div className="font-mono text-xs text-muted-foreground">{q.customerPhone}</div>
                         )}
                         {q.salesOwnerName && (
-                          <div className="text-[10px] text-muted-foreground/80 flex items-center gap-1 mt-0.5">
+                          <div className="text-xs text-muted-foreground/80 flex items-center gap-1 mt-0.5">
                             <span className="font-normal">{isRtl ? "المسؤول:" : "Rep:"}</span>
                             <span>{q.salesOwnerName}</span>
                           </div>
@@ -320,18 +341,18 @@ function QuotesPage() {
                     </TableCell>
 
                     {/* Subtotal */}
-                    <TableCell className="font-mono text-xs text-muted-foreground font-medium">
+                    <TableCell className="font-mono text-xs sm:text-sm text-muted-foreground font-medium text-end">
                       {formatEGP(q.subtotal)}
                     </TableCell>
 
                     {/* Total */}
-                    <TableCell className="font-mono text-xs font-bold text-foreground">
+                    <TableCell className="font-mono text-xs sm:text-sm font-bold text-foreground text-end">
                       {formatEGP(q.total)}
                     </TableCell>
 
                     {/* Status */}
                     <TableCell>
-                      <Badge variant="outline" className={`text-[10px] capitalize font-medium ${getStatusBadgeClass(q.progressiveStatus || q.status)}`}>
+                      <Badge variant="outline" className={`text-xs px-2.5 py-0.5 capitalize font-medium ${getStatusBadgeClass(q.progressiveStatus || q.status)}`}>
                         {q.statusLabelAr || q.status}
                       </Badge>
                     </TableCell>
@@ -347,16 +368,16 @@ function QuotesPage() {
 
                     {/* Actions */}
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-1.5">
                         {/* Cost Analysis Trigger */}
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={(e) => handleOpenCostAnalysis(q.id, e)}
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
                           title={isRtl ? "تحليل التكاليف وهامش الربحية" : "Cost Analysis & Margin"}
                         >
-                          <BarChart3 className="h-3.5 w-3.5" />
+                          <BarChart3 className="h-4 w-4" />
                         </Button>
 
                         {/* View Details */}
@@ -364,7 +385,7 @@ function QuotesPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                            className="h-8 text-xs px-2.5 text-muted-foreground hover:text-foreground"
                           >
                             <span>{isRtl ? "عرض" : "View"}</span>
                           </Button>
@@ -463,6 +484,13 @@ function QuotesPage() {
         quoteId={costQuoteId}
         open={isCostDrawerOpen}
         onOpenChange={setIsCostDrawerOpen}
+      />
+
+      {/* Customer 360 Drawer */}
+      <Customer360Drawer
+        customerId={customer360Id}
+        open={!!customer360Id}
+        onOpenChange={(open) => !open && setCustomer360Id(null)}
       />
     </div>
   );

@@ -131,7 +131,7 @@ function DashboardPage() {
       {/* ── Page Header & Quick Launch Strip ──────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-5">
         <div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight flex items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5 text-foreground">
             <Activity className="h-7 w-7 text-primary" />
             <span>{isRtl ? "مركز القيادة والعمليات التنفيذية" : "Executive Operations Command Center"}</span>
           </h1>
@@ -143,19 +143,19 @@ function DashboardPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Link to="/admin/quotes/new">
-            <Button className="gap-2 bg-primary text-primary-foreground shadow-sm h-9 text-xs">
+            <Button className="gap-2 bg-primary text-primary-foreground shadow-xs h-9 text-xs font-semibold">
               <Plus className="h-3.5 w-3.5" />
               <span>{isRtl ? "عرض سعر جديد" : "New Quotation"}</span>
             </Button>
           </Link>
           <Link to="/admin/tasks">
-            <Button variant="outline" className="gap-1.5 h-9 text-xs">
+            <Button variant="outline" className="gap-1.5 h-9 text-xs font-medium">
               <CheckSquare className="h-3.5 w-3.5" />
               <span>{isRtl ? "المهام" : "Tasks"}</span>
             </Button>
           </Link>
           <Link to="/admin/inventory">
-            <Button variant="outline" className="gap-1.5 h-9 text-xs">
+            <Button variant="outline" className="gap-1.5 h-9 text-xs font-medium">
               <Boxes className="h-3.5 w-3.5" />
               <span>{isRtl ? "المخزون" : "Inventory"}</span>
             </Button>
@@ -174,27 +174,27 @@ function DashboardPage() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {isRtl ? "التحصيل والمستحقات" : "Financial & Collection"}
                   </p>
-                  <p className="text-2xl font-serif font-bold tracking-tight text-foreground">
+                  <p className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-foreground">
                     {formatEGP(financial.totalCollected)}
                   </p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <Receipt className="h-5 w-5" />
                 </div>
               </div>
-              <div className="mt-3 space-y-1.5">
+              <div className="mt-4 space-y-1.5">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>{isRtl ? "معدل التحصيل:" : "Collection Rate:"}</span>
-                  <span className="font-mono font-bold text-emerald-600">{financial.collectionRate.toFixed(1)}%</span>
+                  <span className="font-mono font-bold text-primary">{financial.collectionRate.toFixed(1)}%</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
                   <div
-                    className="bg-emerald-600 h-1.5 rounded-full transition-all"
+                    className="bg-primary h-1.5 rounded-full transition-all"
                     style={{ width: `${Math.min(100, financial.collectionRate)}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1">
-                  <span>{isRtl ? "المتبقي:" : "Due:"} <strong className="text-amber-600 font-mono">{formatEGP(financial.outstandingBalance)}</strong></span>
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                  <span>{isRtl ? "المتبقي:" : "Due:"} <strong className="text-amber-700 dark:text-amber-400 font-mono">{formatEGP(financial.outstandingBalance)}</strong></span>
                   <span>{financial.unpaidInvoicesCount} {isRtl ? "فواتير غير مسددة" : "unpaid"}</span>
                 </div>
               </div>
@@ -211,11 +211,11 @@ function DashboardPage() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {isRtl ? "القيمة التجارية للمقايسات" : "Commercial Pipeline"}
                   </p>
-                  <p className="text-2xl font-serif font-bold tracking-tight text-foreground">
+                  <p className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-foreground">
                     {formatEGP(commercial.totalPipelineValue)}
                   </p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-gold/15 text-gold flex items-center justify-center">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <TrendingUp className="h-5 w-5" />
                 </div>
               </div>
@@ -224,7 +224,7 @@ function DashboardPage() {
                   <span className="font-bold text-foreground">{commercial.totalQuotes}</span>{" "}
                   <span>{isRtl ? "مقايسة" : "quotes"}</span>
                 </div>
-                <div className="flex items-center gap-1 text-emerald-600 font-semibold">
+                <div className="flex items-center gap-1 text-primary font-semibold">
                   <span>{isRtl ? "نسبة الإغلاق:" : "Conversion:"}</span>
                   <span className="font-mono">{commercial.conversionRate.toFixed(1)}%</span>
                 </div>
@@ -242,26 +242,26 @@ function DashboardPage() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {isRtl ? "الإنتاج النشط بالمصنع" : "Active Factory Orders"}
                   </p>
-                  <p className="text-2xl font-serif font-bold tracking-tight text-foreground">
+                  <p className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-foreground">
                     {factory.activeInProduction}
                   </p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <Hammer className="h-5 w-5" />
                 </div>
               </div>
               <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                 {factory.bottleneckStage ? (
                   <div className="flex items-center gap-1.5">
-                    <span className="text-amber-600 font-bold">{isRtl ? "عنق الزجاجة:" : "Bottleneck:"}</span>
-                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-300 font-medium">
+                    <span className="text-amber-700 dark:text-amber-400 font-bold">{isRtl ? "عنق الزجاجة:" : "Bottleneck:"}</span>
+                    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60 font-medium">
                       {getStageLabelAr(factory.bottleneckStage.stage)} ({factory.bottleneckStage.count})
                     </Badge>
                   </div>
                 ) : (
                   <span>{isRtl ? "خطوط الإنتاج متوازنة" : "Lines Balanced"}</span>
                 )}
-                <span className="font-mono text-[11px]">{factory.workOrders.total} {isRtl ? "أمر شغل" : "WO"}</span>
+                <span className="font-mono text-xs">{factory.workOrders.total} {isRtl ? "أمر شغل" : "WO"}</span>
               </div>
             </CardContent>
           </Card>
@@ -276,20 +276,20 @@ function DashboardPage() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {isRtl ? "الشحنات والتسليمات" : "Deliveries & Handover"}
                   </p>
-                  <p className="text-2xl font-serif font-bold tracking-tight text-foreground">
+                  <p className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-foreground">
                     {deliveries.outForDelivery + deliveries.readyForDispatch + deliveries.installationPending}
                   </p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <Truck className="h-5 w-5" />
                 </div>
               </div>
               <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <span className="text-blue-600 font-semibold">{deliveries.readyForDispatch} {isRtl ? "جاهز" : "ready"}</span> •
-                  <span className="text-purple-600 font-semibold">{deliveries.installationPending} {isRtl ? "تركيب" : "install"}</span>
+                  <span className="text-primary font-semibold">{deliveries.readyForDispatch} {isRtl ? "جاهز" : "ready"}</span> •
+                  <span className="text-muted-foreground font-semibold">{deliveries.installationPending} {isRtl ? "تركيب" : "install"}</span>
                 </div>
-                <div className="text-emerald-600 font-semibold font-mono">
+                <div className="text-primary font-semibold font-mono">
                   {deliveries.completed} {isRtl ? "مكتمل" : "done"}
                 </div>
               </div>
@@ -299,18 +299,18 @@ function DashboardPage() {
       </div>
 
       {/* ── Management Attention Center ("Needs Attention") ────────────────── */}
-      <Card className="border-2 border-amber-300/80 bg-amber-50/20 dark:bg-amber-950/10 rounded-2xl shadow-xs overflow-hidden">
-        <CardHeader className="p-4 bg-amber-100/40 dark:bg-amber-900/20 border-b border-amber-200/60 flex flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="h-5 w-5 text-amber-700 dark:text-amber-400" />
-            <CardTitle className="text-base font-bold text-amber-900 dark:text-amber-300">
-              {isRtl ? "تنبيهات تتطلب إجراء الإدارة (Needs Attention)" : "Management Attention Center"}
+      <Card className="border border-border/80 bg-card rounded-2xl shadow-xs overflow-hidden">
+        <CardHeader className="p-4 bg-muted/30 border-b flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <CardTitle className="text-base font-bold text-foreground">
+              {isRtl ? "مركز تنبيهات واستثناءات الإدارة" : "Management Attention Center"}
             </CardTitle>
-            <Badge variant="outline" className="bg-amber-200/60 text-amber-900 border-amber-400 text-xs font-bold">
+            <Badge variant="outline" className="bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800/80 text-xs font-bold px-2 py-0.5">
               {attentionItems.length}
             </Badge>
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground hidden sm:inline">
             {isRtl ? "استثناءات تشغيلية تتطلب تدخلاً فورياً" : "Operational exceptions requiring immediate action"}
           </span>
         </CardHeader>
@@ -318,7 +318,7 @@ function DashboardPage() {
           {attentionItems.length === 0 ? (
             <div className="py-6 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-1.5">
               <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-              <span className="font-semibold text-foreground">
+              <span className="font-semibold text-foreground text-sm">
                 {isRtl ? "لا توجد مشاكل حرجة حالياً — كافة العمليات تسير وفق المعدلات الطبيعية" : "No critical issues right now — all operations normal"}
               </span>
             </div>
@@ -326,20 +326,20 @@ function DashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {attentionItems.map((item) => {
                 const getSeverityStyle = (sev: string) => {
-                  if (sev === "critical") return "border-rose-300 bg-rose-50/60 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200";
-                  if (sev === "warning") return "border-amber-300 bg-amber-50/60 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200";
-                  return "border-blue-300 bg-blue-50/60 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200";
+                  if (sev === "critical") return "border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200";
+                  if (sev === "warning") return "border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200";
+                  return "border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-200";
                 };
 
                 return (
                   <Link key={item.id} to={item.link} className="block group">
-                    <div className={`p-3 rounded-xl border transition-all group-hover:shadow-xs flex items-start justify-between gap-3 text-xs ${getSeverityStyle(item.severity)}`}>
+                    <div className={`p-3.5 rounded-xl border transition-all group-hover:shadow-xs flex items-start justify-between gap-3 text-xs ${getSeverityStyle(item.severity)}`}>
                       <div className="space-y-1 min-w-0">
-                        <div className="font-bold flex items-center gap-1.5">
+                        <div className="font-bold flex items-center gap-1.5 text-xs">
                           {item.severity === "critical" && <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />}
                           <span className="truncate">{item.title}</span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground line-clamp-1">{item.description}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 mt-1 rtl:rotate-180 transition-transform" />
                     </div>
@@ -359,11 +359,11 @@ function DashboardPage() {
           <Card className="border rounded-2xl shadow-xs">
             <CardHeader className="p-4 bg-muted/20 border-b flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Hammer className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Hammer className="h-4.5 w-4.5 text-primary" />
                   <span>{isRtl ? "مراحل خط الإنتاج الفعلي" : "Factory Production Pipeline"}</span>
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs mt-0.5">
                   {isRtl ? "توزيع الأوامر على مراحل التصنيع الثمانية" : "Order distribution across 8 stages"}
                 </CardDescription>
               </div>
@@ -384,12 +384,12 @@ function DashboardPage() {
                       key={st}
                       className={`p-2.5 rounded-xl border text-xs flex flex-col justify-between ${
                         isBottleneck
-                          ? "bg-amber-50/80 border-amber-300 text-amber-900 font-bold"
-                          : "bg-muted/10 border-border/60 text-muted-foreground"
+                          ? "bg-amber-50/80 border-amber-300 text-amber-900 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 font-bold"
+                          : "bg-muted/30 border-border/60 text-muted-foreground"
                       }`}
                     >
-                      <span className="text-[11px] truncate">{getStageLabelAr(st)}</span>
-                      <span className={`text-base font-mono font-bold mt-1 ${isBottleneck ? "text-amber-700" : "text-foreground"}`}>
+                      <span className="text-xs truncate">{getStageLabelAr(st)}</span>
+                      <span className={`text-base font-mono font-bold mt-1 ${isBottleneck ? "text-amber-700 dark:text-amber-400" : "text-foreground"}`}>
                         {count}
                       </span>
                     </div>
@@ -400,11 +400,11 @@ function DashboardPage() {
               {/* Work Orders Strip */}
               <div className="p-3 bg-muted/20 border rounded-xl flex items-center justify-between text-xs">
                 <span className="text-muted-foreground font-medium">{isRtl ? "أوامر الشغل بالمصنع:" : "Factory Work Packages:"}</span>
-                <div className="flex items-center gap-3 font-mono">
-                  <span className="text-blue-600">{factory.workOrders.ready} {isRtl ? "جاهز" : "ready"}</span>
-                  <span className="text-amber-600">{factory.workOrders.inProgress} {isRtl ? "قيد التنفيذ" : "in-progress"}</span>
-                  <span className="text-purple-600">{factory.workOrders.qcPending} {isRtl ? "بانتظار الفحص" : "QC"}</span>
-                  <span className="text-emerald-600">{factory.workOrders.completed} {isRtl ? "مكتمل" : "done"}</span>
+                <div className="flex items-center gap-3 font-mono font-semibold">
+                  <span className="text-blue-600 dark:text-blue-400">{factory.workOrders.ready} {isRtl ? "جاهز" : "ready"}</span>
+                  <span className="text-amber-600 dark:text-amber-400">{factory.workOrders.inProgress} {isRtl ? "قيد التنفيذ" : "in-progress"}</span>
+                  <span className="text-purple-600 dark:text-purple-400">{factory.workOrders.qcPending} {isRtl ? "بانتظار الفحص" : "QC"}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">{factory.workOrders.completed} {isRtl ? "مكتمل" : "done"}</span>
                 </div>
               </div>
             </CardContent>
@@ -414,11 +414,11 @@ function DashboardPage() {
           <Card className="border rounded-2xl shadow-xs">
             <CardHeader className="p-4 bg-muted/20 border-b flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Boxes className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Boxes className="h-4.5 w-4.5 text-primary" />
                   <span>{isRtl ? "حالة المخزون وتخصيص الخامات" : "Inventory & Stock Health"}</span>
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs mt-0.5">
                   {isRtl ? "مراقبة النواقص وحجز الخامات لأوامر الإنتاج" : "Stock shortages and reservations"}
                 </CardDescription>
               </div>
@@ -432,22 +432,22 @@ function DashboardPage() {
             <CardContent className="p-4 space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">{isRtl ? "إجمالي أصناف المخزون المسجلة:" : "Total Registered Stock Items:"}</span>
-                <span className="font-mono font-bold text-foreground">{inventory.totalStockItems}</span>
+                <span className="font-mono font-bold text-foreground text-sm">{inventory.totalStockItems}</span>
               </div>
 
               {inventory.lowStockItems.length === 0 ? (
-                <div className="p-4 bg-emerald-50/40 border border-emerald-200/60 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  <span>{isRtl ? "المخزون كافٍ ولا توجد نواقص حرجة حالياً" : "Stock is sufficient with no critical shortages"}</span>
+                <div className="p-4 bg-emerald-50/40 border border-emerald-200/60 rounded-xl text-xs text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/40 dark:text-emerald-300 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-medium">{isRtl ? "المخزون كافٍ ولا توجد نواقص حرجة حالياً" : "Stock is sufficient with no critical shortages"}</span>
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase">{isRtl ? "أصناف منخفضة / تتطلب طلب شراء:" : "Low Stock Alerts:"}</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase">{isRtl ? "أصناف منخفضة / تتطلب طلب شراء:" : "Low Stock Alerts:"}</span>
                   {inventory.lowStockItems.map((item) => (
-                    <div key={item.id} className="p-2.5 bg-rose-50/40 border border-rose-200/60 rounded-xl flex items-center justify-between text-xs">
+                    <div key={item.id} className="p-2.5 bg-rose-50/40 border border-rose-200/60 dark:bg-rose-950/20 dark:border-rose-900/40 rounded-xl flex items-center justify-between text-xs">
                       <div className="font-mono font-bold text-foreground">{item.materialCode}</div>
-                      <div className="text-[11px] text-muted-foreground font-mono">
-                        {isRtl ? "المتاح:" : "Avail:"} <strong className="text-rose-600 font-bold">{item.availableQuantity}</strong> • {isRtl ? "محجوز:" : "Res:"} {item.reservedQuantity}
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {isRtl ? "المتاح:" : "Avail:"} <strong className="text-rose-600 dark:text-rose-400 font-bold">{item.availableQuantity}</strong> • {isRtl ? "محجوز:" : "Res:"} {item.reservedQuantity}
                       </div>
                     </div>
                   ))}
@@ -463,11 +463,11 @@ function DashboardPage() {
           <Card className="border rounded-2xl shadow-xs">
             <CardHeader className="p-4 bg-muted/20 border-b flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <RefreshCcw className="h-4 w-4 text-primary" />
-                  <span>{isRtl ? "إدارة الجودة وإعادة التصنيع (Remakes)" : "Quality & Remakes"}</span>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <RefreshCcw className="h-4.5 w-4.5 text-primary" />
+                  <span>{isRtl ? "إدارة الجودة ومتابعة العيوب" : "Quality & Remakes"}</span>
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs mt-0.5">
                   {isRtl ? "متابعة العيوب وفحوصات الجودة والضمان" : "Defect tracking, QC failures & warranties"}
                 </CardDescription>
               </div>
@@ -481,16 +481,16 @@ function DashboardPage() {
             <CardContent className="p-4 space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 <div className="p-3 bg-muted/20 border rounded-xl text-xs">
-                  <span className="text-muted-foreground block text-[10px]">{isRtl ? "إعادة تصنيع مفتوحة" : "Open Remakes"}</span>
-                  <span className="text-xl font-mono font-bold text-foreground mt-0.5 block">{quality.openRemakesCount}</span>
+                  <span className="text-muted-foreground block text-xs">{isRtl ? "إعادة تصنيع مفتوحة" : "Open Remakes"}</span>
+                  <span className="text-2xl font-mono font-bold text-foreground mt-1 block">{quality.openRemakesCount}</span>
                 </div>
-                <div className="p-3 bg-rose-50/40 border border-rose-200/60 rounded-xl text-xs">
-                  <span className="text-rose-700 block text-[10px] font-semibold">{isRtl ? "حالات حرجة" : "Critical"}</span>
-                  <span className="text-xl font-mono font-bold text-rose-700 mt-0.5 block">{quality.criticalRemakesCount}</span>
+                <div className="p-3 bg-rose-50/40 border border-rose-200/60 dark:bg-rose-950/20 dark:border-rose-900/40 rounded-xl text-xs">
+                  <span className="text-rose-700 dark:text-rose-300 block text-xs font-semibold">{isRtl ? "حالات حرجة" : "Critical"}</span>
+                  <span className="text-2xl font-mono font-bold text-rose-700 dark:text-rose-400 mt-1 block">{quality.criticalRemakesCount}</span>
                 </div>
-                <div className="p-3 bg-amber-50/40 border border-amber-200/60 rounded-xl text-xs">
-                  <span className="text-amber-700 block text-[10px] font-semibold">{isRtl ? "فحوصات QC مرفوضة" : "Failed QC"}</span>
-                  <span className="text-xl font-mono font-bold text-amber-700 mt-0.5 block">{quality.failedQcCount}</span>
+                <div className="p-3 bg-amber-50/40 border border-amber-200/60 dark:bg-amber-950/20 dark:border-amber-900/40 rounded-xl text-xs">
+                  <span className="text-amber-700 dark:text-amber-300 block text-xs font-semibold">{isRtl ? "فحوصات QC مرفوضة" : "Failed QC"}</span>
+                  <span className="text-2xl font-mono font-bold text-amber-700 dark:text-amber-400 mt-1 block">{quality.failedQcCount}</span>
                 </div>
               </div>
             </CardContent>
@@ -500,11 +500,11 @@ function DashboardPage() {
           <Card className="border rounded-2xl shadow-xs">
             <CardHeader className="p-4 bg-muted/20 border-b flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <CheckSquare className="h-4 w-4 text-primary" />
-                  <span>{isRtl ? "المهام التشغيلية (Task Management)" : "Task Operations"}</span>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <CheckSquare className="h-4.5 w-4.5 text-primary" />
+                  <span>{isRtl ? "إدارة العمليات والمهام التنفيذية" : "Task Operations"}</span>
                 </CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription className="text-xs mt-0.5">
                   {isRtl ? "متابعة إنجاز مهام الفريق والمهام الحرجة" : "Team execution, overdue & critical tasks"}
                 </CardDescription>
               </div>
@@ -518,16 +518,16 @@ function DashboardPage() {
             <CardContent className="p-4 space-y-3">
               <div className="grid grid-cols-3 gap-2">
                 <div className="p-3 bg-muted/20 border rounded-xl text-xs">
-                  <span className="text-muted-foreground block text-[10px]">{isRtl ? "مهام قيد العمل" : "In Progress"}</span>
-                  <span className="text-xl font-mono font-bold text-blue-600 mt-0.5 block">{taskSummary.inProgressTasks}</span>
+                  <span className="text-muted-foreground block text-xs">{isRtl ? "مهام قيد العمل" : "In Progress"}</span>
+                  <span className="text-2xl font-mono font-bold text-blue-600 dark:text-blue-400 mt-1 block">{taskSummary.inProgressTasks}</span>
                 </div>
-                <div className="p-3 bg-amber-50/40 border border-amber-200/60 rounded-xl text-xs">
-                  <span className="text-amber-700 block text-[10px] font-semibold">{isRtl ? "مهام متأخرة" : "Overdue"}</span>
-                  <span className="text-xl font-mono font-bold text-amber-700 mt-0.5 block">{taskSummary.overdueTasks}</span>
+                <div className="p-3 bg-amber-50/40 border border-amber-200/60 dark:bg-amber-950/20 dark:border-amber-900/40 rounded-xl text-xs">
+                  <span className="text-amber-700 dark:text-amber-300 block text-xs font-semibold">{isRtl ? "مهام متأخرة" : "Overdue"}</span>
+                  <span className="text-2xl font-mono font-bold text-amber-700 dark:text-amber-400 mt-1 block">{taskSummary.overdueTasks}</span>
                 </div>
-                <div className="p-3 bg-rose-50/40 border border-rose-200/60 rounded-xl text-xs">
-                  <span className="text-rose-700 block text-[10px] font-semibold">{isRtl ? "مهام عاجلة" : "Urgent / High"}</span>
-                  <span className="text-xl font-mono font-bold text-rose-700 mt-0.5 block">{taskSummary.criticalTasks}</span>
+                <div className="p-3 bg-rose-50/40 border border-rose-200/60 dark:bg-rose-950/20 dark:border-rose-900/40 rounded-xl text-xs">
+                  <span className="text-rose-700 dark:text-rose-300 block text-xs font-semibold">{isRtl ? "مهام عاجلة" : "Urgent / High"}</span>
+                  <span className="text-2xl font-mono font-bold text-rose-700 dark:text-rose-400 mt-1 block">{taskSummary.criticalTasks}</span>
                 </div>
               </div>
             </CardContent>
@@ -540,8 +540,8 @@ function DashboardPage() {
         {/* Recent Quotes */}
         <Card className="border rounded-2xl shadow-xs">
           <CardHeader className="p-4 bg-muted/20 border-b flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" />
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <FileText className="h-4.5 w-4.5 text-primary" />
               <span>{isRtl ? "أحدث المقايسات التجارية" : "Recent Quotations"}</span>
             </CardTitle>
             <Link to="/admin/quotes">
@@ -559,14 +559,14 @@ function DashboardPage() {
             ) : (
               <div className="divide-y text-xs">
                 {commercial.recentQuotes.map((q) => (
-                  <div key={q.id} className="p-3 flex items-center justify-between hover:bg-muted/20 transition-colors">
+                  <div key={q.id} className="p-3.5 flex items-center justify-between hover:bg-muted/20 transition-colors">
                     <div className="space-y-0.5">
-                      <div className="font-mono font-bold text-foreground">{q.quoteNumber}</div>
-                      <div className="text-[11px] text-muted-foreground">{q.customerName}</div>
+                      <div className="font-mono font-bold text-foreground text-xs">{q.quoteNumber}</div>
+                      <div className="text-xs text-muted-foreground">{q.customerName}</div>
                     </div>
                     <div className="text-right rtl:text-left space-y-0.5">
-                      <div className="font-mono font-bold text-primary">{formatEGP(q.total)}</div>
-                      <Badge variant="outline" className="text-[9px] capitalize">{q.status}</Badge>
+                      <div className="font-mono font-bold text-primary text-xs">{formatEGP(q.total)}</div>
+                      <Badge variant="outline" className="text-[10px] px-2 py-0.5 capitalize">{q.status}</Badge>
                     </div>
                   </div>
                 ))}
@@ -578,8 +578,8 @@ function DashboardPage() {
         {/* Recent Activity Stream */}
         <Card className="border rounded-2xl shadow-xs">
           <CardHeader className="p-4 bg-muted/20 border-b flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" />
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <Activity className="h-4.5 w-4.5 text-primary" />
               <span>{isRtl ? "سجل النشاط والعمليات الأخير" : "Recent Activity Log"}</span>
             </CardTitle>
           </CardHeader>
@@ -591,13 +591,13 @@ function DashboardPage() {
             ) : (
               <div className="divide-y text-xs">
                 {recentActivities.map((act) => (
-                  <div key={act.id} className="p-3 flex items-start justify-between gap-3 hover:bg-muted/20 transition-colors">
+                  <div key={act.id} className="p-3.5 flex items-start justify-between gap-3 hover:bg-muted/20 transition-colors">
                     <div className="space-y-0.5">
-                      <p className="font-medium text-foreground">{act.description}</p>
-                      <span className="text-[10px] text-muted-foreground uppercase font-mono">{act.entityType}</span>
+                      <p className="font-medium text-foreground text-xs">{act.description}</p>
+                      <span className="text-xs text-muted-foreground uppercase font-mono">{act.entityType}</span>
                     </div>
                     {act.createdAt && (
-                      <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                      <span className="text-xs text-muted-foreground font-mono shrink-0">
                         {new Date(act.createdAt).toLocaleTimeString(isRtl ? "ar-EG" : "en-US", { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     )}

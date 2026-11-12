@@ -364,7 +364,7 @@ function InventoryPage() {
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-serif text-3xl font-bold tracking-tight flex items-center gap-2.5">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5 text-foreground">
               <Boxes className="h-7 w-7 text-primary" />
               <span>{t("inventory.title", "Inventory Management")}</span>
             </h1>
@@ -405,13 +405,13 @@ function InventoryPage() {
               : "text-muted-foreground hover:text-foreground hover:bg-background/50"
           }`}
         >
-          <Layers className={`h-4 w-4 ${isMaterialsTab ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"}`} />
+          <Layers className={`h-4 w-4 ${isMaterialsTab ? "text-primary" : "text-muted-foreground"}`} />
           <span>{t("inventory.rawMaterials", "Raw Materials")}</span>
           <Badge
             variant="secondary"
-            className={`text-xs font-mono font-bold px-2 py-0 ${
+            className={`text-xs font-mono font-bold px-2 py-0.5 ${
               isMaterialsTab
-                ? "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300"
+                ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary"
                 : "bg-muted text-muted-foreground"
             }`}
           >
@@ -428,13 +428,13 @@ function InventoryPage() {
               : "text-muted-foreground hover:text-foreground hover:bg-background/50"
           }`}
         >
-          <Wrench className={`h-4 w-4 ${!isMaterialsTab ? "text-purple-600 dark:text-purple-400" : "text-muted-foreground"}`} />
+          <Wrench className={`h-4 w-4 ${!isMaterialsTab ? "text-primary" : "text-muted-foreground"}`} />
           <span>{t("inventory.accessoriesHardware", "Accessories & Hardware")}</span>
           <Badge
             variant="secondary"
-            className={`text-xs font-mono font-bold px-2 py-0 ${
+            className={`text-xs font-mono font-bold px-2 py-0.5 ${
               !isMaterialsTab
-                ? "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300"
+                ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary"
                 : "bg-muted text-muted-foreground"
             }`}
           >
@@ -444,26 +444,14 @@ function InventoryPage() {
       </div>
 
       {/* ── Active Section Banner ────────────────────────────────────────────── */}
-      <div
-        className={`p-4 rounded-2xl border transition-all ${
-          isMaterialsTab
-            ? "bg-blue-50/40 dark:bg-blue-950/20 border-blue-200/70 dark:border-blue-900/50"
-            : "bg-purple-50/40 dark:bg-purple-950/20 border-purple-200/70 dark:border-purple-900/50"
-        }`}
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            {isMaterialsTab ? (
-              <div className="h-9 w-9 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center shrink-0">
-                <Layers className="h-5 w-5" />
-              </div>
-            ) : (
-              <div className="h-9 w-9 rounded-xl bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 flex items-center justify-center shrink-0">
-                <Wrench className="h-5 w-5" />
-              </div>
-            )}
+      <div className="p-4 sm:p-5 rounded-2xl border bg-card shadow-xs transition-all">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              {isMaterialsTab ? <Layers className="h-5 w-5" /> : <Wrench className="h-5 w-5" />}
+            </div>
             <div>
-              <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
                 <span>{sectionTitle}</span>
                 <span className="text-xs font-normal text-muted-foreground">
                   ({isMaterialsTab ? (isRtl ? "خشب، ألواح، قشرة" : "Wood, MDF, Plywood, HPL") : (isRtl ? "مفصلات، مقابض، سكك" : "Hinges, Handles, Runners, Fasteners")})
@@ -476,7 +464,7 @@ function InventoryPage() {
           <div className="flex items-center gap-3 text-xs shrink-0 self-end sm:self-center">
             <span className="text-muted-foreground">
               {isRtl ? "الأصناف المطابقة:" : "Filtered Items:"}{" "}
-              <strong className="text-foreground font-mono">{totalCount}</strong>
+              <strong className="text-foreground font-mono font-bold">{totalCount}</strong>
             </span>
           </div>
         </div>
@@ -486,7 +474,7 @@ function InventoryPage() {
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {/* Card 1: Items Count */}
         <Card className="border rounded-2xl p-4 shadow-xs">
-          <div className="text-xs text-muted-foreground font-medium">
+          <div className="text-xs text-muted-foreground font-semibold">
             {isMaterialsTab
               ? isRtl
                 ? "أصناف الخامات"
@@ -495,14 +483,14 @@ function InventoryPage() {
               ? "أصناف الهاردوير"
               : "Hardware Items"}
           </div>
-          <div className="text-2xl font-bold font-mono mt-1 text-foreground">
+          <div className="text-2xl sm:text-3xl font-bold font-mono mt-1 text-foreground">
             {isMaterialsTab ? kpis.materialsCount : kpis.hardwareCount}
           </div>
         </Card>
 
         {/* Card 2: Total Units In Stock */}
         <Card className="border rounded-2xl p-4 shadow-xs">
-          <div className="text-xs text-muted-foreground font-medium">
+          <div className="text-xs text-muted-foreground font-semibold">
             {isMaterialsTab
               ? isRtl
                 ? "إجمالي الألواح بالمخزن"
@@ -511,7 +499,7 @@ function InventoryPage() {
               ? "إجمالي القطع بالمخزن"
               : "Total Fittings In Stock"}
           </div>
-          <div className="text-2xl font-bold font-mono mt-1 text-emerald-700 dark:text-emerald-400">
+          <div className="text-2xl sm:text-3xl font-bold font-mono mt-1 text-emerald-700 dark:text-emerald-400">
             {isMaterialsTab
               ? kpis.materialsTotalStock ?? 0
               : kpis.hardwareTotalStock ?? 0}
@@ -520,10 +508,10 @@ function InventoryPage() {
 
         {/* Card 3: Reserved for Production */}
         <Card className="border rounded-2xl p-4 shadow-xs">
-          <div className="text-xs text-primary font-medium">
+          <div className="text-xs text-primary font-semibold">
             {isRtl ? "المحجوز لأوامر الإنتاج" : "Reserved for Orders"}
           </div>
-          <div className="text-2xl font-bold font-mono mt-1 text-primary">
+          <div className="text-2xl sm:text-3xl font-bold font-mono mt-1 text-primary">
             {isMaterialsTab
               ? kpis.materialsReservedUnits ?? 0
               : kpis.hardwareReservedUnits ?? 0}
@@ -538,11 +526,11 @@ function InventoryPage() {
               : "bg-card"
           }`}
         >
-          <div className="text-xs text-amber-800 dark:text-amber-300 font-medium flex items-center gap-1.5">
+          <div className="text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5">
             <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
             <span>{t("inventory.lowStockAlert", "Low Stock Alert")}</span>
           </div>
-          <div className="text-2xl font-bold font-mono mt-1 text-amber-800 dark:text-amber-300">
+          <div className="text-2xl sm:text-3xl font-bold font-mono mt-1 text-amber-800 dark:text-amber-300">
             {isMaterialsTab
               ? kpis.materialsLowStockCount ?? 0
               : kpis.hardwareLowStockCount ?? 0}
@@ -551,10 +539,10 @@ function InventoryPage() {
 
         {/* Card 5: Global Inventory Items */}
         <Card className="border rounded-2xl p-4 shadow-xs bg-muted/20">
-          <div className="text-xs text-muted-foreground font-medium">
+          <div className="text-xs text-muted-foreground font-semibold">
             {isRtl ? "إجمالي الكتالوج (الكل)" : "Catalog Scope"}
           </div>
-          <div className="text-2xl font-bold font-mono mt-1 text-foreground/80">
+          <div className="text-2xl sm:text-3xl font-bold font-mono mt-1 text-foreground/80">
             {kpis.totalItems}
           </div>
         </Card>
@@ -624,11 +612,9 @@ function InventoryPage() {
                 key={cat.key}
                 type="button"
                 onClick={() => handleCategoryChange(cat.key)}
-                className={`px-3 py-1 text-xs rounded-full font-medium transition-all ${
+                className={`px-3.5 py-1.5 text-xs rounded-full font-medium transition-all ${
                   active
-                    ? isMaterialsTab
-                      ? "bg-blue-600 text-white shadow-xs font-bold"
-                      : "bg-purple-600 text-white shadow-xs font-bold"
+                    ? "bg-primary text-primary-foreground shadow-xs font-bold"
                     : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
@@ -641,13 +627,13 @@ function InventoryPage() {
           <button
             type="button"
             onClick={handleLowStockToggle}
-            className={`px-3 py-1 text-xs rounded-full font-medium transition-all ml-auto rtl:ml-0 rtl:mr-auto flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs rounded-full font-medium transition-all ml-auto rtl:ml-0 rtl:mr-auto flex items-center gap-1.5 ${
               currentLowStock
                 ? "bg-amber-600 text-white shadow-xs font-bold"
                 : "bg-amber-100/60 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100 border border-amber-200/60"
             }`}
           >
-            <AlertTriangle className="h-3 w-3" />
+            <AlertTriangle className="h-3.5 w-3.5" />
             <span>{isRtl ? "تنبيه نقص الرصيد فقط" : "Low Stock Only"}</span>
           </button>
         </div>
@@ -659,13 +645,13 @@ function InventoryPage() {
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead>{t("inventory.sku", "SKU / Item Code")}</TableHead>
+                <TableHead className="w-40">{t("inventory.sku", "SKU / Item Code")}</TableHead>
                 <TableHead>{isRtl ? "اسم الصنف / التوصيف" : "Item / Material Name"}</TableHead>
                 <TableHead>{isRtl ? "الفئة" : "Category"}</TableHead>
-                <TableHead>{t("inventory.unitOfMeasure", "Unit")}</TableHead>
-                <TableHead>{t("inventory.physicalStock", "Physical Stock")}</TableHead>
-                <TableHead>{t("inventory.reservedStock", "Reserved")}</TableHead>
-                <TableHead>{t("inventory.availableStock", "Available Stock")}</TableHead>
+                <TableHead className="text-end w-24">{t("inventory.unitOfMeasure", "Unit")}</TableHead>
+                <TableHead className="text-end w-28">{t("inventory.physicalStock", "Physical Stock")}</TableHead>
+                <TableHead className="text-end w-24">{t("inventory.reservedStock", "Reserved")}</TableHead>
+                <TableHead className="text-end w-28">{t("inventory.availableStock", "Available Stock")}</TableHead>
                 <TableHead className="text-center w-36">{isRtl ? "الإجراءات" : "Actions"}</TableHead>
               </TableRow>
             </TableHeader>
@@ -730,15 +716,15 @@ function InventoryPage() {
                       {/* Name */}
                       <TableCell className="text-xs font-medium text-foreground">
                         <div className="flex items-center gap-2">
-                          <span>{item.name}</span>
+                          <span className="text-xs sm:text-sm font-semibold">{item.name}</span>
                           {isOut ? (
-                            <Badge variant="destructive" className="text-[9px] px-1.5 py-0 font-bold">
+                            <Badge variant="destructive" className="text-xs px-2 py-0.5 font-bold">
                               {isRtl ? "نفد الرصيد" : "Out of stock"}
                             </Badge>
                           ) : isLow ? (
                             <Badge
                               variant="outline"
-                              className="text-[9px] px-1.5 py-0 font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-amber-300"
+                              className="text-xs px-2 py-0.5 font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-amber-300"
                             >
                               {isRtl ? "منخفض" : "Low"}
                             </Badge>
@@ -750,30 +736,26 @@ function InventoryPage() {
                       <TableCell className="text-xs">
                         <Badge
                           variant="outline"
-                          className={`text-[10px] font-medium ${
-                            item.itemType === "material"
-                              ? "bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200"
-                              : "bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200"
-                          }`}
+                          className="text-xs font-medium bg-muted/60 text-foreground border-border/80 dark:bg-muted/40 dark:text-muted-foreground px-2.5 py-0.5"
                         >
                           {categoryLabel}
                         </Badge>
                       </TableCell>
 
                       {/* Unit */}
-                      <TableCell className="text-xs text-muted-foreground font-mono">
+                      <TableCell className="text-xs text-muted-foreground font-mono text-end">
                         {item.unit}
                       </TableCell>
 
                       {/* Physical Stock */}
-                      <TableCell className="font-mono text-xs font-bold text-foreground">
+                      <TableCell className="font-mono text-xs sm:text-sm font-bold text-foreground text-end">
                         {item.physicalQuantity}
                       </TableCell>
 
                       {/* Reserved Stock */}
-                      <TableCell className="font-mono text-xs">
+                      <TableCell className="font-mono text-xs sm:text-sm text-end">
                         {item.reservedQuantity > 0 ? (
-                          <span className="text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded">
+                          <span className="text-primary font-bold bg-primary/10 px-2 py-0.5 rounded">
                             {item.reservedQuantity}
                           </span>
                         ) : (
@@ -782,7 +764,7 @@ function InventoryPage() {
                       </TableCell>
 
                       {/* Available Free Stock */}
-                      <TableCell className="font-mono text-xs font-bold">
+                      <TableCell className="font-mono text-xs sm:text-sm font-bold text-end">
                         <span
                           className={
                             item.freeQuantity <= 0
@@ -796,16 +778,16 @@ function InventoryPage() {
 
                       {/* Actions */}
                       <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-1.5">
                           {/* View Details */}
                           <Button
                             size="icon"
                             variant="ghost"
                             onClick={() => handleOpenDetail(item)}
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
                             title={t("inventory.viewDetails", "View Details & History")}
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            <Eye className="h-4 w-4" />
                           </Button>
 
                           {/* Adjust Stock */}
@@ -814,10 +796,10 @@ function InventoryPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => handleOpenAdjust(item)}
-                              className="h-7 text-xs px-2 text-primary font-semibold gap-1"
+                              className="h-8 text-xs px-2.5 text-primary font-semibold gap-1.5"
                               title={t("inventory.adjustStock", "Adjust Stock")}
                             >
-                              <Edit3 className="h-3 w-3" />
+                              <Edit3 className="h-3.5 w-3.5" />
                               <span className="hidden sm:inline">
                                 {isRtl ? "رصيد" : "Stock"}
                               </span>
@@ -830,7 +812,7 @@ function InventoryPage() {
                               size="icon"
                               variant="ghost"
                               onClick={() => handleOpenEdit(item)}
-                              className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
                               title={t("inventory.editItem", "Edit Item")}
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -843,7 +825,7 @@ function InventoryPage() {
                               size="icon"
                               variant="ghost"
                               onClick={() => handleOpenDelete(item)}
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                               title={t("inventory.archiveItem", "Archive Item")}
                             >
                               <Trash2 className="h-3.5 w-3.5" />

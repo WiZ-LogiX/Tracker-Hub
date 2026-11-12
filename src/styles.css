@@ -14,7 +14,8 @@
 @import "@fontsource/playfair-display/600.css";
 @import "@fontsource/playfair-display/700.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Match both .dark element itself and any descendants */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -29,6 +30,8 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-primary-brand: var(--primary-brand);
+  --color-primary-text: var(--primary-text);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -43,6 +46,28 @@
   --color-ring: var(--ring);
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
+
+  /* Official PeleCanon Brand Palette Tokens */
+  --color-pelecanon-teal: #118B76;
+  --color-pelecanon-teal-hover: #0E7564;
+  --color-pelecanon-teal-light: #E6F5F2;
+  --color-pelecanon-teal-dark: #0B6B5B;
+  --color-pelecanon-charcoal: #333333;
+  --color-pelecanon-charcoal-deep: #222222;
+  --color-pelecanon-charcoal-elevated: #292929;
+  --color-pelecanon-charcoal-dark: #181818;
+  --color-pelecanon-offwhite: #F8F7F4;
+  --color-pelecanon-offwhite-card: #FFFFFF;
+
+  /* Backward-compatible mapped tokens: ensure existing atelier- classes adapt seamlessly */
+  --color-atelier-emerald: #118B76;
+  --color-atelier-dark: #222222;
+  --color-atelier-ivory: #F8F7F4;
+  --color-atelier-cream: #F8F7F4;
+  --color-atelier-gold: #118B76;
+  --color-atelier-stone: #88847D;
+  --color-atelier-charcoal: #333333;
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -51,96 +76,186 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-sans: 'Cairo', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', 'Cairo', system-ui, sans-serif;
   --font-serif: 'Playfair Display', Georgia, serif;
 }
 
-/* Emerald Prestige palette: deep emerald + muted gold + warm cream */
+/* Official PeleCanon Brand Design Tokens */
 :root {
   --radius: 0.5rem;
-  /* base */
-  --background: oklch(0.985 0.012 95);          /* cream #f5f0e0 */
-  --foreground: oklch(0.22 0.05 165);           /* near-black emerald */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.05 165);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.05 165);
-  /* primary = deep emerald */
-  --primary: oklch(0.33 0.085 165);             /* #064e3b */
-  --primary-foreground: oklch(0.985 0.012 95);
-  /* secondary = lighter emerald */
-  --secondary: oklch(0.50 0.10 165);            /* #0d7a5f */
-  --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(0.95 0.014 95);
-  --muted-foreground: oklch(0.45 0.03 160);
-  --accent: oklch(0.93 0.025 95);
-  --accent-foreground: oklch(0.22 0.05 165);
-  --destructive: oklch(0.52 0.20 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.88 0.02 100);
-  --input: oklch(0.92 0.018 100);
-  --ring: oklch(0.50 0.10 165);
-  --gold: oklch(0.74 0.12 85);                  /* #c9a84c */
-  --gold-foreground: oklch(0.22 0.05 165);
-  --sidebar: oklch(0.30 0.075 165);
-  --sidebar-foreground: oklch(0.95 0.018 95);
-  --sidebar-primary: oklch(0.74 0.12 85);
-  --sidebar-primary-foreground: oklch(0.22 0.05 165);
-  --sidebar-accent: oklch(0.38 0.085 165);
-  --sidebar-accent-foreground: oklch(0.985 0.012 95);
-  --sidebar-border: oklch(0.40 0.08 165);
-  --sidebar-ring: oklch(0.74 0.12 85);
+
+  /* Surfaces & Typography */
+  --background: #F8F7F4;                 /* Official Warm Off-White (#F8F7F4) */
+  --foreground: #333333;                 /* Official Charcoal (#333333, Contrast 11.9:1 - AAA) */
+  --card: #FFFFFF;                       /* Clean Off-White Card Surface */
+  --card-foreground: #333333;            /* Charcoal */
+  --popover: #FFFFFF;                    /* Elevated Surface: Crisp White */
+  --popover-foreground: #333333;
+
+  /* Primary Brand Action (Official Primary Teal #118B76 preserved for brand identity) */
+  --primary: #0F7867;                    /* Derived Accessible Primary Teal (5.38:1 with #FFFFFF - WCAG AA) */
+  --primary-brand: #118B76;              /* Official Brand Primary Teal for non-text marks & brand identity */
+  --primary-foreground: #FFFFFF;         /* Crisp White */
+  --primary-hover: #0B6B5B;              /* Darker Accessible Hover */
+  --primary-text: #0F7867;               /* High-contrast Teal for normal body text (Contrast 5.02:1 on #F8F7F4 - AA) */
+
+  /* Secondary & Muted Elements */
+  --secondary: #EFECE6;                  /* Warm Neutral Secondary */
+  --secondary-foreground: #333333;       /* Charcoal */
+  --muted: #EDE9E1;                      /* Muted Off-White Container */
+  --muted-foreground: #666666;           /* Readable Neutral Gray (Contrast 5.36:1 on #F8F7F4 - AA) */
+
+  /* Accent & Interactive States */
+  --accent: #E6F5F2;                     /* Subtle Teal Tint */
+  --accent-foreground: #0F7867;          /* Accessible Deep Teal Text (Contrast 4.79:1 on #E6F5F2 - AA) */
+
+  /* Operational Statuses (Preserved) */
+  --destructive: #D9383A;
+  --destructive-foreground: #FFFFFF;
+  --success: #0F7867;                    /* Aligned with Accessible Teal */
+  --success-foreground: #FFFFFF;
+  --warning: #D97706;
+  --warning-foreground: #FFFFFF;
+  --info: #0284C7;
+  --info-foreground: #FFFFFF;
+
+  /* Borders & Inputs */
+  --border: #E0DDD5;                     /* Subtle Warm Off-White Border */
+  --input: #8C857B;                      /* Accessible Control Border (3.41:1 vs #F8F7F4, 3.65:1 vs #FFFFFF - WCAG 1.4.11) */
+  --ring: #0F7867;                       /* Focus Ring: Accessible Teal (5.02:1 vs #F8F7F4 - WCAG 1.4.11) */
+
+  /* Sidebar Tokens (Executive Charcoal Workspace) */
+  --sidebar: #222222;                    /* Derived Deep Charcoal Sidebar */
+  --sidebar-foreground: #F8F7F4;         /* Warm Off-White Typography */
+  --sidebar-primary: #0F7867;            /* Accessible Teal Active State (5.38:1 with #FFFFFF) */
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #2C2C2C;             /* Charcoal Item Hover */
+  --sidebar-accent-foreground: #F8F7F4;
+  --sidebar-border: #333333;             /* Official Charcoal Border */
+  --sidebar-ring: #0F7867;
+
+  /* Legacy brand compatibility mappings to official palette */
+  --gold: #118B76;                       /* Replaced with Primary Teal */
+  --gold-foreground: #FFFFFF;
 }
 
 .dark {
-  --background: oklch(0.18 0.025 165);
-  --foreground: oklch(0.96 0.012 95);
-  --card: oklch(0.22 0.035 165);
-  --card-foreground: oklch(0.96 0.012 95);
-  --popover: oklch(0.22 0.035 165);
-  --popover-foreground: oklch(0.96 0.012 95);
-  --primary: oklch(0.74 0.12 85);              /* gold becomes primary accent in dark */
-  --primary-foreground: oklch(0.18 0.025 165);
-  --secondary: oklch(0.50 0.10 165);
-  --secondary-foreground: oklch(0.98 0 0);
-  --muted: oklch(0.26 0.03 165);
-  --muted-foreground: oklch(0.72 0.025 95);
-  --accent: oklch(0.30 0.05 165);
-  --accent-foreground: oklch(0.96 0.012 95);
-  --destructive: oklch(0.58 0.22 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.32 0.04 165);
-  --input: oklch(0.30 0.04 165);
-  --ring: oklch(0.74 0.12 85);
-  --gold: oklch(0.78 0.13 85);
-  --gold-foreground: oklch(0.18 0.025 165);
-  --sidebar: oklch(0.14 0.025 165);
-  --sidebar-foreground: oklch(0.95 0.018 95);
-  --sidebar-primary: oklch(0.74 0.12 85);
-  --sidebar-primary-foreground: oklch(0.18 0.025 165);
-  --sidebar-accent: oklch(0.24 0.04 165);
-  --sidebar-accent-foreground: oklch(0.985 0.012 95);
-  --sidebar-border: oklch(0.28 0.05 165);
-  --sidebar-ring: oklch(0.74 0.12 85);
+  /* Surfaces & Typography */
+  --background: #181818;                 /* Main Dark Canvas (#181818) */
+  --foreground: #F8F7F4;                 /* Warm Off-White Typography (Contrast 16.5:1 on #181818 - AAA) */
+  --card: #222222;                       /* Secondary Background / Card Surface (#222222) */
+  --card-foreground: #F8F7F4;
+  --popover: #292929;                    /* Elevated Surface for Modals, Drawers, Dropdowns (#292929) */
+  --popover-foreground: #F8F7F4;
+
+  /* Primary Brand Action in Dark Mode */
+  --primary: #0F7867;                    /* Consistent Accessible Teal (5.38:1 with #FFFFFF - WCAG AA) */
+  --primary-brand: #118B76;
+  --primary-foreground: #FFFFFF;         /* Crisp White on Teal Button */
+  --primary-hover: #0E7564;
+  --primary-text: #2DD4BF;               /* High-contrast mint-teal for body text in dark mode (9.54:1 on #181818 - AAA) */
+
+  /* Secondary & Muted Elements */
+  --secondary: #2C2C2C;                  /* Charcoal Secondary */
+  --secondary-foreground: #F8F7F4;
+  --muted: #262626;                      /* Muted Charcoal */
+  --muted-foreground: #A6A29A;           /* Warm Soft Neutral (Contrast 6.64:1 on #222222 - AA) */
+
+  /* Accent & Interactive States */
+  --accent: #1C2D29;                     /* Dark Teal Tint */
+  --accent-foreground: #2DD4BF;          /* Readable Mint-Teal Accent (9.54:1 on #181818, 8.55:1 on #222222) */
+
+  /* Operational Statuses (Preserved with AA compliance) */
+  --destructive: #D9383A;                /* 4.59:1 with #FFFFFF - WCAG AA */
+  --destructive-foreground: #FFFFFF;
+  --success: #0F7867;
+  --success-foreground: #FFFFFF;
+  --warning: #F59E0B;
+  --warning-foreground: #121212;
+  --info: #0369A1;                       /* 4.88:1 with #FFFFFF - WCAG AA */
+  --info-foreground: #FFFFFF;
+
+  /* Borders & Inputs */
+  --border: #333333;                     /* Official Charcoal Border */
+  --input: #737373;                      /* Accessible Control Border in Dark Mode (3.74:1 vs #181818, 3.36:1 vs #222222 - WCAG 1.4.11) */
+  --ring: #2DD4BF;                       /* Focus Ring in Dark Mode (9.54:1 vs #181818) */
+
+  /* Sidebar Tokens (Dark Mode) */
+  --sidebar: #141414;                    /* Pure Dark Charcoal */
+  --sidebar-foreground: #F8F7F4;
+  --sidebar-primary: #0F7867;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #222222;
+  --sidebar-accent-foreground: #F8F7F4;
+  --sidebar-border: #262626;
+  --sidebar-ring: #0F7867;
+
+  /* Legacy brand compatibility mappings */
+  --gold: #17A38B;
+  --gold-foreground: #121212;
 }
 
 @layer base {
   * { border-color: var(--color-border); }
-  html { font-family: var(--font-sans); }
+  html {
+    font-family: var(--font-sans);
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    min-height: 100vh;
   }
-  h1, h2, h3, h4 { font-family: var(--font-serif); letter-spacing: -0.01em; }
-  [dir="rtl"] .rtl-flip { transform: scaleX(-1); }
+
+  /* Operational typography: default all headings to clean sans-serif */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    letter-spacing: -0.015em;
+  }
+
+  /* Editorial headings on showroom pages opt-in via .font-serif */
+  .font-serif {
+    font-family: var(--font-serif);
+  }
+
+  /* Arabic typography defaults to Cairo */
+  [dir="rtl"] {
+    font-family: 'Cairo', system-ui, sans-serif;
+  }
+  [dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3, [dir="rtl"] h4, [dir="rtl"] h5, [dir="rtl"] h6 {
+    font-family: 'Cairo', system-ui, sans-serif;
+    letter-spacing: normal;
+  }
+  [dir="rtl"] .font-serif {
+    font-family: 'Cairo', system-ui, sans-serif;
+  }
+  [dir="rtl"] .rtl-flip {
+    transform: scaleX(-1);
+  }
+
+  ::selection {
+    background-color: rgba(17, 139, 118, 0.25);
+    color: inherit;
+  }
 }
 
 @layer utilities {
-  .text-gold { color: var(--color-gold); }
-  .bg-gold { background-color: var(--color-gold); }
-  .border-gold { border-color: var(--color-gold); }
-  .gradient-emerald {
-    background: linear-gradient(135deg, oklch(0.30 0.075 165), oklch(0.45 0.09 165));
+  .text-gold { color: var(--color-primary); }
+  .bg-gold { background-color: var(--color-primary); }
+  .border-gold { border-color: var(--color-primary); }
+  .gradient-teal {
+    background: linear-gradient(135deg, #118B76, #0E7564);
+  }
+  .teal-glow {
+    box-shadow: 0 0 25px -4px rgba(17, 139, 118, 0.35);
+  }
+  .charcoal-glass {
+    background-color: rgba(34, 34, 34, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 }

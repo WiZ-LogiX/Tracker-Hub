@@ -169,7 +169,7 @@ function AfterSalesWorkspacePage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold font-serif text-foreground">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
                 {isRtl ? "خدمة ما بعد البيع والضمان" : "After-Sales & Warranty CRM"}
               </h1>
               <Badge variant="outline" className="text-[10px] font-mono uppercase tracking-wider">

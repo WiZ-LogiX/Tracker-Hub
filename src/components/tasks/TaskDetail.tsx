@@ -46,6 +46,7 @@ import {
   Check,
   Calendar,
   Headphones,
+  FolderKanban,
 } from "lucide-react";
 import type { TaskItem, TaskStatus } from "@/lib/task-types";
 import { InternalNotes } from "@/components/admin/InternalNotes";
@@ -539,13 +540,45 @@ export function TaskDetail({
                       </div>
                     )}
 
+                    {task.opportunityId && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground flex items-center gap-1.5">
+                          <FolderKanban className="h-3.5 w-3.5 text-primary" />
+                          {isRtl ? "مساحة عمل المشروع:" : "Project Workspace:"}
+                        </span>
+                        {!isWorker ? (
+                          <Link
+                            to="/admin/projects/$id"
+                            params={{ id: task.opportunityId }}
+                            className="font-mono font-bold text-primary hover:underline flex items-center gap-1"
+                          >
+                            <span>{isRtl ? "عرض المشروع" : "View Project"}</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <span className="font-mono font-medium">{isRtl ? "مشروع مرتبط" : "Linked Project"}</span>
+                        )}
+                      </div>
+                    )}
+
                     {task.quoteNumber && (
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground flex items-center gap-1.5">
                           <FileText className="h-3.5 w-3.5 text-secondary" />
                           {isRtl ? "المقايسة:" : "Quotation:"}
                         </span>
-                        <span className="font-mono font-medium">{task.quoteNumber}</span>
+                        {!isWorker && task.quoteId ? (
+                          <Link
+                            to="/admin/quotes/$id"
+                            params={{ id: task.quoteId }}
+                            className="font-mono font-bold text-primary hover:underline flex items-center gap-1"
+                          >
+                            <span>{task.quoteNumber}</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <span className="font-mono font-medium">{task.quoteNumber}</span>
+                        )}
                       </div>
                     )}
 

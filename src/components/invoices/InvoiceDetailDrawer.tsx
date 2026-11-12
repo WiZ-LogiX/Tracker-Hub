@@ -58,6 +58,10 @@ export function InvoiceDetailDrawer({
   const canRecordPayment = userRole !== "worker" && userRole !== "viewer" && invoice.balanceDue > 0;
 
   const handleDownloadPdf = async () => {
+    if (!invoice?.id) {
+      toast.error(isRtl ? "بيانات الفاتورة غير مكتملة" : "Invoice ID missing");
+      return;
+    }
     setDownloadingPdf(true);
     try {
       const { downloadUrl } = await pdfFn({
@@ -187,6 +191,32 @@ export function InvoiceDetailDrawer({
                   </span>
                   <Link to="/admin/orders" className="font-mono font-bold text-primary hover:underline flex items-center gap-1">
                     <span>{invoice.orderNumber}</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                </div>
+              )}
+
+              {invoice.quoteId && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Receipt className="h-3.5 w-3.5 text-secondary" />
+                    {isRtl ? "عرض السعر الأصلي:" : "Originating Quote:"}
+                  </span>
+                  <Link to="/admin/quotes/$id" params={{ id: invoice.quoteId }} className="font-mono font-bold text-primary hover:underline flex items-center gap-1">
+                    <span>{invoice.invoiceNumber || (isRtl ? "عرض السعر" : "Quote")}</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                </div>
+              )}
+
+              {invoice.orderId && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Package className="h-3.5 w-3.5 text-primary" />
+                    {isRtl ? "مساحة عمل المشروع:" : "Project Workspace:"}
+                  </span>
+                  <Link to="/admin/projects/$id" params={{ id: invoice.orderId }} className="font-mono font-bold text-primary hover:underline flex items-center gap-1">
+                    <span>{isRtl ? "عرض المشروع" : "View Project"}</span>
                     <ExternalLink className="h-3 w-3" />
                   </Link>
                 </div>

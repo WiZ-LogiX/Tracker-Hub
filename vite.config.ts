@@ -12,4 +12,36 @@ export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
+  vite: {
+    plugins: [
+      {
+        name: "react-pdf-textkit-bidi-patch",
+        enforce: "pre",
+        transform(code, id) {
+          if (id.includes("@react-pdf/textkit") && code.includes("if (addedGlyphs.has(glyph.id))")) {
+            return {
+              code: code.replace(
+                "if (addedGlyphs.has(glyph.id))",
+                "if (!glyph || addedGlyphs.has(glyph.id))"
+              ),
+              map: null,
+            };
+          }
+        },
+      },
+      {
+        name: "tanstack-server-fn-base-transform",
+        enforce: "pre",
+        apply: "serve",
+        transform(code, id, options) {
+          if (!options?.ssr && code.includes("process.env.TSS_SERVER_FN_BASE")) {
+            return {
+              code: code.replaceAll("process.env.TSS_SERVER_FN_BASE", JSON.stringify("/_serverFn/")),
+              map: null,
+            };
+          }
+        },
+      },
+    ],
+  },
 });

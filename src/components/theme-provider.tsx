@@ -29,7 +29,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return "system";
     return (localStorage.getItem(STORAGE_KEY) as Theme) || "system";
   });
-  const [resolved, setResolved] = useState<"light" | "dark">("light");
+  const [resolved, setResolved] = useState<"light" | "dark">(() => {
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark") ? "dark" : "light";
+    }
+    return "light";
+  });
 
   useEffect(() => {
     setResolved(apply(theme));

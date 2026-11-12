@@ -557,7 +557,7 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
     await expect(page.getByRole("dialog")).toBeHidden();
   });
 
-  test("Scenario H: Category Configuration in Admin Settings", async ({ page }) => {
+  test("Scenario H: Category Configuration in Main Catalog Options", async ({ page }) => {
     test.setTimeout(60_000);
 
     await page.route("**/rest/v1/tenants**", async (route) => {
@@ -577,14 +577,15 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
 
     await signIn(page);
 
-    await page.goto("/admin/settings");
+    await page.goto("/admin/products?tab=options");
     await page.waitForLoadState("domcontentloaded");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 });
 
-    // Click categories tab
-    const categoriesTab = page.getByRole("tab", { name: /تصنيفات المقايسات|Categories/i });
-    await expect(categoriesTab).toBeVisible({ timeout: 10_000 });
-    await categoriesTab.click();
+    // Click options/categories tab if not already selected
+    const categoriesTab = page.getByRole("tab", { name: /خيارات وتصنيفات الكتالوج|Options/i });
+    if (await categoriesTab.isVisible()) {
+      await categoriesTab.click();
+    }
 
     // Verify categories table renders with Kitchen, Dressing, Door
     await expect(page.getByText(/مطبخ|Kitchen/i).first()).toBeVisible({ timeout: 10_000 });

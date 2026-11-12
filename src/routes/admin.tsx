@@ -54,17 +54,17 @@ const NAV_SECTIONS: NavSection[] = [
     titleKey: "admin.nav.sectionCore",
     items: [
       { to: "/admin", labelKey: "admin.nav.home", icon: LayoutDashboard, exact: true },
-      { to: "/admin/projects", labelKey: "admin.nav.projects", icon: FolderKanban },
       { to: "/admin/crm", labelKey: "admin.nav.crm", icon: TrendingUp },
       { to: "/admin/crm/sales", labelKey: "admin.nav.salesWorkspace", icon: UserCheck },
-      { to: "/admin/crm/analytics", labelKey: "admin.nav.crmAnalytics", icon: BarChart3 },
-      { to: "/admin/crm/after-sales", labelKey: "admin.nav.afterSales", icon: Headphones },
-      { to: "/admin/tasks", labelKey: "admin.nav.tasks", icon: CheckSquare },
       { to: "/admin/quotes", labelKey: "admin.nav.quotes", icon: FileText },
+      { to: "/admin/projects", labelKey: "admin.nav.projects", icon: FolderKanban },
       { to: "/admin/orders", labelKey: "admin.nav.orders", icon: ClipboardList },
       { to: "/admin/deliveries", labelKey: "admin.nav.deliveries", icon: Truck },
       { to: "/admin/invoices", labelKey: "admin.nav.invoices", icon: Receipt },
+      { to: "/admin/tasks", labelKey: "admin.nav.tasks", icon: CheckSquare },
       { to: "/admin/cost-analysis", labelKey: "admin.nav.costAnalysis", icon: BarChart3 },
+      { to: "/admin/crm/analytics", labelKey: "admin.nav.crmAnalytics", icon: BarChart3 },
+      { to: "/admin/crm/after-sales", labelKey: "admin.nav.afterSales", icon: Headphones },
       { to: "/admin/discounts", labelKey: "admin.nav.discounts", icon: Ticket },
       { to: "/admin/customers", labelKey: "admin.nav.customers", icon: UserCircle },
     ],
@@ -126,17 +126,14 @@ function SidebarContent() {
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground select-none">
       {/* Brand Header */}
       <div className="px-5 py-5 border-b border-sidebar-border/80 flex items-center justify-between">
-        <Link to={isWorker ? "/admin/tasks" : "/"} className="flex items-center gap-3 group">
-          <div className="h-10 w-10 rounded-lg bg-gold/90 flex items-center justify-center text-gold-foreground font-serif font-bold text-lg shadow-sm group-hover:scale-105 transition-transform">
-            P
-          </div>
-          <div>
-            <div className="font-serif font-bold text-lg leading-tight text-sidebar-foreground tracking-tight">
-              PeleCanon
-            </div>
-            <div className="text-[11px] text-sidebar-foreground/60 font-medium">
-              {isWorker ? t("tasks.workerWorkspace", "Task Workspace") : t("admin.panel", "Manufacturing SaaS")}
-            </div>
+        <Link to={isWorker ? "/admin/tasks" : "/"} className="flex flex-col gap-1.5 group py-0.5">
+          <img
+            src="/images/brand-logo-dark.png"
+            alt="PeleCanon"
+            className="h-8 sm:h-9 w-auto max-w-[190px] object-contain hover:opacity-90 transition-opacity"
+          />
+          <div className="text-xs text-sidebar-foreground/70 font-medium tracking-wide">
+            {isWorker ? t("tasks.workerWorkspace", "Task Workspace") : t("admin.panel", "Manufacturing SaaS")}
           </div>
         </Link>
       </div>
@@ -145,7 +142,7 @@ function SidebarContent() {
       <nav className="flex-1 px-3 py-4 space-y-6 overflow-y-auto">
         {activeSections.map((section, idx) => (
           <div key={idx} className="space-y-1">
-            <div className="px-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45 mb-1.5">
+            <div className="px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/65 mb-1.5">
               {t(section.titleKey, section.titleKey === "admin.nav.sectionCore" ? "Core Operations" : section.titleKey === "admin.nav.sectionCatalog" ? "Catalog & Production" : "System & Administration")}
             </div>
             {section.items.map((item) => {
@@ -156,7 +153,7 @@ function SidebarContent() {
                   to={item.to}
                   className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
                     active
-                      ? "bg-gold text-gold-foreground font-medium shadow-sm"
+                      ? "bg-primary text-primary-foreground font-medium shadow-sm"
                       : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   }`}
                 >
@@ -167,7 +164,7 @@ function SidebarContent() {
                   {item.badge && (
                     <span
                       className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                        active ? "bg-sidebar/30 text-gold-foreground" : "bg-gold/20 text-gold"
+                        active ? "bg-sidebar/30 text-primary-foreground" : "bg-primary/20 text-primary"
                       }`}
                     >
                       {item.badge}
@@ -220,14 +217,16 @@ function AdminLayout() {
   const isWorker = currentRole === "worker";
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && loc.pathname.startsWith("/admin")) {
       const returnUrl = loc.pathname + (loc.searchStr || "");
+      const isClean = returnUrl && !returnUrl.startsWith("/auth") && returnUrl !== "/admin";
       nav({
         to: "/auth",
-        search: returnUrl && returnUrl !== "/admin" ? ({ returnTo: returnUrl } as any) : undefined,
+        search: isClean ? ({ returnTo: returnUrl } as any) : undefined,
+        replace: true,
       });
     }
-  }, [loading, user, nav, loc]);
+  }, [loading, user, nav, loc.pathname, loc.searchStr]);
 
   useEffect(() => {
     if (!loading && user && isWorker) {
@@ -248,7 +247,10 @@ function AdminLayout() {
     );
   }
 
-  if (bootstrapping) {
+  // Only display full-screen bootstrap loader during initial workspace load
+  // when memberships have not yet been fetched. Route transitions and background
+  // token refreshes must NEVER disrupt or unmount the persistent Admin shell.
+  if (bootstrapping && memberships.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-background">
         <div className="text-center space-y-3">
@@ -335,14 +337,10 @@ function AdminLayout() {
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
-      <aside
-        className={`hidden md:flex md:w-64 shrink-0 fixed inset-y-0 z-30 shadow-md ${
-          isRtl ? "right-0" : "left-0"
-        }`}
-      >
+      <aside className="hidden md:flex md:w-72 shrink-0 sticky top-0 h-screen z-30 shadow-md border-r rtl:border-r-0 rtl:border-l border-sidebar-border/80">
         <SidebarContent />
       </aside>
-      <div className={`flex-1 ${isRtl ? "md:mr-64" : "md:ml-64"} flex flex-col min-w-0`}>
+      <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden">
         <header className="sticky top-0 z-20 border-b bg-card/95 backdrop-blur px-4 md:px-8 py-3 flex items-center gap-3">
           <Sheet>
             <SheetTrigger asChild>
@@ -354,7 +352,10 @@ function AdminLayout() {
               <SidebarContent />
             </SheetContent>
           </Sheet>
-          <div className="font-serif font-bold text-lg md:hidden">PeleCanon</div>
+          <Link to={isWorker ? "/admin/tasks" : "/"} className="md:hidden flex items-center">
+            <img src="/images/brand-logo.png" alt="PeleCanon" className="h-7 w-auto object-contain dark:hidden" />
+            <img src="/images/brand-logo-dark.png" alt="PeleCanon" className="h-7 w-auto object-contain hidden dark:block" />
+          </Link>
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <NotificationBell />
@@ -362,7 +363,7 @@ function AdminLayout() {
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 w-full max-w-[1600px] mx-auto min-w-0">
           <Outlet />
         </main>
       </div>

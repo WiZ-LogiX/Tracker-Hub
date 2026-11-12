@@ -42,9 +42,20 @@ export const listCommercialCategories = createServerFn({ method: "GET" })
       const flags = (tenant?.feature_flags as Record<string, any>) || {};
       const customCats: CommercialProductCategory[] = flags.commercialCategories || [];
 
-      // If tenant has custom configured categories, return them
+      // If tenant has custom configured categories, return them (ensuring defaults exist if not explicitly defined)
       if (Array.isArray(customCats) && customCats.length > 0) {
-        return customCats;
+        const existingCodes = new Set(customCats.map((c) => c.code));
+        const missingDefaults = DEFAULT_COMMERCIAL_CATEGORIES.filter(
+          (dc) => !existingCodes.has(dc.code),
+        ).map((c) => ({ ...c, active: true }));
+        const normalizedCats = customCats.map((c) => {
+          // PeleCanon core categories (kitchen, dressing, door) are foundational
+          if (c.code === "kitchen" && c.active === false) {
+            return { ...c, active: true };
+          }
+          return c;
+        });
+        return [...normalizedCats, ...missingDefaults];
       }
     } catch {
       // Fallback to default categories

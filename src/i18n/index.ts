@@ -52,11 +52,29 @@ if (!i18n.isInitialized) {
     });
 }
 
+export function normalizeLang(lang: string | null | undefined): SupportedLang {
+  if (!lang) return "ar";
+  const code = lang.split("-")[0].toLowerCase();
+  return (SUPPORTED_LANGS as readonly string[]).includes(code) ? (code as SupportedLang) : "ar";
+}
+
 export function applyLangToDocument(lang: string) {
   if (typeof document === "undefined") return;
-  const meta = LANG_META[(SUPPORTED_LANGS as readonly string[]).includes(lang) ? (lang as SupportedLang) : "en"];
-  document.documentElement.lang = lang;
+  const validLang = normalizeLang(lang);
+  const meta = LANG_META[validLang];
+  document.documentElement.lang = validLang;
   document.documentElement.dir = meta.dir;
+}
+
+export function changeAppLanguage(lang: string) {
+  const validLang = normalizeLang(lang);
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("pelecanon-lang", validLang);
+    } catch {}
+  }
+  i18n.changeLanguage(validLang);
+  applyLangToDocument(validLang);
 }
 
 export default i18n;

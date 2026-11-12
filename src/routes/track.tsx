@@ -119,7 +119,10 @@ function TrackPage() {
     <div dir="rtl" className="min-h-screen bg-background">
       <header className="border-b">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/" className="font-serif font-bold text-lg">PeleCanon</Link>
+          <Link to="/" className="flex items-center">
+            <img src="/images/brand-logo.png" alt="PeleCanon" className="h-8 w-auto object-contain dark:hidden" />
+            <img src="/images/brand-logo-dark.png" alt="PeleCanon" className="h-8 w-auto object-contain hidden dark:block" />
+          </Link>
           <Link to="/"><Button variant="ghost" size="sm">{t("common.home", "الرئيسية")}</Button></Link>
         </div>
       </header>
@@ -234,6 +237,10 @@ function QuoteView({ data, onReload }: { data: any; onReload: () => void }) {
   const [submitting, setSubmitting] = useState(false);
 
   async function handleDownloadPdf() {
+    if (!quote?.tracking_token) {
+      toast.error("رابط التتبع غير صالح أو منتهي الصلاحية");
+      return;
+    }
     setDownloading(true);
     try {
       const res = await getPdfUrlFn({ data: { trackingToken: quote.tracking_token } });
@@ -332,7 +339,7 @@ function QuoteView({ data, onReload }: { data: any; onReload: () => void }) {
               <Button
                 onClick={() => handleDecisionSubmit("accept")}
                 disabled={submitting}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 flex-1 sm:flex-none cursor-pointer"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 flex-1 sm:flex-none cursor-pointer"
               >
                 ✓ قبول عرض السعر
               </Button>
@@ -412,7 +419,7 @@ function QuoteView({ data, onReload }: { data: any; onReload: () => void }) {
               <div key={i} className="flex items-start gap-3 text-sm">
                 <div className={`h-5 w-5 rounded-full mt-0.5 flex items-center justify-center text-[10px] font-bold ${
                   item.completed
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground border"
                 }`}>
                   {item.completed ? "✓" : (i + 1)}
@@ -440,14 +447,14 @@ function QuoteView({ data, onReload }: { data: any; onReload: () => void }) {
 
       {/* If Converted to Order, Show Order Progress */}
       {quote.converted_order && (
-        <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50/20 dark:bg-emerald-950/10">
+        <Card className="border-primary/30 dark:border-primary/30 bg-primary/5 dark:bg-primary/10">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-xs text-emerald-600 font-semibold">تم بدء التنفيذ الفعلي</span>
+                <span className="text-xs text-primary font-semibold">تم بدء التنفيذ الفعلي</span>
                 <CardTitle className="text-lg">أمر تصنيع: {quote.converted_order.order_number}</CardTitle>
               </div>
-              <span className="text-xs px-2.5 py-1 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 font-medium">
+              <span className="text-xs px-2.5 py-1 rounded bg-primary/15 text-primary font-medium">
                 {quote.converted_order.customer_stage_label_ar}
               </span>
             </div>
@@ -559,13 +566,13 @@ function OrderView({ data }: { data: any }) {
                     isCurrent
                       ? "border-primary bg-primary/5 shadow-sm"
                       : isPast
-                      ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/20"
+                      ? "border-primary/25 bg-primary/5 dark:border-primary/30 dark:bg-primary/10"
                       : "border-muted bg-muted/20 opacity-60"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-mono text-muted-foreground">0{i + 1}</span>
-                    {isPast && <span className="text-xs text-emerald-600 font-bold">✓ مكتمل</span>}
+                    {isPast && <span className="text-xs text-primary font-bold">✓ مكتمل</span>}
                     {isCurrent && <span className="text-xs text-primary font-bold animate-pulse">● قيد التنفيذ</span>}
                   </div>
                   <div className={`text-sm font-semibold ${isCurrent ? "text-primary" : "text-foreground"}`}>

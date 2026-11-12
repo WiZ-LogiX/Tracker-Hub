@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useTranslation as _useTranslation } from "react-i18next";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, FolderKanban, FileText, Truck, UserCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Customer360Drawer } from "@/components/customers/Customer360Drawer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +86,7 @@ function OrdersPage() {
   const [trackMatches, setTrackMatches] = useState<OrderSummary[] | null>(null);
   const [trackResult, setTrackResult] = useState<OrderViewData | null>(null);
   const [trackLoading, setTrackLoading] = useState(false);
+  const [customer360Id, setCustomer360Id] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -403,7 +405,7 @@ function OrdersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-serif text-3xl font-bold">{t("orders.title")}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">{t("orders.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">{t("orders.subtitle")}</p>
       </div>
 
@@ -651,6 +653,7 @@ function OrdersPage() {
                           refreshAttach={refreshAttach}
                           triggerRefreshAttach={() => setRefreshAttach((n) => n + 1)}
                           onRefreshOrders={load}
+                          onOpenCustomer360={setCustomer360Id}
                         />
                       )}
                     </DialogContent>
@@ -688,6 +691,12 @@ function OrdersPage() {
           </CardContent>
         </Card>
       )}
+
+      <Customer360Drawer
+        customerId={customer360Id}
+        open={!!customer360Id}
+        onOpenChange={(open) => !open && setCustomer360Id(null)}
+      />
     </div>
   );
 }
@@ -716,6 +725,7 @@ function OrderDetail({
   refreshAttach,
   triggerRefreshAttach,
   onRefreshOrders,
+  onOpenCustomer360,
 }: any) {
   const { currentRole } = useAuth();
   const idx = stageIndex(o.current_stage);
@@ -725,6 +735,41 @@ function OrderDetail({
     inspections.find((i: any) => i.stage === "quality_check")?.passed;
   return (
     <div className="space-y-4 text-sm">
+      {/* Contextual Lifecycle Links */}
+      <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-lg border bg-muted/30">
+        {o.customer_id && onOpenCustomer360 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenCustomer360(o.customer_id)}
+            className="h-7 text-xs gap-1.5"
+          >
+            <UserCircle className="h-3.5 w-3.5 text-primary" />
+            <span>{t("orders.customerProfile", "ملف العميل 360")}</span>
+          </Button>
+        )}
+        <Button asChild variant="outline" size="sm" className="h-7 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10">
+          <Link to="/admin/projects/$id" params={{ id: o.id }}>
+            <FolderKanban className="h-3.5 w-3.5" />
+            <span>{t("admin.nav.projects", "مساحة عمل المشروع")}</span>
+          </Link>
+        </Button>
+        {o.quote_id && (
+          <Button asChild variant="outline" size="sm" className="h-7 text-xs gap-1.5">
+            <Link to="/admin/quotes/$id" params={{ id: o.quote_id }}>
+              <FileText className="h-3.5 w-3.5 text-secondary" />
+              <span>{t("quotes.title", "المقايسة الأصلية")}</span>
+            </Link>
+          </Button>
+        )}
+        <Button asChild variant="outline" size="sm" className="h-7 text-xs gap-1.5">
+          <Link to="/admin/deliveries">
+            <Truck className="h-3.5 w-3.5 text-blue-600" />
+            <span>{t("admin.nav.deliveries", "التسليم والشحن")}</span>
+          </Link>
+        </Button>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <div className="text-xs text-muted-foreground">{t("orders.customer")}</div>

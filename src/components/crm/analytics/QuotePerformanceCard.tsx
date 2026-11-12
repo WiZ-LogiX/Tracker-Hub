@@ -93,6 +93,30 @@ export function QuotePerformanceCard({ quotes, isRtl }: QuotePerformanceCardProp
             />
           </div>
         </div>
+
+        {/* Origin Breakdown: Standalone vs Opportunity Quotes */}
+        <div className="pt-2 border-t grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="p-2.5 rounded-xl border bg-muted/20 space-y-1">
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium">
+              <FileText className="h-3.5 w-3.5 text-primary" />
+              <span>{isRtl ? "مقايسات تجارية مباشرة:" : "Direct Customer Quotes:"}</span>
+            </span>
+            <div className="flex items-baseline justify-between">
+              <span className="font-bold text-sm">{quotes.standaloneCount || 0}</span>
+              <span className="font-mono text-muted-foreground">{formatEgp(quotes.standaloneValue || 0)}</span>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl border bg-muted/20 space-y-1">
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-medium">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              <span>{isRtl ? "مقايسات مرتبطة بفرص CRM:" : "CRM Opportunity Quotes:"}</span>
+            </span>
+            <div className="flex items-baseline justify-between">
+              <span className="font-bold text-sm">{quotes.opportunityCount || 0}</span>
+              <span className="font-mono text-muted-foreground">{formatEgp(quotes.opportunityValue || 0)}</span>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

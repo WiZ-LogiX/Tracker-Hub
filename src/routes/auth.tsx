@@ -116,13 +116,13 @@ function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <div className="w-full max-w-md">
-        <Link to="/" className="flex items-center gap-2 justify-center mb-6">
-          <div className="h-10 w-10 rounded-md gradient-emerald flex items-center justify-center text-gold font-serif font-bold">P</div>
-          <span className="font-serif text-2xl font-bold">PeleCanon</span>
+        <Link to="/" className="flex items-center justify-center mb-6">
+          <img src="/images/brand-logo.png" alt="PeleCanon" className="h-11 w-auto object-contain dark:hidden" />
+          <img src="/images/brand-logo-dark.png" alt="PeleCanon" className="h-11 w-auto object-contain hidden dark:block" />
         </Link>
-        <Card>
+        <Card className="border border-border/80 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-center font-serif">{t("auth.title")}</CardTitle>
+            <CardTitle className="text-center text-xl font-bold">{t("auth.title")}</CardTitle>
             <p className="text-sm text-muted-foreground text-center mt-1">{t("auth.subtitle")}</p>
           </CardHeader>
           <CardContent>

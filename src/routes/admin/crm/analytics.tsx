@@ -137,7 +137,7 @@ function CrmAnalyticsPage() {
               <BarChart3 className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-serif">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                 {isRtl ? "ذكاء وتحليلات المبيعات (Commercial Analytics)" : "CRM Intelligence & Analytics"}
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">

@@ -82,7 +82,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
-      <head><HeadContent /></head>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var l=localStorage.getItem("pelecanon-lang")||"ar";var d=l==="ar"?"rtl":"ltr";document.documentElement.lang=l;document.documentElement.dir=d;var t=localStorage.getItem("pelecanon-theme")||"system";var dark=t==="dark"||(t==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark){document.documentElement.classList.add("dark")}else{document.documentElement.classList.remove("dark")}}catch(e){}})()`,
+          }}
+        />
+        <HeadContent />
+      </head>
       <body>
         {children}
         <Scripts />

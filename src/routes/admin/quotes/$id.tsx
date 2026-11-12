@@ -32,9 +32,18 @@ import {
   Calendar,
   ImageIcon,
   Sparkles,
+  UserCircle,
+  FolderKanban,
+  ClipboardList,
+  Package,
+  Receipt,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
 } from "lucide-react";
 import { InternalNotes } from "@/components/admin/InternalNotes";
 import { convertQuoteToOrder } from "@/lib/transactional.functions";
+import { Customer360Drawer } from "@/components/customers/Customer360Drawer";
 
 const TreeConfigurator = lazy(() =>
   import("@/components/quote/TreeConfigurator").then((m) => ({ default: m.TreeConfigurator })),
@@ -54,6 +63,7 @@ function QuoteDetail() {
   const [quote, setQuote] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [customer, setCustomer] = useState<any>(null);
+  const [customer360Id, setCustomer360Id] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [isV2, setIsV2] = useState<boolean | null>(null);
   const [commercialContext, setCommercialContext] = useState<any>(null);
@@ -158,7 +168,10 @@ function QuoteDetail() {
   }
 
   async function handleGeneratePdf() {
-    if (!quote) return;
+    if (!quote?.id) {
+      toast.error(isRtl ? "بيانات عرض السعر غير متوفرة" : "Quote data not available");
+      return;
+    }
     setWorking(true);
     try {
       const { downloadUrl } = await pdfFn({ data: { entityType: "quote", entityId: quote.id } });
@@ -233,14 +246,27 @@ function QuoteDetail() {
       </Link>
       <div className="flex justify-between items-start flex-wrap gap-3">
         <div>
-          <h1 className="font-serif text-3xl font-bold">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             {quote.quote_number?.startsWith("PLC-")
               ? quote.quote_number
               : `${quote.quote_number || t("quotes.draft")}`}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {customer?.name} • {customer?.phone}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            {customer ? (
+              <button
+                type="button"
+                onClick={() => setCustomer360Id(customer.id)}
+                className="text-sm font-medium text-foreground hover:text-primary transition-colors inline-flex items-center gap-1.5 underline underline-offset-4 decoration-primary/40 hover:decoration-primary"
+                title={isRtl ? "عرض ملف العميل الشامل (Customer 360)" : "View Customer 360 profile"}
+              >
+                <UserCircle className="h-4 w-4 text-primary" />
+                <span>{customer.name}</span>
+                <span className="text-xs text-muted-foreground font-normal">({customer.phone})</span>
+              </button>
+            ) : (
+              <span className="text-sm text-muted-foreground">{customer?.name || "—"}</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Badge className="text-base px-3 py-1 bg-primary text-primary-foreground">
@@ -310,44 +336,264 @@ function QuoteDetail() {
         </CardContent>
       </Card>
 
-      {commercialContext?.opportunityId && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2 text-primary">
-                <Briefcase className="h-4 w-4" />
-                <span>{t("quotes.commercialContext", "السياق التجاري والفرصة البيعية")}</span>
-              </CardTitle>
+      {/* Quotation-Centered Business Relationships Lifecycle Section */}
+      <Card className="border-border shadow-xs">
+        <CardHeader className="pb-3 border-b border-border/60">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2 text-foreground">
+              <Briefcase className="h-4 w-4 text-primary" />
+              <span>{isRtl ? "العلاقات التجارية ودورة العمل المتكاملة" : "Business Relationships & Connected Lifecycle"}</span>
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs bg-muted/40 font-mono">
+                {quote?.quote_number || quote?.quoteNumber}
+              </Badge>
+              {commercialContext?.projectId && (
+                <Button asChild size="sm" variant="outline" className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10">
+                  <Link
+                    to="/admin/projects/$id"
+                    params={{ id: commercialContext.projectId }}
+                  >
+                    <FolderKanban className="h-3 w-3" />
+                    <span>{isRtl ? "مساحة عمل المشروع" : "Project Workspace"}</span>
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+          {/* 1. Customer */}
+          <div className="p-3 rounded-lg border border-border/80 bg-card/60 flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <UserCircle className="h-3.5 w-3.5 text-primary" />
+                  {isRtl ? "العميل" : "Customer"}
+                </span>
+                <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300">
+                  {isRtl ? "مسجل" : "Registered"}
+                </Badge>
+              </div>
+              <div className="mt-1.5 font-semibold text-foreground text-sm truncate">
+                {customer?.name || commercialContext?.customerName || "—"}
+              </div>
+              <div className="text-[11px] font-mono text-muted-foreground truncate">
+                {customer?.phone || commercialContext?.customerPhone || customer?.email || commercialContext?.customerEmail || "—"}
+              </div>
+            </div>
+            {(customer?.id || commercialContext?.customerId) && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setCustomer360Id(customer?.id || commercialContext?.customerId)}
+                className="w-full h-7 text-xs gap-1.5 cursor-pointer mt-1"
+              >
+                <Sparkles className="h-3 w-3 text-primary" />
+                <span>{isRtl ? "ملف العميل 360°" : "Customer 360°"}</span>
+              </Button>
+            )}
+          </div>
+
+          {/* 2. CRM Opportunity */}
+          <div className="p-3 rounded-lg border border-border/80 bg-card/60 flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Briefcase className="h-3.5 w-3.5 text-primary" />
+                  {isRtl ? "الفرصة البيعية (CRM)" : "CRM Opportunity"}
+                </span>
+                <Badge variant="outline" className={`text-[10px] ${commercialContext?.opportunityId ? "text-primary border-primary/30 bg-primary/5" : "text-muted-foreground"}`}>
+                  {commercialContext?.opportunityId ? (isRtl ? "مرتبطة" : "Linked") : (isRtl ? "عرض مباشر" : "Direct Quote")}
+                </Badge>
+              </div>
+              <div className="mt-1.5 font-semibold text-foreground truncate">
+                {commercialContext?.opportunityTitle || (isRtl ? "عرض سعر تجاري مباشر" : "Direct Commercial Quote")}
+              </div>
+              <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                <span className="font-mono">{commercialContext?.opportunityNumber || "—"}</span>
+                {commercialContext?.opportunityStage && (
+                  <span>• {commercialContext.opportunityStage}</span>
+                )}
+              </div>
+            </div>
+            {commercialContext?.opportunityId ? (
               <Link to="/admin/crm" search={{ opportunityId: commercialContext.opportunityId }}>
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10">
+                <Button size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5">
                   <ExternalLink className="h-3 w-3" />
-                  <span>{t("quotes.viewInCrm", "عرض في CRM")}</span>
+                  <span>{isRtl ? "عرض في CRM" : "View in CRM"}</span>
                 </Button>
               </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            ) : (
+              <div className="text-[11px] text-muted-foreground/80 italic py-1">
+                {isRtl ? "طلب مباشر من العميل بدون مسار بيعي سابق" : "Direct customer request without prior lead"}
+              </div>
+            )}
+          </div>
+
+          {/* 3. Project Workspace */}
+          <div className="p-3 rounded-lg border border-border/80 bg-card/60 flex flex-col justify-between space-y-2">
             <div>
-              <span className="text-muted-foreground block text-[11px]">{t("quotes.opportunityNumber", "رقم الصفقة")}</span>
-              <span className="font-mono font-bold text-foreground">{commercialContext.opportunityNumber}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <FolderKanban className="h-3.5 w-3.5 text-primary" />
+                  {isRtl ? "مساحة عمل المشروع" : "Project Workspace"}
+                </span>
+                <Badge variant="outline" className={`text-[10px] ${commercialContext?.projectId ? "text-primary border-primary/30 bg-primary/5" : "text-muted-foreground"}`}>
+                  {commercialContext?.projectId ? (isRtl ? "نشط" : "Active") : (isRtl ? "عند القبول" : "Pending")}
+                </Badge>
+              </div>
+              <div className="mt-1.5 font-semibold text-foreground truncate">
+                {commercialContext?.projectTitle || (isRtl ? "مشروع العرض" : "Project Workspace")}
+              </div>
+              <div className="text-[11px] font-mono text-muted-foreground">
+                {commercialContext?.projectNumber || (isRtl ? "يُنشأ فور اعتماد العرض" : "Created upon acceptance")}
+              </div>
             </div>
+            {commercialContext?.projectId ? (
+              <Button asChild size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5">
+                <Link to="/admin/projects/$id" params={{ id: commercialContext.projectId }}>
+                  <FolderKanban className="h-3 w-3" />
+                  <span>{isRtl ? "فتح مساحة العمل" : "Open Workspace"}</span>
+                </Link>
+              </Button>
+            ) : (
+              <div className="text-[11px] text-muted-foreground/80 italic py-1">
+                {isRtl ? "متاح تلقائياً للربط بعد قبول العرض" : "Available automatically after quote acceptance"}
+              </div>
+            )}
+          </div>
+
+          {/* 4. Production Order */}
+          <div className="p-3 rounded-lg border border-border/80 bg-card/60 flex flex-col justify-between space-y-2">
             <div>
-              <span className="text-muted-foreground block text-[11px]">{t("quotes.dealTitle", "عنوان المشروع")}</span>
-              <span className="font-semibold text-foreground truncate block">{commercialContext.opportunityTitle}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <ClipboardList className="h-3.5 w-3.5 text-primary" />
+                  {isRtl ? "أمر الإنتاج والتصنيع" : "Production Order"}
+                </span>
+                <Badge variant="outline" className={`text-[10px] ${commercialContext?.orderId ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400" : "text-muted-foreground"}`}>
+                  {commercialContext?.orderStage || (isRtl ? "غير منشأ" : "Unordered")}
+                </Badge>
+              </div>
+              <div className="mt-1.5 font-semibold text-foreground">
+                {commercialContext?.orderNumber ? (
+                  <span className="font-mono">{commercialContext.orderNumber}</span>
+                ) : (
+                  <span>{isRtl ? "لم يتم تحويله لأمر إنتاج بعد" : "Not yet converted"}</span>
+                )}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {commercialContext?.orderTotal != null ? (
+                  <span className="font-mono">{formatEGP(commercialContext.orderTotal)}</span>
+                ) : (
+                  <span>{isRtl ? "التحويل متاح بعد اعتماد العرض" : "Convertible upon acceptance"}</span>
+                )}
+              </div>
             </div>
+            {commercialContext?.orderId ? (
+              <Button asChild size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5">
+                <Link to="/admin/orders">
+                  <ClipboardList className="h-3 w-3" />
+                  <span>{isRtl ? "تتبع الإنتاج" : "Track Production"}</span>
+                </Link>
+              </Button>
+            ) : quote?.status === "accepted" || quote?.status === "approved" || quote?.status === "converted" ? (
+              <Button
+                size="sm"
+                onClick={convertToInvoice}
+                disabled={working}
+                className="w-full h-7 text-xs gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <span>{isRtl ? "تحويل إلى أمر إنتاج الآن" : "Convert to Order Now"}</span>
+              </Button>
+            ) : (
+              <div className="text-[11px] text-muted-foreground/80 italic py-1">
+                {isRtl ? "يتطلب قبول العميل لإنشاء أمر الإنتاج" : "Requires customer acceptance"}
+              </div>
+            )}
+          </div>
+
+          {/* 5. Delivery & Handover */}
+          <div className="p-3 rounded-lg border border-border/80 bg-card/60 flex flex-col justify-between space-y-2">
             <div>
-              <span className="text-muted-foreground block text-[11px]">{t("quotes.pipelineStage", "المرحلة البيعية")}</span>
-              <Badge variant="outline" className="text-[10px] capitalize mt-0.5">
-                {commercialContext.stage}
-              </Badge>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Truck className="h-3.5 w-3.5 text-primary" />
+                  {isRtl ? "التسليم والتركيب" : "Delivery & Handover"}
+                </span>
+                <Badge variant="outline" className={`text-[10px] ${commercialContext?.deliveryId ? "text-primary border-primary/30 bg-primary/5" : "text-muted-foreground"}`}>
+                  {commercialContext?.deliveryStatus || (isRtl ? "مرحلة لاحقة" : "Pending")}
+                </Badge>
+              </div>
+              <div className="mt-1.5 font-semibold text-foreground">
+                {commercialContext?.deliveryNumber ? (
+                  <span className="font-mono">{commercialContext.deliveryNumber}</span>
+                ) : (
+                  <span>{isRtl ? "جدولة التسليم" : "Delivery Scheduling"}</span>
+                )}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {commercialContext?.deliveryScheduledDate ? (
+                  <span>{new Date(commercialContext.deliveryScheduledDate).toLocaleDateString(isRtl ? "ar-EG" : "en-US")}</span>
+                ) : (
+                  <span>{isRtl ? "يتم الجدولة بعد اكتمال التصنيع" : "Scheduled after production"}</span>
+                )}
+              </div>
             </div>
+            {commercialContext?.deliveryId ? (
+              <Button asChild size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5">
+                <Link to="/admin/deliveries">
+                  <Truck className="h-3 w-3" />
+                  <span>{isRtl ? "سجل التسليم" : "View Delivery"}</span>
+                </Link>
+              </Button>
+            ) : (
+              <div className="text-[11px] text-muted-foreground/80 italic py-1">
+                {isRtl ? "يُجدول تلقائياً بعد إنهاء أوامر الشغل" : "Scheduled after work orders complete"}
+              </div>
+            )}
+          </div>
+
+          {/* 6. Invoices & Payments */}
+          <div className="p-3 rounded-lg border border-border/80 bg-card/60 flex flex-col justify-between space-y-2">
             <div>
-              <span className="text-muted-foreground block text-[11px]">{t("quotes.salesOwner", "المسؤول التجاري")}</span>
-              <span className="font-medium text-foreground">{commercialContext.salesOwnerName || "—"}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                  <Receipt className="h-3.5 w-3.5 text-primary" />
+                  {isRtl ? "الفاتورة والمدفوعات" : "Invoice & Payments"}
+                </span>
+                <Badge variant="outline" className={`text-[10px] ${commercialContext?.invoiceId ? "text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400" : "text-muted-foreground"}`}>
+                  {commercialContext?.invoiceId ? (Number(commercialContext.invoicePaidAmount || 0) >= Number(commercialContext.invoiceTotal || 0) ? (isRtl ? "مسددة" : "Paid") : (isRtl ? "تحت التحصيل" : "Active")) : (isRtl ? "غير مفوتر" : "Unbilled")}
+                </Badge>
+              </div>
+              <div className="mt-1.5 font-semibold text-foreground font-mono">
+                {commercialContext?.invoiceNumber || (isRtl ? "لم تُصدر فاتورة بعد" : "No invoice issued")}
+              </div>
+              <div className="text-[11px] text-muted-foreground font-mono">
+                {commercialContext?.invoiceTotal != null ? (
+                  <span>{formatEGP(commercialContext.invoicePaidAmount || 0)} / {formatEGP(commercialContext.invoiceTotal)}</span>
+                ) : (
+                  <span className="font-sans">{isRtl ? "تُنشأ الدفعة المقدمة عند التعاقد" : "Deposit created upon contract"}</span>
+                )}
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            {commercialContext?.invoiceId ? (
+              <Button asChild size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5">
+                <Link to="/admin/invoices">
+                  <Receipt className="h-3 w-3" />
+                  <span>{isRtl ? "إدارة الفواتير" : "View Invoices"}</span>
+                </Link>
+              </Button>
+            ) : (
+              <div className="text-[11px] text-muted-foreground/80 italic py-1">
+                {isRtl ? "تصدر الفاتورة تلقائياً عند تحويل الأمر" : "Issued automatically on conversion"}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {isV2 === null ? (
         <Card>
@@ -460,7 +706,7 @@ function QuoteDetail() {
                             </div>
                             <div className="text-sm font-semibold text-primary">
                               {line.quantity} {line.pricingUnitAr || "عدد"} × {formatEGP(Number(line.unitPrice))} ={" "}
-                              <span className="font-serif text-lg font-bold">{formatEGP(Number(line.lineTotal))}</span>
+                              <span className="font-mono text-lg font-bold">{formatEGP(Number(line.lineTotal))}</span>
                             </div>
                           </div>
 
@@ -616,7 +862,7 @@ function QuoteDetail() {
             <span>{formatEGP(Number(quote.vat_amount))}</span>
           </div>
           <Separator />
-          <div className="flex justify-between font-serif text-2xl font-bold text-primary">
+          <div className="flex justify-between font-mono text-2xl font-bold text-primary">
             <span>{t("quotes.grandTotal")}</span>
             <span>{formatEGP(Number(quote.total))}</span>
           </div>
@@ -790,6 +1036,12 @@ function QuoteDetail() {
           <InternalNotes entityType="quote" entityId={id} />
         </CardContent>
       </Card>
+
+      <Customer360Drawer
+        customerId={customer360Id}
+        open={!!customer360Id}
+        onOpenChange={(open) => !open && setCustomer360Id(null)}
+      />
     </div>
   );
 }

@@ -1,18 +1,19 @@
 import { z } from "zod";
 import type { LeadSource, PipelineStage, LostReasonKey } from "@/lib/crm-types";
 
-export type TimeWindow = "today" | "this_week" | "this_month" | "this_quarter" | "custom";
+export type TimeWindow = "today" | "this_week" | "this_month" | "this_quarter" | "all_time" | "custom";
 
 export const TIME_WINDOW_OPTIONS: { value: TimeWindow; label: string; labelAr: string }[] = [
   { value: "today", label: "Today", labelAr: "اليوم" },
   { value: "this_week", label: "This Week", labelAr: "هذا الأسبوع" },
   { value: "this_month", label: "This Month", labelAr: "هذا الشهر" },
   { value: "this_quarter", label: "This Quarter", labelAr: "هذا الربع" },
+  { value: "all_time", label: "All Time", labelAr: "كامل السجل" },
   { value: "custom", label: "Custom Range", labelAr: "فترة مخصصة" },
 ];
 
 export const CrmAnalyticsInput = z.object({
-  timeWindow: z.enum(["today", "this_week", "this_month", "this_quarter", "custom"]).default("this_month"),
+  timeWindow: z.enum(["today", "this_week", "this_month", "this_quarter", "all_time", "custom"]).default("this_month"),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
   salesOwnerId: z.string().uuid().optional().nullable(),
@@ -109,6 +110,18 @@ export function resolveDateRange(
     };
   }
 
+  if (window === "all_time") {
+    const start = new Date(2020, 0, 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear() + 5, 11, 31, 23, 59, 59, 999);
+    return {
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      timeWindow: "all_time",
+      label: "All Time",
+      labelAr: "كامل السجل",
+    };
+  }
+
   // Default: this_month
   const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -156,6 +169,10 @@ export interface QuoteConversionAnalytics {
   rejectedValue: number;
   draftCount: number;
   draftValue: number;
+  standaloneCount: number;
+  standaloneValue: number;
+  opportunityCount: number;
+  opportunityValue: number;
   conversionRate: number; // accepted / (accepted + rejected) * 100
   acceptanceRateOfSent: number; // accepted / sent * 100
 }

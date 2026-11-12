@@ -10,7 +10,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { db } from "@/db/client.server";
-import { quotes, quoteItems, customers, orders, opportunities, tasks, taskAssignees, auditLog, appUsers, tenantCounters } from "@/db/schema";
+import { quotes, quoteItems, customers, orders, opportunities, tasks, taskAssignees, auditLog, appUsers, tenantCounters, invoices, invoicePayments, deliveryHandovers } from "@/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
 import { deliverToN8n, type NotifyPayload } from "@/lib/whatsapp-share.functions";
@@ -2078,6 +2078,8 @@ export const getQuoteCommercialContext = createServerFn({ method: "GET" })
       .select({
         id: quotes.id,
         quoteNumber: quotes.quoteNumber,
+        status: quotes.status,
+        customerId: quotes.customerId,
         snapshot: quotes.snapshot,
       })
       .from(quotes)
@@ -2087,40 +2089,167 @@ export const getQuoteCommercialContext = createServerFn({ method: "GET" })
     if (!q) return null;
     const snap = ((q.snapshot as any) || {}) as Record<string, any>;
     const oppId = (snap.opportunityId as string) || (snap.opportunity_id as string) || null;
-    if (!oppId) return null;
 
+    // 1. Fetch Customer
+    let cust: any = null;
     try {
-      const [row] = await db
+      const [c] = await db
         .select({
-          opportunityId: opportunities.id,
-          opportunityNumber: opportunities.opportunityNumber,
-          opportunityTitle: opportunities.title,
-          projectType: opportunities.projectType,
-          stage: opportunities.stage,
-          status: opportunities.status,
-          salesOwnerId: opportunities.salesOwner,
-          salesOwnerName: appUsers.displayName,
+          id: customers.id,
+          name: customers.name,
+          phone: customers.phone,
+          email: customers.email,
         })
-        .from(opportunities)
-        .leftJoin(appUsers, eq(opportunities.salesOwner, appUsers.id))
-        .where(and(eq(opportunities.id, oppId), eq(opportunities.tenantId, tenantId)))
+        .from(customers)
+        .where(and(eq(customers.id, q.customerId), eq(customers.tenantId, tenantId)))
         .limit(1);
-
-      return row ? { quoteId: q.id, quoteNumber: q.quoteNumber, ...row } : null;
+      if (c) cust = c;
     } catch {
-      return {
-        quoteId: q.id,
-        quoteNumber: q.quoteNumber,
-        opportunityId: oppId,
-        opportunityNumber: (snap.opportunityNumber as string) || "OPP",
-        opportunityTitle: (snap.opportunityTitle as string) || "Linked Project",
-        projectType: (snap.projectType as string) || "residential",
-        stage: (snap.opportunityStage as string) || "quotation",
-        status: "open",
-        salesOwnerId: null,
-        salesOwnerName: (snap.salesOwnerName as string) || null,
-      };
+      // Non-blocking
     }
+
+    // 2. Fetch Opportunity (if linked)
+    let oppRow: any = null;
+    if (oppId) {
+      try {
+        const [o] = await db
+          .select({
+            opportunityId: opportunities.id,
+            opportunityNumber: opportunities.opportunityNumber,
+            opportunityTitle: opportunities.title,
+            projectType: opportunities.projectType,
+            stage: opportunities.stage,
+            status: opportunities.status,
+            salesOwnerId: opportunities.salesOwner,
+            salesOwnerName: appUsers.displayName,
+          })
+          .from(opportunities)
+          .leftJoin(appUsers, eq(opportunities.salesOwner, appUsers.id))
+          .where(and(eq(opportunities.id, oppId), eq(opportunities.tenantId, tenantId)))
+          .limit(1);
+        if (o) oppRow = o;
+      } catch {
+        // Non-blocking
+      }
+    }
+
+    // 3. Fetch Order
+    let linkedOrder: any = null;
+    try {
+      const [ord] = await db
+        .select({
+          id: orders.id,
+          orderNumber: orders.orderNumber,
+          currentStage: orders.currentStage,
+          total: orders.total,
+          deposit: orders.deposit,
+        })
+        .from(orders)
+        .where(and(eq(orders.quoteId, data.quoteId), eq(orders.tenantId, tenantId)))
+        .limit(1);
+      if (ord) linkedOrder = ord;
+    } catch {
+      // Non-blocking
+    }
+
+    // 4. Fetch Delivery (if order exists)
+    let linkedDelivery: any = null;
+    if (linkedOrder?.id) {
+      try {
+        const [del] = await db
+          .select({
+            id: deliveryHandovers.id,
+            deliveryNumber: deliveryHandovers.deliveryNumber,
+            status: deliveryHandovers.status,
+            scheduledDate: deliveryHandovers.scheduledDate,
+            deliveredAt: deliveryHandovers.deliveredAt,
+          })
+          .from(deliveryHandovers)
+          .where(and(eq(deliveryHandovers.orderId, linkedOrder.id), eq(deliveryHandovers.tenantId, tenantId)))
+          .limit(1);
+        if (del) linkedDelivery = del;
+      } catch {
+        // Non-blocking
+      }
+    }
+
+    // 5. Fetch Invoice and Payments
+    let linkedInvoice: any = null;
+    let paymentsCount = 0;
+    let totalPaymentsAmount = 0;
+    try {
+      const [inv] = await db
+        .select({
+          id: invoices.id,
+          invoiceNumber: invoices.invoiceNumber,
+          total: invoices.total,
+          depositAmount: invoices.depositAmount,
+          paidAmount: invoices.paidAmount,
+          paidAt: invoices.paidAt,
+        })
+        .from(invoices)
+        .where(and(eq(invoices.quoteId, data.quoteId), eq(invoices.tenantId, tenantId)))
+        .limit(1);
+      if (inv) {
+        linkedInvoice = inv;
+        const payments = await db
+          .select({
+            id: invoicePayments.id,
+            amount: invoicePayments.amount,
+          })
+          .from(invoicePayments)
+          .where(and(eq(invoicePayments.invoiceId, inv.id), eq(invoicePayments.tenantId, tenantId)));
+        paymentsCount = payments.length;
+        totalPaymentsAmount = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+      }
+    } catch {
+      // Non-blocking
+    }
+
+    const projectId = oppId || linkedOrder?.id || null;
+
+    return {
+      quoteId: q.id,
+      quoteNumber: q.quoteNumber,
+      quoteStatus: q.status,
+      // Customer
+      customerId: cust?.id ?? q.customerId,
+      customerName: cust?.name ?? (snap.customerName as string) ?? "—",
+      customerPhone: cust?.phone ?? (snap.customerPhone as string) ?? null,
+      customerEmail: cust?.email ?? (snap.customerEmail as string) ?? null,
+      // Opportunity
+      opportunityId: oppRow?.opportunityId ?? oppId ?? null,
+      opportunityNumber: oppRow?.opportunityNumber ?? (oppId ? (snap.opportunityNumber as string) || "OPP" : null),
+      opportunityTitle: oppRow?.opportunityTitle ?? (oppId ? (snap.opportunityTitle as string) || "CRM Opportunity" : null),
+      opportunityStage: oppRow?.stage ?? (oppId ? (snap.opportunityStage as string) || "quotation" : null),
+      opportunityStatus: oppRow?.status ?? "open",
+      salesOwnerId: oppRow?.salesOwnerId ?? null,
+      salesOwnerName: oppRow?.salesOwnerName ?? (snap.salesOwnerName as string) ?? null,
+      // Project
+      projectId,
+      projectNumber: oppRow?.opportunityNumber || (linkedOrder ? `PRJ-${linkedOrder.orderNumber}` : (oppId ? "PRJ" : null)),
+      projectTitle: oppRow?.opportunityTitle || (linkedOrder ? `مشروع أمر ${linkedOrder.orderNumber}` : (oppId ? "Project" : null)),
+      // Production Order
+      orderId: linkedOrder?.id ?? null,
+      orderNumber: linkedOrder?.orderNumber ?? null,
+      orderStage: linkedOrder?.currentStage ?? null,
+      orderTotal: linkedOrder?.total ?? null,
+      // Delivery
+      deliveryId: linkedDelivery?.id ?? null,
+      deliveryNumber: linkedDelivery?.deliveryNumber ?? null,
+      deliveryStatus: linkedDelivery?.status ?? null,
+      deliveryScheduledDate: linkedDelivery?.scheduledDate ?? null,
+      deliveryDeliveredAt: linkedDelivery?.deliveredAt ?? null,
+      // Invoice & Payments
+      invoiceId: linkedInvoice?.id ?? null,
+      invoiceNumber: linkedInvoice?.invoiceNumber ?? null,
+      invoiceTotal: linkedInvoice?.total ?? null,
+      invoiceDepositAmount: linkedInvoice?.depositAmount ?? null,
+      invoicePaidAmount: linkedInvoice?.paidAmount ?? null,
+      invoicePaidAt: linkedInvoice?.paidAt ?? null,
+      paymentsCount,
+      totalPaymentsAmount,
+    };
   });
 
 const GetCommercialQuoteInput = z.object({

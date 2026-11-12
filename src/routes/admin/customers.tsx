@@ -255,7 +255,7 @@ function CustomersPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b pb-5">
         <div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight flex items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5 text-foreground">
             <UserCircle className="h-7 w-7 text-primary" />
             <span>{isRtl ? "العملاء وسجل التعاملات" : "Customers & Client 360"}</span>
           </h1>
@@ -592,7 +592,7 @@ function CustomersPage() {
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-lg font-serif font-bold">
+            <DialogTitle className="text-lg font-bold">
               {editingId
                 ? (isRtl ? "تعديل بيانات العميل" : "Edit Customer")
                 : (isRtl ? "إضافة عميل جديد" : "Add New Customer")}

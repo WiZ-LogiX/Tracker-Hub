@@ -230,7 +230,7 @@ function SalesWorkspacePage() {
             <span>/</span>
             <span className="text-foreground font-medium">{isRtl ? "مساحة فريق المبيعات والمتابعة" : "Sales Team & Follow-Ups"}</span>
           </div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
             <UserCheck className="h-7 w-7 text-primary" />
             <span>{isRtl ? "إدارة فريق المبيعات والمتابعة التجارية" : "Sales Team & Follow-Up Operations"}</span>
           </h1>

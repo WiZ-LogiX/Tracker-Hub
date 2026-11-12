@@ -8,6 +8,7 @@ import {
   useRef,
   useCallback,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
@@ -59,6 +60,7 @@ const Ctx = createContext<AuthCtx>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
@@ -157,6 +159,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
+      if (!sess?.user) {
+        setMemberships([]);
+        setCurrentTenantId(null);
+        setBootstrapping(false);
+        setBootstrapError(null);
+        setBootstrapAttempted(false);
+        bootstrappedForRef.current = null;
+        bootstrapTokenRef.current++;
+        return;
+      }
+      // If the session belongs to the same user and bootstrap has already succeeded, do not reset memberships or flash loading
+      if (bootstrappedForRef.current === sess.user.id) {
+        return;
+      }
       setMemberships([]);
       setCurrentTenantId(null);
       setBootstrapping(false);
@@ -164,9 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setBootstrapAttempted(false);
       bootstrappedForRef.current = null;
       bootstrapTokenRef.current++;
-      if (sess?.user) {
-        void runBootstrap(sess.user.id);
-      }
+      void runBootstrap(sess.user.id);
     });
 
     return () => {
@@ -234,6 +248,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    queryClient.clear();
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("pelecanon:active-tenant");
+    }
     setMemberships([]);
     setCurrentTenantId(null);
     setBootstrapping(false);
@@ -241,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setBootstrapAttempted(false);
     bootstrappedForRef.current = null;
     bootstrapTokenRef.current++;
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo<AuthCtx>(() => {
     const current = memberships.find((m) => m.tenantId === currentTenantId) ?? null;

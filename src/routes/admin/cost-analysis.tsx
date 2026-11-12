@@ -78,7 +78,7 @@ function CostAnalysisPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 border-b pb-5">
         <div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight flex items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5 text-foreground">
             <BarChart3 className="h-7 w-7 text-primary" />
             <span>{isRtl ? "تحليل التكاليف وهامش الربحية (V2)" : "V2 Cost Analysis & Profitability"}</span>
           </h1>
@@ -110,7 +110,7 @@ function CostAnalysisPage() {
             <div className="text-xs text-muted-foreground uppercase font-semibold">
               {isRtl ? "إجمالي قيمة البيع (قبل الضريبة)" : "Total Selling Value"}
             </div>
-            <div className="text-2xl font-bold font-serif text-foreground">
+            <div className="text-2xl font-bold font-mono text-foreground">
               {formatEGP(analysis?.totalSellingPrice || 0)}
             </div>
           </CardContent>
@@ -121,7 +121,7 @@ function CostAnalysisPage() {
             <div className="text-xs text-muted-foreground uppercase font-semibold">
               {isRtl ? "إجمالي تكلفة التصنيع" : "Total Mfg Cost"}
             </div>
-            <div className="text-2xl font-bold font-serif text-foreground">
+            <div className="text-2xl font-bold font-mono text-foreground">
               {formatEGP(analysis?.totalManufacturingCost || 0)}
             </div>
           </CardContent>
@@ -132,7 +132,7 @@ function CostAnalysisPage() {
             <div className="text-xs text-emerald-700 dark:text-emerald-400 uppercase font-semibold">
               {isRtl ? "إجمالي الربح التشغيلي" : "Total Gross Profit"}
             </div>
-            <div className="text-2xl font-bold font-serif text-emerald-700 dark:text-emerald-400">
+            <div className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
               {formatEGP(analysis?.totalGrossProfit || 0)}
             </div>
           </CardContent>
@@ -143,7 +143,7 @@ function CostAnalysisPage() {
             <div className="text-xs text-primary uppercase font-semibold">
               {isRtl ? "متوسط هامش الربح" : "Average Margin"}
             </div>
-            <div className="text-2xl font-bold font-serif text-primary">
+            <div className="text-2xl font-bold font-mono text-primary">
               {(analysis?.averageGrossMarginPct || 0).toFixed(1)}%
             </div>
           </CardContent>
@@ -153,7 +153,7 @@ function CostAnalysisPage() {
       {/* Category Cost Breakdown Bars */}
       <Card className="border rounded-2xl shadow-xs">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-bold font-serif flex items-center justify-between">
+          <CardTitle className="text-base font-bold flex items-center justify-between">
             <span className="flex items-center gap-2">
               <PieChart className="h-4 w-4 text-primary" />
               <span>{isRtl ? "هيكل التكلفة الصناعية الإجمالي" : "Overall Manufacturing Cost Structure"}</span>
@@ -249,7 +249,7 @@ function CostAnalysisPage() {
       <div className="grid md:grid-cols-2 gap-4">
         <Card className="border rounded-2xl shadow-xs">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold font-serif">
+            <CardTitle className="text-sm font-bold">
               {isRtl ? "أبرز بنود تكلفة الخامات" : "Top Material Cost Drivers"}
             </CardTitle>
           </CardHeader>
@@ -265,7 +265,7 @@ function CostAnalysisPage() {
 
         <Card className="border rounded-2xl shadow-xs">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold font-serif">
+            <CardTitle className="text-sm font-bold">
               {isRtl ? "أبرز بنود المستلزمات والمصنعيات" : "Top Hardware & Op Drivers"}
             </CardTitle>
           </CardHeader>
@@ -283,7 +283,7 @@ function CostAnalysisPage() {
       {/* Quotations Margin Table */}
       <Card className="border rounded-2xl shadow-xs overflow-hidden">
         <CardHeader className="bg-muted/30 pb-3">
-          <CardTitle className="text-sm font-bold font-serif">
+          <CardTitle className="text-sm font-bold">
             {isRtl ? "تفصيل ربحية المقايسات المسجلة" : "Quotation Margins & Unit Economics"}
           </CardTitle>
         </CardHeader>

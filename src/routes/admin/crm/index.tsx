@@ -246,7 +246,7 @@ function CRMPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
             <TrendingUp className="h-7 w-7 text-primary" />
             <span>{isRtl ? "إدارة الفرص البيعية والعملاء (CRM)" : "Commercial CRM & Pipeline"}</span>
           </h1>

@@ -403,18 +403,30 @@ export const getCrmAnalytics = createServerFn({ method: "GET" })
     let quotesRejectedValue = 0;
     let quotesDraftCount = 0;
     let quotesDraftValue = 0;
+    let quotesStandaloneCount = 0;
+    let quotesStandaloneValue = 0;
+    let quotesOpportunityCount = 0;
+    let quotesOpportunityValue = 0;
 
     for (const q of rawQuotes) {
       const total = Number(q.total) || 0;
       quotesCreatedValue += total;
 
-      if (q.status === "accepted") {
+      if (q.opportunityId) {
+        quotesOpportunityCount += 1;
+        quotesOpportunityValue += total;
+      } else {
+        quotesStandaloneCount += 1;
+        quotesStandaloneValue += total;
+      }
+
+      if (q.status === "accepted" || q.status === "converted") {
         quotesAcceptedCount += 1;
         quotesAcceptedValue += total;
       } else if (q.status === "rejected") {
         quotesRejectedCount += 1;
         quotesRejectedValue += total;
-      } else if (q.status === "sent") {
+      } else if (q.status === "sent" || q.status === "pdf_sent" || q.status === "awaiting_customer_confirmation" || q.status === "awaiting_customer_decision") {
         quotesSentCount += 1;
         quotesSentValue += total;
       } else if (q.status === "draft") {
@@ -434,6 +446,10 @@ export const getCrmAnalytics = createServerFn({ method: "GET" })
       rejectedValue: quotesRejectedValue,
       draftCount: quotesDraftCount,
       draftValue: quotesDraftValue,
+      standaloneCount: quotesStandaloneCount,
+      standaloneValue: quotesStandaloneValue,
+      opportunityCount: quotesOpportunityCount,
+      opportunityValue: quotesOpportunityValue,
       conversionRate: calculateRate(quotesAcceptedCount, quotesAcceptedCount + quotesRejectedCount),
       acceptanceRateOfSent: calculateRate(quotesAcceptedCount, quotesSentCount + quotesAcceptedCount + quotesRejectedCount),
     };

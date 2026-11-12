@@ -151,6 +151,10 @@ export function Customer360Drawer({
   };
 
   const handleDownloadInvoicePdf = async (invoiceId: string) => {
+    if (!invoiceId) {
+      toast.error(isRtl ? "بيانات الفاتورة غير متوفرة" : "Invoice ID missing");
+      return;
+    }
     try {
       const { downloadUrl } = await pdfFn({
         data: { entityType: "invoice", entityId: invoiceId },
@@ -162,6 +166,10 @@ export function Customer360Drawer({
   };
 
   const handleDownloadQuotePdf = async (quoteId: string) => {
+    if (!quoteId) {
+      toast.error(isRtl ? "بيانات عرض السعر غير متوفرة" : "Quote ID missing");
+      return;
+    }
     try {
       const { downloadUrl } = await pdfFn({
         data: { entityType: "quote", entityId: quoteId },

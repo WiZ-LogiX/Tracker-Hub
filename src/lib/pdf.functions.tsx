@@ -589,7 +589,8 @@ export async function loadQuotePdfData(
 
     for (let pIdx = 0; pIdx < productsList.length; pIdx++) {
       const p = productsList[pIdx];
-      const bp = breakdownProducts[pIdx] || breakdownProducts.find((x: any) => x.id === p.id);
+      if (!p) continue;
+      const bp = breakdownProducts[pIdx] || breakdownProducts.find((x: any) => x?.id && p?.id && x.id === p.id);
       const prodLabel = p.label || p.product_type_code || `منتج ${pIdx + 1}`;
       const sections = Array.isArray(p.sections) ? p.sections : [];
       const bSections = Array.isArray(bp?.sections) ? bp.sections : [];
@@ -598,14 +599,16 @@ export async function loadQuotePdfData(
 
       for (let sIdx = 0; sIdx < sections.length; sIdx++) {
         const s = sections[sIdx];
-        const bs = bSections[sIdx] || bSections.find((x: any) => x.id === s.id);
+        if (!s) continue;
+        const bs = bSections[sIdx] || bSections.find((x: any) => x?.id && s?.id && x.id === s.id);
         const secLabel = s.label ? ` - ${s.label}` : "";
         const units = Array.isArray(s.units) ? s.units : [];
         const bUnits = Array.isArray(bs?.units) ? bs.units : [];
 
         for (let uIdx = 0; uIdx < units.length; uIdx++) {
           const u = units[uIdx];
-          const bu = bUnits[uIdx] || bUnits.find((x: any) => x.id === u.id);
+          if (!u) continue;
+          const bu = bUnits[uIdx] || bUnits.find((x: any) => x?.id && u?.id && x.id === u.id);
           const unitPrice = bu?.computedUnitPrice ?? bu?.price ?? Number(u.computed_unit_price ?? u.computedUnitPrice ?? 0);
           const qty = Number(u.qty ?? 1);
           const lineTotal = round2(unitPrice * qty);
@@ -673,16 +676,18 @@ export async function loadQuotePdfData(
     .order("position");
 
   if (products && products.length > 0) {
-    const productIds = products.map((p: any) => p.id);
+    const productIds = products.map((p: any) => p?.id).filter(Boolean);
 
-    const { data: sections } = await client
-      .from("sections")
-      .select("id, quotation_product_id, label, position")
-      .in("quotation_product_id", productIds)
-      .eq("tenant_id", tenantId)
-      .order("position");
+    const { data: sections } = productIds.length > 0
+      ? await client
+          .from("sections")
+          .select("id, quotation_product_id, label, position")
+          .in("quotation_product_id", productIds)
+          .eq("tenant_id", tenantId)
+          .order("position")
+      : { data: [] };
 
-    const sectionIds = (sections ?? []).map((s: any) => s.id);
+    const sectionIds = (sections ?? []).map((s: any) => s?.id).filter(Boolean);
 
     const { data: units } = sectionIds.length > 0
       ? await client

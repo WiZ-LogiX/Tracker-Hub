@@ -61,7 +61,7 @@ export function OrderFinancialWidget({
   const canRecord = userRole !== "worker" && userRole !== "viewer" && invoice && invoice.balanceDue > 0;
 
   const handleDownloadPdf = async () => {
-    if (!invoice) return;
+    if (!invoice?.id) return;
     setDownloadingPdf(true);
     try {
       const { downloadUrl } = await pdfFn({

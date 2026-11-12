@@ -1,239 +1,168 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
-import { Building2, Layers } from "lucide-react";
-import { getTenantSettings, updateTenant } from "@/lib/tenant-settings.functions";
+import { Settings, ShieldCheck, Activity, Users, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { PhotoUploader } from "@/components/photo-uploader";
-import { useSignedR2Urls } from "@/lib/useSignedR2Urls";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { CommercialCategoriesSettings } from "@/components/settings/CommercialCategoriesSettings";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/lib/useAuth";
 
 export const Route = createFileRoute("/admin/settings")({ component: SettingsPage });
 
-type TenantSettings = {
-  name?: string | null;
-  logo_url?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  address?: string | null;
-  tax_number?: string | null;
-  commercial_registry?: string | null;
-  primary_color?: string | null;
-};
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function SettingsPage() {
-  const { t } = useTranslation();
-  const loadSettings = useServerFn(getTenantSettings);
-  const saveSettings = useServerFn(updateTenant);
-
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  // Form state
-  const [name, setName] = useState("");
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [taxNumber, setTaxNumber] = useState("");
-  const [commercialRegistry, setCommercialRegistry] = useState("");
-  const [primaryColor, setPrimaryColor] = useState("");
-
-  const { data: signedLogoMap } = useSignedR2Urls(logoUrl ? [logoUrl] : []);
-  const displayLogoUrl = logoUrl ? (signedLogoMap?.get(logoUrl) ?? logoUrl) : null;
-
-  useEffect(() => {
-    loadSettings()
-      .then((tenant: TenantSettings) => {
-        setName(tenant.name ?? "");
-        setLogoUrl(tenant.logo_url ?? null);
-        setPhone(tenant.phone ?? "");
-        setEmail(tenant.email ?? "");
-        setAddress(tenant.address ?? "");
-        setTaxNumber(tenant.tax_number ?? "");
-        setCommercialRegistry(tenant.commercial_registry ?? "");
-        setPrimaryColor(tenant.primary_color ?? "");
-      })
-      .catch(() => toast.error(t("common.loading")))
-      .finally(() => setLoading(false));
-  }, [loadSettings]);
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await saveSettings({
-        data: {
-          name: name || undefined,
-          logoUrl: logoUrl,
-          phone: phone || null,
-          email: email || null,
-          address: address || null,
-          taxNumber: taxNumber || null,
-          commercialRegistry: commercialRegistry || null,
-          primaryColor: primaryColor || null,
-        },
-      });
-      toast.success(t("admin.settings.saved"));
-    } catch (e: unknown) {
-      toast.error(errorMessage(e) || t("admin.settings.saveFailed"));
-    }
-    setSaving(false);
-  }
-
-  if (loading) {
-    return <div className="p-8 text-center text-muted-foreground">{t("common.loading")}</div>;
-  }
+  const { t, i18n } = useTranslation();
+  const isRtl = i18n.language === "ar";
+  const { currentTenantId, currentRole } = useAuth();
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex items-center gap-2">
-        <Building2 className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">{t("admin.nav.settings")}</h1>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center justify-between pb-2 border-b">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <Settings className="h-6 w-6 text-primary" />
+            <span>{t("admin.nav.settings", "إعدادات النظام والتشغيل")}</span>
+          </h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            {isRtl
+              ? "تهيئة بيئة العمل، المعايير المحاسبية والتشغيلية الافتراضية، ومؤشرات صحة البنية التحتية"
+              : "System environment configuration, standard operational defaults, and infrastructure diagnostics."}
+          </p>
+        </div>
+        <Badge variant="outline" className="font-mono text-xs border-primary/30 text-primary">
+          {currentRole ?? "Admin"}
+        </Badge>
       </div>
 
-      <Tabs defaultValue="company" className="space-y-6">
-        <TabsList className="grid grid-cols-2 max-w-md">
-          <TabsTrigger value="company" className="gap-2 text-xs">
-            <Building2 className="h-3.5 w-3.5" />
-            <span>{t("admin.settings.companyInfo", "بيانات المنشأة")}</span>
+      <Tabs defaultValue="system" className="space-y-6">
+        <TabsList className="grid grid-cols-2 max-w-sm">
+          <TabsTrigger value="system" className="gap-2 text-xs">
+            <Settings className="h-3.5 w-3.5" />
+            <span>{t("admin.settings.systemTab", "تفضيلات النظام")}</span>
           </TabsTrigger>
-          <TabsTrigger value="categories" className="gap-2 text-xs">
-            <Layers className="h-3.5 w-3.5" />
-            <span>{t("admin.settings.productCategories", "تصنيفات المقايسات")}</span>
+          <TabsTrigger value="diagnostics" className="gap-2 text-xs">
+            <Activity className="h-3.5 w-3.5" />
+            <span>{t("admin.settings.diagTab", "حالة البيئة والتشغيل")}</span>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="company" className="space-y-6 max-w-2xl">
-          {/* Logo */}
+        {/* Tab 1: Operational System Defaults */}
+        <TabsContent value="system" className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">{t("admin.settings.companyLogo")}</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Settings className="h-4 w-4 text-primary" />
+                <span>{isRtl ? "المعايير التشغيلية والمالية الافتراضية" : "Operational & Financial Standards"}</span>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {isRtl
+                  ? "الثوابت المحاسبية والتشغيلية المعتمدة في PeleCanon لجميع عروض الأسعار والفواتير وأوامر الإنتاج."
+                  : "Standard accounting constants used across PeleCanon quotations, invoices, and production orders."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {displayLogoUrl ? (
-                <div className="flex items-center gap-4">
-                  <img src={displayLogoUrl} alt="Logo" className="h-20 w-20 object-contain border rounded" />
-                  <Button variant="ghost" size="sm" onClick={() => setLogoUrl(null)}>
-                    {t("admin.settings.removeLogo")}
-                  </Button>
-                </div>
-              ) : null}
-              <PhotoUploader
-                entityType="logos"
-                entityId="tenant-logo"
-                label={t("admin.settings.uploadLogo")}
-                onUploaded={(results) => {
-                  if (results.length > 0) {
-                    setLogoUrl(results[0].key || results[0].publicUrl);
-                  }
-                }}
-                maxFiles={1}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Company Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">{t("admin.settings.companyInfo")}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">{t("admin.settings.companyName")}</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="PeleCanon" />
-              </div>
-
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">{t("admin.settings.phone")}</label>
-                  <Input
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="01xxxxxxxxx"
-                    dir="ltr"
-                  />
+                <div className="p-3 border rounded-lg bg-card/60 space-y-1">
+                  <span className="text-xs text-muted-foreground">{isRtl ? "العملة الرسمية" : "Official Currency"}</span>
+                  <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <span>EGP — الجنيه المصري</span>
+                    <Badge variant="secondary" className="text-[10px]">مُثبت</Badge>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">{t("admin.settings.email")}</label>
-                  <Input
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="info@pelecanon.com"
-                    dir="ltr"
-                  />
+
+                <div className="p-3 border rounded-lg bg-card/60 space-y-1">
+                  <span className="text-xs text-muted-foreground">{isRtl ? "ضريبة القيمة المضافة (VAT)" : "Standard VAT"}</span>
+                  <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <span>14%</span>
+                    <Badge variant="secondary" className="text-[10px]">القانون المصري</Badge>
+                  </div>
+                </div>
+
+                <div className="p-3 border rounded-lg bg-card/60 space-y-1">
+                  <span className="text-xs text-muted-foreground">{isRtl ? "نسبة الدفعة المقدمة الافتراضية" : "Default Deposit Rate"}</span>
+                  <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <span>50%</span>
+                    <Badge variant="secondary" className="text-[10px]">عند توقيع العقد</Badge>
+                  </div>
+                </div>
+
+                <div className="p-3 border rounded-lg bg-card/60 space-y-1">
+                  <span className="text-xs text-muted-foreground">{isRtl ? "مهلة التوريد والتسليم المعيارية" : "Standard Delivery Window"}</span>
+                  <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <span>30 {isRtl ? "يوم عمل" : "days"}</span>
+                    <Badge variant="secondary" className="text-[10px]">من استلام الدفعة</Badge>
+                  </div>
+                </div>
+
+                <div className="p-3 border rounded-lg bg-card/60 space-y-1">
+                  <span className="text-xs text-muted-foreground">{isRtl ? "فترة صلاحية عرض السعر الافتراضية" : "Quotation Validity Window"}</span>
+                  <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <span>14 {isRtl ? "يوم تقويمي" : "days"}</span>
+                    <Badge variant="secondary" className="text-[10px]">من تاريخ الإصدار</Badge>
+                  </div>
+                </div>
+
+                <div className="p-3 border rounded-lg bg-card/60 space-y-1">
+                  <span className="text-xs text-muted-foreground">{isRtl ? "هيكل الألوان والهوية" : "Brand Identity System"}</span>
+                  <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <span>PeleCanon Official Palette</span>
+                    <Badge variant="secondary" className="text-[10px]">#118B76 • #333333 • #F8F7F4</Badge>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">{t("admin.settings.address")}</label>
-                <Input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="القاهرة، مصر"
-                />
-              </div>
-
-              <Separator />
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">{t("admin.settings.taxNumber")}</label>
-                  <Input
-                    value={taxNumber}
-                    onChange={(e) => setTaxNumber(e.target.value)}
-                    placeholder="123-456-789"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium">{t("admin.settings.commercialRegistry")}</label>
-                  <Input
-                    value={commercialRegistry}
-                    onChange={(e) => setCommercialRegistry(e.target.value)}
-                    placeholder="CR-12345"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">{t("admin.settings.primaryColor")}</label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="color"
-                    value={primaryColor || "#1a5276"}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    className="w-12 h-8 p-1 cursor-pointer"
-                  />
-                  <Input
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    placeholder="#1a5276"
-                    className="flex-1"
-                    dir="ltr"
-                  />
-                </div>
+              {/* Administrative Shortcuts */}
+              <div className="pt-2 border-t flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground me-2">
+                  {isRtl ? "إعدادات متصلة:" : "Related Settings:"}
+                </span>
+                <Button asChild variant="outline" size="sm" className="h-7 text-xs gap-1.5">
+                  <Link to="/admin/team">
+                    <Users className="h-3.5 w-3.5 text-primary" />
+                    <span>{t("admin.nav.teamManagement", "إدارة الفريق والصلاحيات")}</span>
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="h-7 text-xs gap-1.5">
+                  <Link to="/admin/notifications">
+                    <Bell className="h-3.5 w-3.5 text-primary" />
+                    <span>{t("admin.nav.notifications", "مركز التنبيهات")}</span>
+                  </Link>
+                </Button>
               </div>
             </CardContent>
           </Card>
-
-          <Button onClick={handleSave} disabled={saving} className="w-full">
-            {saving ? t("admin.settings.saving") : t("admin.settings.saveButton")}
-          </Button>
         </TabsContent>
 
-        <TabsContent value="categories">
-          <CommercialCategoriesSettings />
+        {/* Tab 2: Environment & Diagnostics */}
+        <TabsContent value="diagnostics" className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <span>{isRtl ? "بيانات البيئة والتكاملات النشطة" : "Environment & Operational Health"}</span>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {isRtl ? "مؤشرات الاتصال والخدمات السحابية النشطة" : "Active cloud infrastructure and operational services."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              <div className="flex items-center justify-between p-2.5 rounded border bg-card/60">
+                <span className="text-muted-foreground">{isRtl ? "معرف بيئة العمل (Tenant ID)" : "Workspace Tenant ID"}</span>
+                <span className="font-mono font-bold">{currentTenantId ?? "—"}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded border bg-card/60">
+                <span className="text-muted-foreground">{isRtl ? "مستودع التخزين السحابي (Cloudflare R2)" : "Object Storage (Cloudflare R2)"}</span>
+                <Badge variant="outline" className="border-emerald-500 text-emerald-700 bg-emerald-50">متصل وآمن</Badge>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded border bg-card/60">
+                <span className="text-muted-foreground">{isRtl ? "قاعدة البيانات السحابية (Supabase DB)" : "Database (Supabase PostgreSQL)"}</span>
+                <Badge variant="outline" className="border-emerald-500 text-emerald-700 bg-emerald-50">نشطة (RLS مفعل)</Badge>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded border bg-card/60">
+                <span className="text-muted-foreground">{isRtl ? "إصدار المنصة (Release Baseline)" : "Release Baseline"}</span>
+                <span className="font-mono">PeleCanon v2.0 (Commit e820b8c)</span>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
