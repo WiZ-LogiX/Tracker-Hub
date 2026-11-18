@@ -1024,5 +1024,26 @@
     "allHardware": "Toute la quincaillerie",
     "adjustStock": "Ajuster le stock",
     "viewDetails": "Voir les détails"
+  },
+  "fastIntake": {
+    "quickInquiry": "Demande rapide",
+    "quickInquiryDesc": "Prise en charge commerciale rapide : client, opportunité et transfert direct vers le devis.",
+    "customerName": "Nom du client",
+    "customerNamePlaceholder": "ex. Ing. Tarek Nour",
+    "phoneNumber": "Numéro de téléphone",
+    "phoneNumberPlaceholder": "010XXXXXXXX ou +20...",
+    "category": "Catégorie / Intérêt",
+    "categoryPlaceholder": "Sélectionner une catégorie",
+    "budget": "Budget estimé (EGP)",
+    "budgetPlaceholder": "ex. 150000",
+    "optionalDetails": "Détails supplémentaires (Source, Localisation, Notes)",
+    "source": "Source d'acquisition",
+    "location": "Localisation / Zone",
+    "locationPlaceholder": "ex. Nouveau Caire, Sheikh Zayed",
+    "notes": "Notes de contact",
+    "notesPlaceholder": "Exigences particulières, dimensions, préférences...",
+    "saveToPipeline": "Enregistrer dans le pipeline",
+    "saveAndBuildQuote": "Enregistrer & Créer le devis",
+    "convertAndBuildQuote": "Convertir & Créer le devis"
   }
 }

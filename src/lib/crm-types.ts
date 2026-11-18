@@ -427,3 +427,23 @@ export interface BulkAssignInput {
   salesOwnerId: string | null; // null to unassign
 }
 
+// ── TASK: Fast CRM Intake ────────────────────────────────────────────────────
+
+export interface QuickCrmIntakeInput {
+  name: string;
+  phone: string;
+  category?: string | null;
+  estimatedBudget?: number | null;
+  source?: LeadSource;
+  location?: string | null;
+  notes?: string | null;
+  initialStage?: "new_lead" | "quotation";
+}
+
+export interface QuickCrmIntakeResult {
+  customerId: string;
+  opportunityId: string;
+  opportunityNumber: string;
+  isExistingCustomer: boolean;
+}
+

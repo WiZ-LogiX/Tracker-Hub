@@ -17,6 +17,7 @@ import { deliverToN8n, type NotifyPayload } from "@/lib/whatsapp-share.functions
 import { generatePdf } from "@/lib/pdf.functions";
 import { log } from "@/lib/log";
 import { findProjectByQuoteOrOrder, findProjectsByQuoteOrOrderBatch } from "@/lib/project-store.server";
+import { syncQuoteOpportunity } from "@/lib/crm-fast-intake.server";
 import { generatePLCId, isCanonicalQuoteNumber } from "@/lib/numbering";
 import {
   priceQuote,
@@ -2118,6 +2119,7 @@ export const getQuoteCommercialContext = createServerFn({ method: "GET" })
         quoteNumber: quotes.quoteNumber,
         status: quotes.status,
         customerId: quotes.customerId,
+        opportunityId: quotes.opportunityId,
         snapshot: quotes.snapshot,
       })
       .from(quotes)
@@ -2126,7 +2128,7 @@ export const getQuoteCommercialContext = createServerFn({ method: "GET" })
 
     if (!q) return null;
     const snap = ((q.snapshot as any) || {}) as Record<string, any>;
-    const oppId = (snap.opportunityId as string) || (snap.opportunity_id as string) || null;
+    const oppId = q.opportunityId || (snap.opportunityId as string) || (snap.opportunity_id as string) || null;
 
     // 1. Fetch Customer
     let cust: any = null;
@@ -2381,37 +2383,51 @@ export const getCommercialQuote = createServerFn({ method: "GET" })
     };
   });
 
-export const saveCommercialQuote = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth, requireTenant])
-  .validator((d) => SaveCommercialQuoteInput.parse(d))
-  .handler(async ({ data, context }) => {
-    const ctx = context.tenantContext as TenantContext;
-    requirePermission(ctx, data.quoteId ? "quotes.edit" : "quotes.create");
-    const { tenantId, userId } = ctx;
-    const client = (context as any).supabase;
+/**
+ * Core business transaction for saving a commercial quotation.
+ */
+async function executeSaveCommercialQuote(
+  ctx: TenantContext,
+  data: z.infer<typeof SaveCommercialQuoteInput>,
+  client?: any,
+) {
+  requirePermission(ctx, data.quoteId ? "quotes.edit" : "quotes.create");
+  const { tenantId, userId } = ctx;
 
-    // 1. Calculate authoritative totals
-    const totals = calculateCommercialQuoteTotals({
-      lines: data.lines,
-      discountAmount: data.discount_amount,
-      vatPct: data.vat_pct,
-      applyVat: data.apply_vat,
-      depositPct: data.terms.paymentSchedule?.[0]?.percent ?? 60,
-    });
+  // 1. Calculate authoritative totals
+  const totals = calculateCommercialQuoteTotals({
+    lines: data.lines,
+    discountAmount: data.discount_amount,
+    vatPct: data.vat_pct,
+    applyVat: data.apply_vat,
+    depositPct: data.terms.paymentSchedule?.[0]?.percent ?? 60,
+  });
 
-    // 2. Fetch customer details
-    const { data: customer } = await client
+  // 2. Fetch customer details
+  let customer: { id: string; name: string; phone: string | null; email: string | null } | null = null;
+  if (client) {
+    const { data: c } = await client
       .from("customers")
       .select("id, name, phone, email")
       .eq("id", data.customer_id)
       .eq("tenant_id", tenantId)
       .maybeSingle();
+    customer = c;
+  }
+  if (!customer) {
+    const [c] = await db
+      .select({ id: customers.id, name: customers.name, phone: customers.phone, email: customers.email })
+      .from(customers)
+      .where(and(eq(customers.id, data.customer_id), eq(customers.tenantId, tenantId)))
+      .limit(1);
+    customer = c || null;
+  }
 
-    if (!customer) {
-      throw new Error("Customer not found or access denied");
-    }
+  if (!customer) {
+    throw new Error("Customer not found or access denied");
+  }
 
-    const noteText = data.terms.customNotes || (data.terms.notes && data.terms.notes.length > 0 ? data.terms.notes.join("\n") : "");
+  const noteText = data.terms.customNotes || (data.terms.notes && data.terms.notes.length > 0 ? data.terms.notes.join("\n") : "");
 
     // 3. Build snapshot
     const commercialSnapshot: CommercialQuoteSnapshot = {
@@ -2466,6 +2482,7 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
         .update(quotes)
         .set({
           customerId: data.customer_id,
+          opportunityId: data.opportunity_id ?? null,
           status: data.status,
           subtotal: String(totals.subtotal),
           discountAmount: String(totals.discountAmount),
@@ -2508,6 +2525,7 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
           quoteNumber: canonicalQuoteNumber,
           legacyQuoteNumber: !isCanonicalQuoteNumber(data.quote_number) ? data.quote_number : null,
           customerId: data.customer_id,
+          opportunityId: data.opportunity_id ?? null,
           status: data.status,
           subtotal: String(totals.subtotal),
           discountAmount: String(totals.discountAmount),
@@ -2580,7 +2598,12 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
       await db.insert(quoteItems).values(itemsToInsert as any);
     }
 
-    // 5. Freeze snapshot if status is sent
+    // 5. CRM Opportunity Synchronization (non-blocking)
+    if (data.opportunity_id) {
+      await syncQuoteOpportunity(tenantId, data.opportunity_id, totals.total, data.status);
+    }
+
+    // 6. Freeze snapshot if status is sent
     if (data.status === "sent") {
       try {
         await writeSnapshot(
@@ -2626,5 +2649,13 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
       discountAmount: totals.discountAmount,
       vatAmount: totals.vatAmount,
     };
+  }
+
+export const saveCommercialQuote = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .validator((d) => SaveCommercialQuoteInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    return await executeSaveCommercialQuote(ctx, data, (context as any).supabase);
   });
 

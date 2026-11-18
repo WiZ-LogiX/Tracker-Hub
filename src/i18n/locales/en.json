@@ -1024,5 +1024,26 @@
     "allHardware": "All Hardware",
     "adjustStock": "Adjust Stock",
     "viewDetails": "View Details"
+  },
+  "fastIntake": {
+    "quickInquiry": "Quick Inquiry",
+    "quickInquiryDesc": "Rapid commercial intake: customer, opportunity, and direct quote handoff.",
+    "customerName": "Customer Name",
+    "customerNamePlaceholder": "e.g. Eng. Tarek Nour",
+    "phoneNumber": "Phone Number",
+    "phoneNumberPlaceholder": "010XXXXXXXX or +20...",
+    "category": "Category / Interest",
+    "categoryPlaceholder": "Select category",
+    "budget": "Estimated Budget (EGP)",
+    "budgetPlaceholder": "e.g. 150000",
+    "optionalDetails": "Additional Details (Source, Location, Notes)",
+    "source": "Acquisition Source",
+    "location": "Location / Area",
+    "locationPlaceholder": "e.g. New Cairo, Sheikh Zayed",
+    "notes": "Intake Notes",
+    "notesPlaceholder": "Specific requirements, dimensions, preferences...",
+    "saveToPipeline": "Save to Pipeline",
+    "saveAndBuildQuote": "Save & Build Quote",
+    "convertAndBuildQuote": "Convert & Build Quote"
   }
 }

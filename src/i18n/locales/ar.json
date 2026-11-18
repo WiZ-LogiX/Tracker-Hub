@@ -1024,5 +1024,26 @@
     "allHardware": "كافة الإكسسوارات",
     "adjustStock": "تعديل الرصيد",
     "viewDetails": "عرض التفاصيل"
+  },
+  "fastIntake": {
+    "quickInquiry": "استفسار سريع",
+    "quickInquiryDesc": "تسجيل تجاري فوري: العميل، الصفقة، والتحويل المباشر لمحرر عروض الأسعار.",
+    "customerName": "اسم العميل",
+    "customerNamePlaceholder": "مثال: م. طارق نور",
+    "phoneNumber": "رقم الهاتف",
+    "phoneNumberPlaceholder": "010XXXXXXXX أو +20...",
+    "category": "التصنيف / الاهتمام",
+    "categoryPlaceholder": "اختر التصنيف",
+    "budget": "الميزانية التقديرية (ج.م)",
+    "budgetPlaceholder": "مثال: 150000",
+    "optionalDetails": "بيانات إضافية (المصدر، الموقع، الملاحظات)",
+    "source": "مصدر العميل",
+    "location": "الموقع / المنطقة",
+    "locationPlaceholder": "مثال: التجمع الخامس، الشيخ زايد",
+    "notes": "ملاحظات الاستفسار",
+    "notesPlaceholder": "متطلبات خاصة، أبعاد، تفضيلات العميل...",
+    "saveToPipeline": "حفظ بالمسار البيعي",
+    "saveAndBuildQuote": "حفظ وإنشاء عرض سعر",
+    "convertAndBuildQuote": "تحويل وإنشاء عرض سعر"
   }
 }

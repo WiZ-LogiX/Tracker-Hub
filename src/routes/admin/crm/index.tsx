@@ -22,6 +22,7 @@ import { OpportunityDetailDrawer } from "@/components/crm/OpportunityDetailDrawe
 import { LeadFormModal } from "@/components/crm/LeadFormModal";
 import { ConvertLeadModal } from "@/components/crm/ConvertLeadModal";
 import { OpportunityFormModal } from "@/components/crm/OpportunityFormModal";
+import { FastCrmIntakeDrawer } from "@/components/crm/FastCrmIntakeDrawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,7 @@ import {
   RefreshCcw,
   Sparkles,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -116,6 +118,7 @@ function CRMPage() {
 
   const [isOppModalOpen, setIsOppModalOpen] = useState(false);
   const [oppToEdit, setOppToEdit] = useState<OpportunityItem | null>(null);
+  const [isFastIntakeOpen, setIsFastIntakeOpen] = useState(false);
 
   // Auto-open opportunity drawer on deep link navigation
   useEffect(() => {
@@ -298,6 +301,15 @@ function CRMPage() {
           >
             <RefreshCcw className="h-3.5 w-3.5" />
             <span>{isRtl ? "تحديث" : "Refresh"}</span>
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => setIsFastIntakeOpen(true)}
+            className="h-8 text-xs gap-1.5 font-semibold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs"
+          >
+            <Zap className="h-3.5 w-3.5 fill-current" />
+            <span>{isRtl ? "استفسار سريع" : "Quick Inquiry"}</span>
           </Button>
 
           <Button
@@ -496,6 +508,18 @@ function CRMPage() {
           loadStats();
           if (currentTab === "pipeline" || currentTab === "my_deals") loadKanban();
           if (currentTab === "opportunities") loadOpportunitiesTable();
+        }}
+      />
+
+      {/* Fast CRM Intake Drawer */}
+      <FastCrmIntakeDrawer
+        open={isFastIntakeOpen}
+        onOpenChange={setIsFastIntakeOpen}
+        onSuccess={() => {
+          loadStats();
+          if (currentTab === "pipeline" || currentTab === "my_deals") loadKanban();
+          if (currentTab === "opportunities") loadOpportunitiesTable();
+          if (currentTab === "leads") loadLeads();
         }}
       />
     </div>

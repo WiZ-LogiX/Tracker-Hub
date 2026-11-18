@@ -17,7 +17,7 @@ import {
   auditLog,
 } from "@/db/schema";
 import { eq, and, desc, asc, sql, inArray, or, isNull, lt } from "drizzle-orm";
-import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, forbidWorker, type TenantContext } from "@/lib/tenant-context";
 import type {
   LeadItem,
   OpportunityItem,
@@ -36,6 +36,8 @@ import type {
   ActivityType,
   LogActivityInput,
   BulkAssignInput,
+  QuickCrmIntakeInput,
+  QuickCrmIntakeResult,
 } from "@/lib/crm-types";
 import { PIPELINE_STAGES, ACTIVITY_TYPES } from "@/lib/crm-types";
 
@@ -83,6 +85,17 @@ const PipelineStageSchema = z.enum([
 ]);
 
 const OpportunityStatusSchema = z.enum(["open", "won", "lost", "abandoned"]);
+
+const QuickCrmIntakeInputSchema = z.object({
+  name: z.string().trim().min(1, "Customer name is required").max(255),
+  phone: z.string().trim().min(1, "Phone number is required"),
+  category: z.string().trim().optional().nullable(),
+  estimatedBudget: z.number().min(0).optional().nullable(),
+  source: LeadSourceSchema.optional().default("walk_in"),
+  location: z.string().trim().optional().nullable(),
+  notes: z.string().trim().optional().nullable(),
+  initialStage: z.enum(["new_lead", "quotation"]).optional().default("new_lead"),
+});
 
 const ListLeadsInput = z
   .object({
@@ -281,8 +294,8 @@ async function getNextLeadCode(tenantId: string): Promise<string> {
 /**
  * Atomically generates the next sequential opportunity number (OPP-XXXX) per tenant.
  */
-async function getNextOpportunityCode(tenantId: string): Promise<string> {
-  const [row] = await db
+async function getNextOpportunityCode(tenantId: string, executor: any = db): Promise<string> {
+  const [row] = await executor
     .insert(tenantCounters)
     .values({
       tenantId,
@@ -2785,3 +2798,18 @@ export const bulkAssignCRMEntities = createServerFn({ method: "POST" })
       return { success: true, count: entityIds.length };
     }
   });
+
+import { executeQuickCrmIntake } from "@/lib/crm-fast-intake.server";
+
+/**
+ * Fast CRM Intake:
+ * Atomically captures customer, generates opportunity, and allows direct handoff to quotation builder.
+ */
+export const quickCrmIntake = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .validator((input: unknown) => QuickCrmIntakeInputSchema.parse(input))
+  .handler(async ({ data, context }): Promise<QuickCrmIntakeResult> => {
+    const ctx = context.tenantContext as TenantContext;
+    return await executeQuickCrmIntake(ctx, data);
+  });
+

@@ -14,6 +14,7 @@ import type {
 import { formatEGP } from "@/lib/pricing";
 import { QuotationCostDrawer } from "@/components/cost-analysis/QuotationCostDrawer";
 import { Customer360Drawer } from "@/components/customers/Customer360Drawer";
+import { FastCrmIntakeDrawer } from "@/components/crm/FastCrmIntakeDrawer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ import {
   Package,
   Briefcase,
   Sparkles,
+  Zap,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/quotes/")({
@@ -71,6 +73,7 @@ function QuotesPage() {
   const [costQuoteId, setCostQuoteId] = useState<string | null>(null);
   const [isCostDrawerOpen, setIsCostDrawerOpen] = useState(false);
   const [customer360Id, setCustomer360Id] = useState<string | null>(null);
+  const [isFastIntakeOpen, setIsFastIntakeOpen] = useState(false);
 
   // TanStack Query for paginated quotes
   const { data: paginationResult, isLoading, refetch } = useQuery({
@@ -176,6 +179,16 @@ function QuotesPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsFastIntakeOpen(true)}
+            className="gap-2 border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 font-semibold h-9"
+          >
+            <Zap className="h-4 w-4 fill-current text-amber-500" />
+            <span>{isRtl ? "استفسار سريع" : "Quick Inquiry"}</span>
+          </Button>
+
           <Button asChild className="gap-2 bg-primary text-primary-foreground font-semibold shadow-xs">
             <Link to="/admin/quotes/new">
               <Plus className="h-4 w-4" />
@@ -501,6 +514,13 @@ function QuotesPage() {
         customerId={customer360Id}
         open={!!customer360Id}
         onOpenChange={(open) => !open && setCustomer360Id(null)}
+      />
+
+      {/* Fast CRM Intake Drawer */}
+      <FastCrmIntakeDrawer
+        open={isFastIntakeOpen}
+        onOpenChange={setIsFastIntakeOpen}
+        onSuccess={() => refetch()}
       />
     </div>
   );

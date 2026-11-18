@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { convertLead, listSalesMembers } from "@/lib/crm.functions";
 import { listCustomersWithStats } from "@/lib/customers.functions";
 import type { LeadItem, ProjectType } from "@/lib/crm-types";
@@ -30,6 +31,7 @@ import {
   Sparkles,
   AlertCircle,
   TrendingUp,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,6 +50,7 @@ export function ConvertLeadModal({
 }: ConvertLeadModalProps) {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
+  const navigate = useNavigate();
 
   const convertLeadFn = useServerFn(convertLead);
   const listSalesMembersFn = useServerFn(listSalesMembers);
@@ -118,7 +121,7 @@ export function ConvertLeadModal({
     }
   }, [open, lead]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, buildQuote = false) => {
     e.preventDefault();
     if (!lead) return;
 
@@ -174,6 +177,16 @@ export function ConvertLeadModal({
         onSuccess({
           customerId: result.customerId,
           opportunityId: result.opportunityId,
+        });
+      }
+
+      if (buildQuote) {
+        navigate({
+          to: "/admin/quotes/new",
+          search: {
+            customerId: result.customerId,
+            opportunityId: result.opportunityId,
+          },
         });
       }
     } catch (err: any) {
@@ -420,6 +433,19 @@ export function ConvertLeadModal({
               className="h-8 text-xs"
             >
               {isRtl ? "إلغاء" : "Cancel"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submitting}
+              onClick={(e) => handleSubmit(e, true)}
+              className="h-8 text-xs font-semibold gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>
+                {isRtl ? "تحويل وإنشاء عرض سعر" : "Convert & Build Quote"}
+              </span>
             </Button>
             <Button
               type="submit"
