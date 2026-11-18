@@ -23,7 +23,8 @@ import {
 } from "@/db/schema";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, hasEffectivePermission, type TenantContext } from "@/lib/tenant-context";
+import { findProjectById, listProjectRecords, type ProjectEntityRecord } from "@/lib/project-store.server";
 import type {
   ProjectWorkspaceData,
   ProjectHeaderData,
@@ -82,13 +83,18 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
   .inputValidator((d) => GetProjectWorkspaceInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "projects.view");
+    const canSeeFinancials = hasEffectivePermission(ctx, "projects.financials.view");
     const { tenantId, role } = ctx;
 
     const projectId = data.projectId;
 
-    // 1. Fetch Opportunity Anchor
-    // Check if projectId matches an opportunity ID, or fallback to find opportunity by order ID
+    // 0. Fetch Real Project Record from Project Entity
+    const realProject = await findProjectById(tenantId, projectId);
+
+    // 1. Fetch Opportunity Anchor (or enrich from real project)
     let opp: any = null;
+    const lookupOppId = realProject?.opportunityId || projectId;
     try {
       const [oppRow] = await db
         .select({
@@ -111,13 +117,36 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
           updatedAt: opportunities.updatedAt,
         })
         .from(opportunities)
-        .where(and(eq(opportunities.id, projectId), eq(opportunities.tenantId, tenantId)))
+        .where(and(eq(opportunities.id, lookupOppId), eq(opportunities.tenantId, tenantId)))
         .limit(1);
       opp = oppRow;
     } catch (err: any) {
       if (err?.code !== "42P01" && err?.code !== "42703" && !err?.message?.includes("does not exist")) {
         throw err;
       }
+    }
+
+    // If real project exists but has no opportunity row in DB, wrap it as opp anchor
+    if (!opp && realProject) {
+      opp = {
+        id: realProject.id,
+        opportunityNumber: realProject.projectNumber,
+        customerId: realProject.customerId,
+        leadId: null,
+        title: realProject.title,
+        projectType: realProject.projectType,
+        value: realProject.totalValue,
+        salesOwner: realProject.salesOwner,
+        stage: realProject.currentStage === "completed" ? "warranty" : "production",
+        source: "direct",
+        expectedCloseDate: null,
+        nextAction: null,
+        nextActionDate: null,
+        status: realProject.status,
+        lostReason: null,
+        createdAt: new Date(realProject.createdAt),
+        updatedAt: new Date(realProject.updatedAt),
+      };
     }
 
     // If not found by opportunity ID, try finding linked order
@@ -772,12 +801,12 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
     });
 
     const projectFinancials: ProjectFinancials = {
-      totalProjectValue: role === "worker" ? 0 : projectTotalVal,
-      totalInvoiced: role === "worker" ? 0 : totalInvoiced,
-      totalCollected: role === "worker" ? 0 : totalCollected,
-      outstandingBalance: role === "worker" ? 0 : outstandingBalance,
-      invoices: role === "worker" ? [] : invoiceRecords,
-      payments: role === "worker" ? [] : paymentRecords,
+      totalProjectValue: !canSeeFinancials ? 0 : projectTotalVal,
+      totalInvoiced: !canSeeFinancials ? 0 : totalInvoiced,
+      totalCollected: !canSeeFinancials ? 0 : totalCollected,
+      outstandingBalance: !canSeeFinancials ? 0 : outstandingBalance,
+      invoices: !canSeeFinancials ? [] : invoiceRecords,
+      payments: !canSeeFinancials ? [] : paymentRecords,
     };
 
     // 13. Derive Lifecycle and Transparent Health
@@ -933,10 +962,10 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
     };
 
     const headerData: ProjectHeaderData = {
-      projectId: opp.id,
-      projectNumber: opp.opportunityNumber,
-      projectName: opp.title,
-      projectType: opp.projectType || "residential",
+      projectId: realProject ? realProject.id : opp.id,
+      projectNumber: realProject ? realProject.projectNumber : opp.opportunityNumber,
+      projectName: realProject ? realProject.title : opp.title,
+      projectType: realProject?.projectType || opp.projectType || "residential",
       customerId: cust.id,
       customerName: cust.name,
       customerPhone: cust.phone,
@@ -949,15 +978,15 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
       stageLabel: STAGE_LABELS[currentStage]?.en || currentStage,
       stageLabelAr: STAGE_LABELS[currentStage]?.ar || currentStage,
       status: opp.status as any,
-      totalValue: role === "worker" ? 0 : projectTotalVal,
-      invoicedAmount: role === "worker" ? 0 : totalInvoiced,
-      paidAmount: role === "worker" ? 0 : totalCollected,
-      outstandingBalance: role === "worker" ? 0 : outstandingBalance,
+      totalValue: !canSeeFinancials ? 0 : projectTotalVal,
+      invoicedAmount: !canSeeFinancials ? 0 : totalInvoiced,
+      paidAmount: !canSeeFinancials ? 0 : totalCollected,
+      outstandingBalance: !canSeeFinancials ? 0 : outstandingBalance,
       mainQuote: mainQuote
         ? {
             id: mainQuote.id,
             quoteNumber: mainQuote.quoteNumber,
-            total: role === "worker" ? 0 : mainQuote.total,
+            total: !canSeeFinancials ? 0 : mainQuote.total,
             status: mainQuote.status,
           }
         : null,
@@ -965,7 +994,7 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
         ? {
             id: mainOrder.id,
             orderNumber: mainOrder.orderNumber,
-            total: role === "worker" ? 0 : mainOrder.total,
+            total: !canSeeFinancials ? 0 : mainOrder.total,
             currentStage: mainOrder.currentStage,
           }
         : null,
@@ -980,15 +1009,15 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
         opportunityNumber: opp.opportunityNumber,
         title: opp.title,
         projectType: opp.projectType || "residential",
-        value: role === "worker" ? 0 : Number(opp.value || 0),
+        value: !canSeeFinancials ? 0 : Number(opp.value || 0),
         stage: opp.stage as PipelineStage,
         status: opp.status as OpportunityStatus,
         lostReason: opp.lostReason,
         nextAction: opp.nextAction,
         nextActionDate: opp.nextActionDate?.toISOString() || null,
-        quotes: role === "worker" ? [] : projectQuotes,
+        quotes: !canSeeFinancials ? [] : projectQuotes,
       },
-      orders: role === "worker" ? [] : projectOrders,
+      orders: !canSeeFinancials ? [] : projectOrders,
       production: {
         workOrders: projectWorkOrders,
         activeStage: projectOrders[0]?.currentStage || null,
@@ -1032,98 +1061,34 @@ export const listProjects = createServerFn({ method: "GET" })
   .inputValidator((d) => ListProjectsInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "projects.view");
+    const canSeeFinancials = hasEffectivePermission(ctx, "projects.financials.view");
     const { tenantId, role } = ctx;
 
     const page = data?.page || 1;
     const pageSize = data?.pageSize || 25;
     const offset = (page - 1) * pageSize;
 
-    // Fetch all opportunities with joined customer (or fallback to orders if opportunities table not yet migrated)
-    let rows: any[] = [];
-    try {
-      const oppQuery = db
-        .select({
-          id: opportunities.id,
-          opportunityNumber: opportunities.opportunityNumber,
-          title: opportunities.title,
-          projectType: opportunities.projectType,
-          value: opportunities.value,
-          stage: opportunities.stage,
-          status: opportunities.status,
-          salesOwner: opportunities.salesOwner,
-          customerId: customers.id,
-          customerName: customers.name,
-          customerPhone: customers.phone,
-          createdAt: opportunities.createdAt,
-          updatedAt: opportunities.updatedAt,
-        })
-        .from(opportunities)
-        .innerJoin(customers, eq(opportunities.customerId, customers.id))
-        .where(eq(opportunities.tenantId, tenantId))
-        .orderBy(desc(opportunities.createdAt));
+    // Fetch real persistent project entity records (created on quote acceptance / conversion)
+    const { rows: projRecords, totalCount } = await listProjectRecords(tenantId, {
+      searchTerm: data?.searchTerm,
+      stageFilter: data?.stageFilter,
+      projectTypeFilter: data?.projectTypeFilter,
+      limit: pageSize,
+      offset,
+    });
 
-      rows = await oppQuery.limit(500);
-    } catch (err: any) {
-      if (err?.code === "42P01" || err?.code === "42703" || err?.message?.includes("does not exist")) {
-        const orderRows = await db
-          .select({
-            id: orders.id,
-            orderNumber: orders.orderNumber,
-            total: orders.total,
-            currentStage: orders.currentStage,
-            customerId: customers.id,
-            customerName: customers.name,
-            customerPhone: customers.phone,
-            createdAt: orders.createdAt,
-            updatedAt: orders.createdAt,
-          })
-          .from(orders)
-          .innerJoin(customers, eq(orders.customerId, customers.id))
-          .where(eq(orders.tenantId, tenantId))
-          .orderBy(desc(orders.createdAt))
-          .limit(500);
-
-        rows = orderRows.map((o) => ({
-          id: o.id,
-          opportunityNumber: `PRJ-${o.orderNumber.replace(/^ORD-/, "")}`,
-          title: `مشروع أمر التنفيذ ${o.orderNumber}`,
-          projectType: "residential",
-          value: o.total,
-          stage: o.currentStage === "completed" ? "warranty" : "order",
-          status: "won",
-          salesOwner: null,
-          customerId: o.customerId,
-          customerName: o.customerName,
-          customerPhone: o.customerPhone,
-          createdAt: o.createdAt,
-          updatedAt: o.updatedAt,
-        }));
-      } else {
-        throw err;
-      }
-    }
-
-    // Filter in-memory for flexible multi-field search
-    let filtered = rows;
-    if (data?.searchTerm) {
-      const q = data.searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (r) =>
-          r.opportunityNumber.toLowerCase().includes(q) ||
-          r.title.toLowerCase().includes(q) ||
-          r.customerName.toLowerCase().includes(q) ||
-          (r.customerPhone && r.customerPhone.includes(q)),
-      );
-    }
-    if (data?.stageFilter && data.stageFilter !== "all") {
-      filtered = filtered.filter((r) => r.stage === data.stageFilter);
-    }
-    if (data?.projectTypeFilter && data.projectTypeFilter !== "all") {
-      filtered = filtered.filter((r) => r.projectType === data.projectTypeFilter);
-    }
-
-    const totalCount = filtered.length;
-    const paginated = filtered.slice(offset, offset + pageSize);
+    // Lookup customer names
+    const custIds = Array.from(new Set(projRecords.map((p) => p.customerId)));
+    const custList = custIds.length > 0
+      ? await db
+          .select({ id: customers.id, name: customers.name, phone: customers.phone })
+          .from(customers)
+          .where(and(eq(customers.tenantId, tenantId), inArray(customers.id, custIds)))
+      : [];
+    const custMap = new Map<string, { id: string; name: string | null; phone: string | null }>(
+      custList.map((c) => [c.id, c]),
+    );
 
     // User lookup for sales owners
     const userRows = await db
@@ -1134,33 +1099,34 @@ export const listProjects = createServerFn({ method: "GET" })
 
     const userMap = new Map(userRows.map((u) => [u.id, u.displayName || u.username]));
 
-    const projectItems: ProjectListItem[] = paginated.map((r) => {
-      const stage = r.stage as ProjectLifecycleStage;
+    const projectItems: ProjectListItem[] = projRecords.map((r) => {
+      const cust = custMap.get(r.customerId);
+      const stage = (r.currentStage || "production") as ProjectLifecycleStage;
       return {
         id: r.id,
-        projectNumber: r.opportunityNumber,
+        projectNumber: r.projectNumber,
         name: r.title,
         projectType: r.projectType || "residential",
         customerId: r.customerId,
-        customerName: r.customerName,
-        customerPhone: r.customerPhone,
+        customerName: cust?.name || "—",
+        customerPhone: cust?.phone || null,
         salesOwnerName: r.salesOwner ? userMap.get(r.salesOwner) || null : null,
-        stage: (["won", "quotation", "negotiation", "site_visit", "design_measurement"].includes(r.stage) ? r.stage : "opportunity") as any,
-        stageLabel: r.stage,
-        stageLabelAr: r.stage,
-        status: r.status as any,
-        totalValue: role === "worker" ? 0 : Number(r.value || 0),
+        stage,
+        stageLabel: stage,
+        stageLabelAr: stage === "production" ? "قيد التصنيع" : stage === "handover" || stage === "warranty" ? "مكتمل" : stage,
+        status: (r.status as any) || "active",
+        totalValue: !canSeeFinancials ? 0 : Number(r.totalValue || 0),
         outstandingBalance: 0,
-        commercialStatus: r.stage,
-        productionStatus: r.status === "won" ? "Ready" : "Pending",
-        deliveryStatus: "Pending",
-        healthSeverity: r.status === "lost" ? "critical" : r.status === "won" ? "good" : "neutral",
-        quotesCount: 0,
-        ordersCount: 0,
+        commercialStatus: r.status === "active" ? "active" : "completed",
+        productionStatus: r.currentStage === "completed" ? "Completed" : "In Production",
+        deliveryStatus: r.currentStage === "completed" ? "Delivered" : "Pending",
+        healthSeverity: "good",
+        quotesCount: r.quoteId ? 1 : 0,
+        ordersCount: r.orderId ? 1 : 0,
         openTasksCount: 0,
         activeRemakesCount: 0,
-        createdAt: r.createdAt.toISOString(),
-        updatedAt: r.updatedAt.toISOString(),
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
       };
     });
 

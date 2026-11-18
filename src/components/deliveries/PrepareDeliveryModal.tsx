@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { createDelivery } from "@/lib/delivery.functions";
 import {
   Dialog,
@@ -37,6 +38,7 @@ export function PrepareDeliveryModal({
 }: PrepareDeliveryModalProps) {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
+  const queryClient = useQueryClient();
   const createDeliveryFn = useServerFn(createDelivery);
 
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -73,6 +75,8 @@ export function PrepareDeliveryModal({
           ? `تم تجهيز إذن التوصيل بنجاح (${res.deliveryNumber})`
           : `Delivery record prepared successfully (${res.deliveryNumber})`,
       );
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
       onOpenChange(false);
       onCreated?.(res.deliveryId);
     } catch (err: any) {

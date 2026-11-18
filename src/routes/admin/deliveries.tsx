@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { z } from "zod";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/useAuth";
@@ -49,7 +50,12 @@ import {
   PenTool,
 } from "lucide-react";
 
+const deliveriesSearchSchema = z.object({
+  deliveryId: z.string().optional(),
+});
+
 export const Route = createFileRoute("/admin/deliveries")({
+  validateSearch: (search: Record<string, unknown>) => deliveriesSearchSchema.parse(search),
   component: DeliveriesPage,
 });
 
@@ -57,6 +63,7 @@ function DeliveriesPage() {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const { currentRole } = useAuth();
+  const { deliveryId } = Route.useSearch();
   const listDeliveriesFn = useServerFn(listDeliveries);
 
   // Search, Filter, Sort, Pagination state
@@ -70,6 +77,14 @@ function DeliveriesPage() {
   // Detail Drawer
   const [selectedDelId, setSelectedDelId] = useState<string | null>(null);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+
+  // Auto-open delivery detail drawer when deep-linked
+  useEffect(() => {
+    if (deliveryId) {
+      setSelectedDelId(deliveryId);
+      setIsDetailDrawerOpen(true);
+    }
+  }, [deliveryId]);
 
   // Query
   const { data: result, isLoading, refetch } = useQuery({

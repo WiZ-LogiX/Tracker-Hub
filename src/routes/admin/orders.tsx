@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation as _useTranslation } from "react-i18next";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Search, FolderKanban, FileText, Truck, UserCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Customer360Drawer } from "@/components/customers/Customer360Drawer";
@@ -35,6 +36,7 @@ import { OrderMaterialAllocationWidget } from "@/components/admin/OrderMaterialA
 import { OrderWorkOrdersWidget } from "@/components/admin/OrderWorkOrdersWidget";
 import { OrderDeliveryWidget } from "@/components/admin/OrderDeliveryWidget";
 import { createRemake } from "@/lib/remakes.functions";
+import { listProductionOrders, getOrderById, listActiveWorkers } from "@/lib/order.functions";
 import {
   uploadProductionPhoto,
   deleteProductionPhoto,
@@ -50,10 +52,21 @@ import {
   getPublicOrdersByPhone,
 } from "@/lib/tracking.functions";
 
-export const Route = createFileRoute("/admin/orders")({ component: OrdersPage });
+import { z } from "zod";
+
+const ordersSearchSchema = z.object({
+  orderId: z.string().optional(),
+});
+
+export const Route = createFileRoute("/admin/orders")({
+  validateSearch: (search: Record<string, unknown>) => ordersSearchSchema.parse(search),
+  component: OrdersPage,
+});
 
 function OrdersPage() {
   const { t } = _useTranslation();
+  const queryClient = useQueryClient();
+  const { orderId } = Route.useSearch();
   const [orders, setOrders] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [logs, setLogs] = useState<any[]>([]);
@@ -88,27 +101,67 @@ function OrdersPage() {
   const [trackLoading, setTrackLoading] = useState(false);
   const [customer360Id, setCustomer360Id] = useState<string | null>(null);
 
+  const listOrdersFn = useServerFn(listProductionOrders);
+  const getOrderByIdFn = useServerFn(getOrderById);
+  const listWorkersFn = useServerFn(listActiveWorkers);
+
   useEffect(() => {
     load();
     loadWorkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Deep-link auto selection when orderId is provided in URL
+  useEffect(() => {
+    if (orderId && orders.length > 0) {
+      const matched = orders.find((o) => o.id === orderId);
+      if (matched) {
+        openOrder(matched);
+      } else {
+        getOrderByIdFn({ data: { orderId } })
+          .then((data) => {
+            if (data) openOrder(data);
+          })
+          .catch(() => {
+            supabase
+              .from("orders")
+              .select("*, customers(name,phone)")
+              .eq("id", orderId)
+              .single()
+              .then(({ data }) => {
+                if (data) openOrder(data);
+              });
+          });
+      }
+    }
+  }, [orderId, orders]);
+
   async function load() {
-    const { data } = await supabase
-      .from("orders")
-      .select("*, customers(name,phone)")
-      .order("created_at", { ascending: false });
-    setOrders(data ?? []);
+    try {
+      const data = await listOrdersFn();
+      setOrders(data ?? []);
+    } catch (err) {
+      console.warn("listProductionOrders fallback:", err);
+      const { data } = await supabase
+        .from("orders")
+        .select("*, customers(name,phone)")
+        .order("created_at", { ascending: false });
+      setOrders(data ?? []);
+    }
   }
 
   async function loadWorkers() {
-    const { data } = await supabase
-      .from("workers")
-      .select("*")
-      .eq("active", true)
-      .order("name");
-    setWorkers(data ?? []);
+    try {
+      const data = await listWorkersFn();
+      setWorkers(data ?? []);
+    } catch {
+      const { data } = await supabase
+        .from("workers")
+        .select("*")
+        .eq("active", true)
+        .order("name");
+      setWorkers(data ?? []);
+    }
   }
 
   async function onTrackPhoneSubmit(e: React.FormEvent) {
@@ -393,6 +446,8 @@ function OrdersPage() {
       /* notifications are best-effort */
     }
     toast.success(t("orders.advance", { stage: STAGE_LABEL_AR[next] }));
+    queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["orders"] });
     await load();
     if (selected?.id === o.id) {
       const updated = (

@@ -19,7 +19,7 @@ import {
   serviceCases,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, hasEffectivePermission, type TenantContext } from "@/lib/tenant-context";
 import {
   TaskStatusSchema,
   TaskPrioritySchema,
@@ -152,6 +152,11 @@ export const listTasks = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { userId, tenantId, role } = ctx;
 
+    const canViewAll = hasEffectivePermission(ctx, "tasks.view_all");
+    if (!canViewAll) {
+      requirePermission(ctx, "tasks.view_assigned");
+    }
+
     // 1. Resolve query filters
     const conditions = [eq(tasks.tenantId, tenantId)];
 
@@ -227,8 +232,8 @@ export const listTasks = createServerFn({ method: "GET" })
       );
     }
 
-    // Role restriction for workers: only tasks assigned to this worker
-    if (role === "worker") {
+    // Scope restriction: only tasks assigned to this user unless canViewAll
+    if (!canViewAll) {
       try {
         const assignedTaskIdsResult = await db
           .select({ taskId: taskAssignees.taskId })
@@ -436,6 +441,11 @@ export const getTaskById = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { userId, tenantId, role } = ctx;
 
+    const canViewAll = hasEffectivePermission(ctx, "tasks.view_all");
+    if (!canViewAll) {
+      requirePermission(ctx, "tasks.view_assigned");
+    }
+
     let task: any = null;
     try {
       const taskRows = await db
@@ -574,9 +584,9 @@ export const getTaskById = createServerFn({ method: "GET" })
       // safe fallback
     }
 
-    // Worker role restriction: worker must be assigned
-    if (role === "worker" && !assignees.some((a) => a.userId === userId)) {
-      throw new Error("Forbidden: worker is not assigned to this task");
+    // Scope restriction: user must have view_all or be assigned
+    if (!canViewAll && !assignees.some((a) => a.userId === userId)) {
+      throw new Error("Forbidden: user is not assigned to this task");
     }
 
     let isAcknowledged = false;
@@ -633,12 +643,8 @@ export const createTask = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateTaskInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "tasks.create");
     const { userId, tenantId, role } = ctx;
-
-    // 1. Role validation: worker and viewer cannot create tasks
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: insufficient permissions to create tasks");
-    }
 
     // 2. Strict cross-tenant validation for referenced entities
     if (data.customerId) {
@@ -924,11 +930,8 @@ export const updateTask = createServerFn({ method: "POST" })
   .validator((input: unknown) => UpdateTaskInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "tasks.edit");
     const { userId, tenantId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: only managers or admins can edit tasks");
-    }
 
     const [existing] = await db
       .select()
@@ -1107,7 +1110,9 @@ export const changeTaskStatus = createServerFn({ method: "POST" })
   .validator((input: unknown) => ChangeTaskStatusInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "tasks.status.transition");
     const { userId, tenantId, role } = ctx;
+    const canManageTasks = hasEffectivePermission(ctx, "tasks.manage") || hasEffectivePermission(ctx, "tasks.edit");
 
     // 1. Fetch current task
     const [task] = await db
@@ -1137,13 +1142,9 @@ export const changeTaskStatus = createServerFn({ method: "POST" })
       return { success: true, taskId: task.id, status: nextStatus };
     }
 
-    // 2. Role-based status transition rules
-    if (role === "viewer") {
-      throw new Error("Forbidden: read-only users cannot modify tasks");
-    }
-
-    if (role === "worker") {
-      // Check if worker is assigned to this task
+    // 2. Status transition rules
+    if (!canManageTasks) {
+      // Check if user is assigned to this task
       const [assignment] = await db
         .select({ id: taskAssignees.id })
         .from(taskAssignees)
@@ -1157,10 +1158,10 @@ export const changeTaskStatus = createServerFn({ method: "POST" })
         .limit(1);
 
       if (!assignment) {
-        throw new Error("Forbidden: worker can only transition assigned tasks");
+        throw new Error("Forbidden: you can only transition assigned tasks");
       }
 
-      // Workers can transition not_started -> in_progress, and in_progress -> completed / waiting_review / not_started
+      // Non-managers can transition not_started -> in_progress, and in_progress -> completed / waiting_review / not_started
       const allowedTransitions: Record<TaskStatus, TaskStatus[]> = {
         not_started: ["in_progress"],
         in_progress: ["completed", "waiting_review", "not_started"],
@@ -1219,7 +1220,7 @@ export const changeTaskStatus = createServerFn({ method: "POST" })
         : isReopened
         ? "task_reopened"
         : nextStatus === "completed"
-        ? (role === "worker" ? "task_completed" : "task_approved")
+        ? (!canManageTasks ? "task_completed" : "task_approved")
         : nextStatus === "waiting_review"
         ? "task_submitted_review"
         : "status_changed";
@@ -1306,11 +1307,8 @@ export const assignTask = createServerFn({ method: "POST" })
   .validator((input: unknown) => AssignTaskInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "tasks.assign");
     const { userId, tenantId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: only managers or admins can assign tasks");
-    }
 
     const [task] = await db
       .select({
@@ -1427,11 +1425,8 @@ export const acknowledgeTaskCompletion = createServerFn({ method: "POST" })
   .validator((input: unknown) => AcknowledgeTaskCompletionInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "tasks.acknowledge");
     const { userId, tenantId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: only managers or admins can acknowledge task completion");
-    }
 
     const [task] = await db
       .select({
@@ -1476,11 +1471,8 @@ export const bulkUpdateTasks = createServerFn({ method: "POST" })
   .validator((input: unknown) => BulkUpdateTasksInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "tasks.bulk");
     const { userId, tenantId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: insufficient permissions for bulk task updates");
-    }
 
     const uniqueTaskIds = Array.from(new Set(data.taskIds));
 
@@ -1627,7 +1619,7 @@ export const listWorkforceMembers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth, requireTenant])
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Workforce Management");
+    requireAnyPermission(ctx, ["tasks.view_all", "tasks.view_assigned", "team.view"]);
     const { tenantId } = ctx;
 
     // Fetch tenant members joined with app_users
@@ -1750,8 +1742,9 @@ export const getTaskAuditHistory = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    // Task workers can only view audit logs of tasks assigned to them
-    if (role === "worker") {
+    const canViewAll = hasEffectivePermission(ctx, "tasks.view_all");
+    if (!canViewAll) {
+      requirePermission(ctx, "tasks.view_assigned");
       const [assignment] = await db
         .select({ id: taskAssignees.id })
         .from(taskAssignees)
@@ -1765,7 +1758,7 @@ export const getTaskAuditHistory = createServerFn({ method: "GET" })
         .limit(1);
 
       if (!assignment) {
-        throw new Error("Forbidden: worker is not assigned to this task");
+        throw new Error("Forbidden: user is not assigned to this task");
       }
     }
 

@@ -12,7 +12,7 @@ import {
   auditLog,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import {
   InvoiceStatusSchema,
   PaymentMethodSchema,
@@ -76,7 +76,7 @@ export const listInvoices = createServerFn({ method: "GET" })
   .validator((input: unknown) => ListInvoicesInput.parse(input ?? {}))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Invoices & Payments");
+    requirePermission(ctx, "invoices.view");
     const { tenantId } = ctx;
 
     const conditions = [eq(invoices.tenantId, tenantId)];
@@ -198,7 +198,7 @@ export const getInvoiceById = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetInvoiceInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Invoices & Payments");
+    requirePermission(ctx, "invoices.view");
     const { tenantId } = ctx;
 
     const [invoiceRow] = await db
@@ -304,12 +304,8 @@ export const recordInvoicePayment = createServerFn({ method: "POST" })
   .validator((input: unknown) => RecordPaymentInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "invoices.payments.record");
     const { userId, tenantId, role } = ctx;
-
-    // 1. Role validation: Workers and viewers cannot record financial payments
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: insufficient permissions to record payments");
-    }
 
     // 2. Fetch invoice
     const [invoice] = await db
@@ -424,11 +420,8 @@ export const markInvoicePaid = createServerFn({ method: "POST" })
   .validator((d: unknown) => MarkPaidInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "invoices.payments.record");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden");
-    }
 
     const [inv] = await db
       .select()

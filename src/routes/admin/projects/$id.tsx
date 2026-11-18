@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { getProjectWorkspaceData } from "@/lib/project.functions";
 import type { ProjectWorkspaceData } from "@/lib/project-types";
 import type { InvoiceItem } from "@/lib/invoice-types";
@@ -53,8 +54,6 @@ function ProjectWorkspacePage() {
 
   const getWorkspaceFn = useServerFn(getProjectWorkspaceData);
 
-  const [data, setData] = useState<ProjectWorkspaceData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
 
   // Modals state
@@ -64,21 +63,20 @@ function ProjectWorkspacePage() {
   const [isRemakeModalOpen, setIsRemakeModalOpen] = useState(false);
   const [customer360Id, setCustomer360Id] = useState<string | null>(null);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const res = await getWorkspaceFn({ data: { projectId } });
-      setData(res);
-    } catch (err: any) {
-      toast.error(err?.message || (isAr ? "فشل تحميل بيانات المشروع" : "Failed to load project workspace"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [projectId]);
+  const { data = null, isLoading: loading, refetch: loadData } = useQuery<ProjectWorkspaceData | null>({
+    queryKey: ["project-workspace", projectId],
+    queryFn: async () => {
+      try {
+        const res = await getWorkspaceFn({ data: { projectId } });
+        return res || null;
+      } catch (err: any) {
+        toast.error(err?.message || (isAr ? "فشل تحميل بيانات المشروع" : "Failed to load project workspace"));
+        return null;
+      }
+    },
+    staleTime: 30_000,
+    gcTime: 10 * 60 * 1000,
+  });
 
   const handleOpenRecordPayment = (invoiceId?: string) => {
     if (!data) return;
@@ -166,7 +164,7 @@ function ProjectWorkspacePage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={loadData}
+            onClick={() => { loadData(); }}
             disabled={loading}
             className="gap-1.5 h-8 text-xs"
           >

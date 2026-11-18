@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { z } from "zod";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/useAuth";
@@ -35,7 +36,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+const invoicesSearchSchema = z.object({
+  invoiceId: z.string().optional(),
+});
+
 export const Route = createFileRoute("/admin/invoices")({
+  validateSearch: (search: Record<string, unknown>) => invoicesSearchSchema.parse(search),
   component: InvoicesPage,
 });
 
@@ -44,6 +50,7 @@ function InvoicesPage() {
   const isRtl = i18n.language === "ar";
   const { currentRole } = useAuth();
   const queryClient = useQueryClient();
+  const { invoiceId } = Route.useSearch();
 
   const listInvoicesFn = useServerFn(listInvoices);
   const getInvoiceByIdFn = useServerFn(getInvoiceById);
@@ -56,8 +63,22 @@ function InvoicesPage() {
   const [paymentModalInvoice, setPaymentModalInvoice] = useState<InvoiceItem | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
+  // Auto-open invoice detail drawer when deep-linked
+  useEffect(() => {
+    if (invoiceId) {
+      getInvoiceByIdFn({ data: { invoiceId } })
+        .then((inv) => {
+          if (inv) {
+            setSelectedInvoice(inv);
+            setIsDetailOpen(true);
+          }
+        })
+        .catch((err) => console.error("Failed to load deep-linked invoice:", err));
+    }
+  }, [invoiceId]);
+
   // TanStack Query for Invoices
-  const { data: invoices = [], isLoading, refetch } = useQuery({
+  const { data: invoices = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["invoices", status, search],
     queryFn: async () => {
       const s = status !== "all" ? (status as any) : undefined;
@@ -168,7 +189,22 @@ function InvoicesPage() {
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-10 text-muted-foreground text-sm">
-                    {isRtl ? "جاري تحميل سجل الفواتير..." : "Loading invoices ledger..."}
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      <span>{isRtl ? "جاري تحميل سجل الفواتير..." : "Loading invoices ledger..."}</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-10 text-destructive text-sm">
+                    <div className="space-y-2">
+                      <AlertCircle className="h-6 w-6 mx-auto text-destructive" />
+                      <p className="font-semibold">{isRtl ? "فشل تحميل الفواتير" : "Failed to load invoices"}</p>
+                      <Button size="sm" variant="outline" onClick={() => refetch()}>
+                        {isRtl ? "إعادة المحاولة" : "Retry"}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : invoices.length === 0 ? (
@@ -321,6 +357,8 @@ function InvoicesPage() {
         onOpenChange={setIsPaymentModalOpen}
         invoice={paymentModalInvoice}
         onPaymentRecorded={() => {
+          queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+          queryClient.invalidateQueries({ queryKey: ["invoices"] });
           refetch();
         }}
       />

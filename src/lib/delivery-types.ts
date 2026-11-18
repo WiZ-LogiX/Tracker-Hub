@@ -35,6 +35,7 @@ export interface DeliveryHandover {
   deliveryNumber: string;
   orderId: string;
   orderNumber: string;
+  quoteId?: string | null;
   customerId: string;
   customerName: string;
   customerPhone: string;

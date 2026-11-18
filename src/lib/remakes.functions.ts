@@ -14,7 +14,7 @@ import {
   tenantCounters,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import {
   isValidRemakeTransition,
   type RemakeListItem,
@@ -139,7 +139,7 @@ export const listRemakes = createServerFn({ method: "GET" })
   .validator((input: unknown) => ListRemakesInput.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<PaginatedRemakesResult> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Remake Management");
+    requirePermission(ctx, "remakes.view");
     const { tenantId } = ctx;
 
     const conditions = [eq(remakes.tenantId, tenantId)];
@@ -302,7 +302,7 @@ export const getRemakeById = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetRemakeByIdInput.parse(input))
   .handler(async ({ data, context }): Promise<RemakeDetailData> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Remake Management");
+    requirePermission(ctx, "remakes.view");
     const { tenantId } = ctx;
 
     const [remakeRow] = await db
@@ -462,13 +462,8 @@ export const createRemake = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateRemakeInput.parse(input))
   .handler(async ({ data, context }): Promise<{ id: string; remakeNumber: string }> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Remake Management");
+    requirePermission(ctx, "remakes.create");
     const { tenantId, userId, role } = ctx;
-
-    // Viewers cannot create remakes
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot report defects or create quality cases");
-    }
 
     // 1. Verify Order belongs to this tenant
     const [orderRow] = await db
@@ -584,7 +579,7 @@ export const changeRemakeStatus = createServerFn({ method: "POST" })
   .validator((input: unknown) => ChangeRemakeStatusInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: boolean; status: RemakeStatus }> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Remake Management");
+    requirePermission(ctx, "remakes.edit");
     const { tenantId, userId, role } = ctx;
 
     const [remakeRow] = await db
@@ -612,9 +607,9 @@ export const changeRemakeStatus = createServerFn({ method: "POST" })
       );
     }
 
-    // Role check: Only owner/admin can approve/reject
-    if ((targetStatus === "approved" || targetStatus === "rejected") && role !== "owner" && role !== "admin") {
-      throw new Error("Forbidden: only owners or admins can approve or reject remake cases");
+    // Role check: Only users with remakes.approve permission can approve/reject
+    if ((targetStatus === "approved" || targetStatus === "rejected")) {
+      requirePermission(ctx, "remakes.approve");
     }
 
     const updateFields: any = {

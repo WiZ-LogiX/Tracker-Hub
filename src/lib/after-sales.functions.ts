@@ -16,7 +16,7 @@ import {
 } from "@/db/schema";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
 import {
   ListServiceCasesInput,
   CreateServiceCaseInput,
@@ -173,7 +173,7 @@ export const listServiceCases = createServerFn({ method: "GET" })
   .validator((input: unknown) => ListServiceCasesInput.parse(input ?? {}))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "After-Sales Management");
+    requirePermission(ctx, "after-sales.view");
     const { tenantId, role } = ctx;
 
     const page = data.page || 1;
@@ -375,7 +375,7 @@ export const getServiceCaseById = createServerFn({ method: "GET" })
   })
   .handler(async ({ data, context }): Promise<ServiceCaseDetailData | null> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "After-Sales Management");
+    requirePermission(ctx, "after-sales.view");
     const { tenantId } = ctx;
     const caseId = data.caseId;
 
@@ -671,11 +671,8 @@ export const createServiceCase = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateServiceCaseInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "after-sales.create");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "worker") {
-      throw new Error("Forbidden: Workers do not have permission to log after-sales cases");
-    }
 
     const caseNumber = await getNextCaseNumber(tenantId);
 
@@ -848,11 +845,8 @@ export const updateServiceCaseStatus = createServerFn({ method: "POST" })
   .validator((input: unknown) => UpdateServiceCaseStatusInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "after-sales.status.update");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: You do not have permission to transition after-sales case status");
-    }
 
     // Fetch existing status
     let currentStatus: ServiceCaseStatus = "new";
@@ -944,11 +938,8 @@ export const assignServiceCase = createServerFn({ method: "POST" })
   .validator((input: unknown) => AssignServiceCaseInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "after-sales.assign");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: You do not have permission to assign cases");
-    }
 
     const dueDate = data.dueDate ? new Date(data.dueDate) : null;
 
@@ -987,7 +978,7 @@ export const createTaskForCase = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateCaseTaskInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "After-Sales Management");
+    requireAnyPermission(ctx, ["after-sales.create", "tasks.create"]);
     const { tenantId, userId } = ctx;
 
     // Get case details
@@ -1054,7 +1045,7 @@ export const createRemakeForCase = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateCaseRemakeInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "After-Sales Management");
+    requireAnyPermission(ctx, ["after-sales.create", "remakes.create"]);
     const { tenantId, userId } = ctx;
 
     let customerId: string | null = null;
@@ -1129,11 +1120,8 @@ export const createRepeatOpportunity = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateRepeatOpportunityInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireAnyPermission(ctx, ["after-sales.create", "crm.opportunities.create"]);
     const { tenantId, userId, role } = ctx;
-
-    if (role === "worker") {
-      throw new Error("Forbidden: Workers cannot create commercial opportunities");
-    }
 
     // Verify Customer exists
     const [cust] = await db

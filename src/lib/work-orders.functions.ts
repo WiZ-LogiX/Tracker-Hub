@@ -18,7 +18,7 @@ import {
   auditLog,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import type {
   ProductionWorkOrder,
   WorkOrderStatus,
@@ -126,7 +126,7 @@ export const listWorkOrders = createServerFn({ method: "GET" })
   .validator((input: unknown) => ListWorkOrdersInput.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<PaginatedWorkOrderResult> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Work Orders Management");
+    requirePermission(ctx, "work-orders.view");
     const { tenantId } = ctx;
 
     const conditions = [eq(productionWorkOrders.tenantId, tenantId)];
@@ -288,7 +288,7 @@ export const getWorkOrderById = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetWorkOrderInput.parse(input))
   .handler(async ({ data, context }): Promise<WorkOrderDetailData> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Work Orders Management");
+    requirePermission(ctx, "work-orders.view");
     const { tenantId } = ctx;
 
     const [woRow] = await db
@@ -506,12 +506,8 @@ export const createWorkOrder = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateWorkOrderInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: boolean; workOrderId: string; workOrderNumber: string }> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Work Orders Management");
+    requirePermission(ctx, "work-orders.create");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot create work orders");
-    }
 
     // Verify order exists and belongs to tenant
     const [orderRow] = await db
@@ -594,12 +590,8 @@ export const updateWorkOrderStatus = createServerFn({ method: "POST" })
   .validator((input: unknown) => UpdateWorkOrderStatusInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Work Orders Management");
+    requirePermission(ctx, "work-orders.status.update");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot update work orders");
-    }
 
     const [wo] = await db
       .select()
@@ -662,7 +654,7 @@ export const exportCutListCsv = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetWorkOrderInput.parse(input))
   .handler(async ({ data, context }): Promise<{ csvContent: string; fileName: string }> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Work Orders Management");
+    requirePermission(ctx, "work-orders.view");
     const { tenantId, userId } = ctx;
 
     const detail = await getWorkOrderById({ data: { workOrderId: data.workOrderId } });

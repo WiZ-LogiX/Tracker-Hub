@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { recordInvoicePayment } from "@/lib/invoice-payment.functions";
 import type { InvoiceItem, PaymentMethod } from "@/lib/invoice-types";
 import { formatEGP } from "@/lib/pricing";
@@ -40,6 +41,7 @@ export function RecordPaymentModal({
 }: RecordPaymentModalProps) {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
+  const queryClient = useQueryClient();
   const recordPaymentFn = useServerFn(recordInvoicePayment);
 
   const [amount, setAmount] = useState<string>("");
@@ -85,6 +87,8 @@ export function RecordPaymentModal({
           ? `تم تسجيل الدفعة بنجاح (${formatEGP(numAmount)})`
           : `Payment of ${formatEGP(numAmount)} recorded successfully`,
       );
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
       onPaymentRecorded();
       onOpenChange(false);
     } catch (err: any) {

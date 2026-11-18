@@ -3,8 +3,11 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { db } from "@/db/client.server";
+import { orders, customers, quotes, invoices, workers } from "@/db/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { generatePLCId } from "@/lib/numbering";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 
 const CreateOrderInput = z.object({
   quoteId: z.string().uuid().optional().nullable(),
@@ -18,7 +21,7 @@ export const createOrder = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => CreateOrderInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Orders Management");
+    requirePermission(ctx, "orders.create");
     const tenantId = ctx.tenantId;
 
     // Grab the quote if an ID is provided and ensure it belongs to the tenant
@@ -73,4 +76,119 @@ export const createOrder = createServerFn({ method: "POST" })
 
     if (error || !order) throw new Error(error?.message ?? "Failed to create order");
     return { orderId: order.id, orderNumber: plcId };
+  });
+
+export const listProductionOrders = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "orders.view");
+    const { tenantId } = ctx;
+
+    const rows = await db
+      .select({
+        id: orders.id,
+        order_number: orders.orderNumber,
+        orderNumber: orders.orderNumber,
+        quote_id: orders.quoteId,
+        quoteId: orders.quoteId,
+        invoice_id: orders.invoiceId,
+        invoiceId: orders.invoiceId,
+        customer_id: orders.customerId,
+        customerId: orders.customerId,
+        current_stage: orders.currentStage,
+        currentStage: orders.currentStage,
+        total: orders.total,
+        deposit: orders.deposit,
+        contract_date: orders.contractDate,
+        contractDate: orders.contractDate,
+        expected_delivery: orders.expectedDelivery,
+        expectedDelivery: orders.expectedDelivery,
+        delivered_at: orders.deliveredAt,
+        deliveredAt: orders.deliveredAt,
+        notes: orders.notes,
+        created_at: orders.createdAt,
+        createdAt: orders.createdAt,
+        customer_name: customers.name,
+        customer_phone: customers.phone,
+      })
+      .from(orders)
+      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .where(eq(orders.tenantId, tenantId))
+      .orderBy(desc(orders.createdAt));
+
+    return rows.map((r) => ({
+      ...r,
+      customers: {
+        id: r.customer_id,
+        name: r.customer_name,
+        phone: r.customer_phone,
+      },
+    }));
+  });
+
+export const getOrderById = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .inputValidator((d: unknown) => z.object({ orderId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "orders.view");
+    const { tenantId } = ctx;
+
+    const [row] = await db
+      .select({
+        id: orders.id,
+        order_number: orders.orderNumber,
+        orderNumber: orders.orderNumber,
+        quote_id: orders.quoteId,
+        quoteId: orders.quoteId,
+        invoice_id: orders.invoiceId,
+        invoiceId: orders.invoiceId,
+        customer_id: orders.customerId,
+        customerId: orders.customerId,
+        current_stage: orders.currentStage,
+        currentStage: orders.currentStage,
+        total: orders.total,
+        deposit: orders.deposit,
+        contract_date: orders.contractDate,
+        contractDate: orders.contractDate,
+        expected_delivery: orders.expectedDelivery,
+        expectedDelivery: orders.expectedDelivery,
+        delivered_at: orders.deliveredAt,
+        deliveredAt: orders.deliveredAt,
+        notes: orders.notes,
+        created_at: orders.createdAt,
+        createdAt: orders.createdAt,
+        customer_name: customers.name,
+        customer_phone: customers.phone,
+      })
+      .from(orders)
+      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .where(and(eq(orders.id, data.orderId), eq(orders.tenantId, tenantId)))
+      .limit(1);
+
+    if (!row) return null;
+    return {
+      ...row,
+      customers: {
+        id: row.customer_id,
+        name: row.customer_name,
+        phone: row.customer_phone,
+      },
+    };
+  });
+
+export const listActiveWorkers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    const { tenantId } = ctx;
+
+    const rows = await db
+      .select()
+      .from(workers)
+      .where(and(eq(workers.tenantId, tenantId), eq(workers.active, true)))
+      .orderBy(workers.name);
+
+    return rows;
   });

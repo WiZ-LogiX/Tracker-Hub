@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getDeliveryById,
   updateDeliveryStatus,
@@ -39,6 +39,8 @@ import {
   Check,
   CheckSquare,
   Plus,
+  ExternalLink,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatEGP } from "@/lib/pricing";
@@ -60,6 +62,7 @@ export function DeliveryDetailDrawer({
 }: DeliveryDetailDrawerProps) {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
+  const queryClient = useQueryClient();
 
   const getDeliveryFn = useServerFn(getDeliveryById);
   const updateStatusFn = useServerFn(updateDeliveryStatus);
@@ -128,6 +131,8 @@ export function DeliveryDetailDrawer({
           ? "تم تحديث حالة التسليم والتسليم بنجاح"
           : "Delivery & handover status updated successfully",
       );
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries"] });
       refetch();
       onStatusChanged?.();
     } catch (err: any) {
@@ -220,6 +225,47 @@ export function DeliveryDetailDrawer({
 
             {/* Body */}
             <div className="p-6 flex-1 space-y-6">
+              {/* Linked Commercial & Production Records */}
+              <div className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {isRtl ? "المستندات التشغيلية المرتبطة" : "Linked Commercial Documents"}
+                </div>
+                <div className="p-3 bg-muted/20 border rounded-2xl space-y-2 text-xs">
+                  {del.orderId && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Truck className="h-3.5 w-3.5 text-primary" />
+                        {isRtl ? "أمر الإنتاج والتنفيذ:" : "Production Order:"}
+                      </span>
+                      <Link
+                        to="/admin/orders"
+                        search={{ orderId: del.orderId }}
+                        className="font-mono font-bold text-primary hover:underline flex items-center gap-1"
+                      >
+                        <span>{del.orderNumber || del.orderId}</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  )}
+                  {del.quoteId && (
+                    <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 text-secondary" />
+                        {isRtl ? "المقايسة التجارية الأصلية:" : "Originating Quote:"}
+                      </span>
+                      <Link
+                        to="/admin/quotes/$id"
+                        params={{ id: del.quoteId }}
+                        className="font-mono font-bold text-primary hover:underline flex items-center gap-1"
+                      >
+                        <span>{isRtl ? "عرض المقايسة" : "View Quote"}</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Address & Customer */}
               <div className="space-y-3">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

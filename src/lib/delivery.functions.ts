@@ -13,7 +13,7 @@ import {
   auditLog,
 } from "@/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import {
   type DeliveryHandover,
   type DeliveryStatus,
@@ -131,7 +131,7 @@ export const listDeliveries = createServerFn({ method: "GET" })
   .validator((input: unknown) => ListDeliveriesInput.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<PaginatedDeliveryResult> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Delivery Management");
+    requirePermission(ctx, "deliveries.view");
     const { tenantId } = ctx;
 
     const conditions = [eq(deliveryHandovers.tenantId, tenantId)];
@@ -311,7 +311,7 @@ export const getDeliveryById = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetDeliveryInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Delivery Management");
+    requirePermission(ctx, "deliveries.view");
     const { tenantId } = ctx;
 
     const [delRow] = await db
@@ -321,6 +321,7 @@ export const getDeliveryById = createServerFn({ method: "GET" })
         deliveryNumber: deliveryHandovers.deliveryNumber,
         orderId: deliveryHandovers.orderId,
         orderNumber: orders.orderNumber,
+        quoteId: orders.quoteId,
         orderTotal: orders.total,
         invoiceId: orders.invoiceId,
         customerId: deliveryHandovers.customerId,
@@ -387,6 +388,7 @@ export const getDeliveryById = createServerFn({ method: "GET" })
         deliveryNumber: delRow.deliveryNumber,
         orderId: delRow.orderId,
         orderNumber: delRow.orderNumber || "—",
+        quoteId: delRow.quoteId || null,
         customerId: delRow.customerId,
         customerName: delRow.customerName || "—",
         customerPhone: delRow.customerPhone || "—",
@@ -426,12 +428,8 @@ export const createDelivery = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateDeliveryInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: boolean; deliveryId: string; deliveryNumber: string }> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Delivery Management");
+    requirePermission(ctx, "deliveries.create");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot prepare deliveries");
-    }
 
     // Verify order exists
     const [orderRow] = await db
@@ -509,12 +507,8 @@ export const updateDeliveryStatus = createServerFn({ method: "POST" })
   .validator((input: unknown) => UpdateDeliveryStatusInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Delivery Management");
+    requirePermission(ctx, "deliveries.status.update");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot update delivery statuses");
-    }
 
     const [delivery] = await db
       .select()
