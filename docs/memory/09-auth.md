@@ -1,83 +1,54 @@
 # 9. Authentication & Authorization
 
-## 9.1 Provider
+## 9.1 Authentication Provider
 
 - **Supabase Auth** with email/password only.
 - **Google OAuth is explicitly disabled** — username + password only by design.
-- **No self-signup.** Admin creates accounts under `/admin/team`. The username/password model is part of the Phase 7 decision lock.
+- **No public self-signup**: Administrators manage employee credentials under `/admin/team`.
 
-## 9.2 Synthetic email pattern
+## 9.2 Synthetic Email Pattern
 
-```
+```text
 proxyEmailFor(username) = `${username.toLowerCase()}@pelecanon.local`
 ```
 
-This is RFC-compatible. It preserves a unique `auth.users.email` per row while letting the UI present only a username. From the source comment: *"The cleanest way to swap email login for username login without a multi-week edge-function rewrite is to treat `<username>@pelecanon.local` as the canonical email shape — the user never sees it."*
+This RFC-compatible pattern preserves unique email constraints in `auth.users` while allowing the UI to present clean username login.
 
-### Validation
+## 9.3 Unified Dynamic RBAC Architecture
 
-```ts
-Username = z.string().trim().min(3).max(32).regex(/^[a-z0-9._-]+$/i);
-Password = z.string().min(6).max(128);
-```
+Authorization is resolved dynamically through four relational tables:
+`users` → `tenant_members` → `tenant_roles` → `role_permissions` → `permissions`.
 
-## 9.3 Session persistence
+### 3-State Permission Resolution
+1. **Uninitialized Roles**: Seeded automatically from safe system defaults in `DEFAULT_ROLE_PERMISSIONS`.
+2. **Explicitly Saved Permissions**: Resolved directly from `role_permissions` rows.
+3. **Explicitly Zero-Permission Roles**: If all permissions are removed from a role, it is strictly resolved as empty and **never** falls back to default permissions.
 
-- After `login` server fn returns `{session, user, profile}`, the client calls `supabase.auth.setSession({access_token, refresh_token})` (`src/routes/auth.tsx:60`).
-- Cookies via the configured `pelecanon-auth-token` storage key.
-- `onAuthStateChange` triggers the bootstrap flow.
+### Role Profiles & Super-Admin
+- **`owner`**: Immutable super-administrator with unconditional access across all operations.
+- **`admin`**: Full administrative access (adjustable per tenant).
+- **`sales` (Manager)**: Operational manager across CRM, quotes, projects, orders, and after-sales.
+- **`worker` (Task Worker)**: Strictly scoped to the worker workspace (`/admin/tasks`). All administrative routes and financial figures are completely blocked and hidden.
+- **`viewer`**: Read-only profile.
+- **Custom Roles**: Dynamically created and scoped per tenant.
 
-## 9.4 Tenant bootstrap
+### Client-Safe Architecture
+UI metadata, labels, and access levels are isolated in `src/lib/tenant-permissions-data.ts`. This ensures client React bundles never import Node.js database drivers or `postgres`.
 
-```
-First login
-  → ensureBootstrapAdmin (server) — idempotent creates:
-      • tenants row (slug='pelecanon', name='PeleCanon')
-      • auth.users row (email='admin@pelecanon.local', password='admin')
-      • app_users row (tenant_id, username='admin', display_name='Admin', status='active')
-      • tenant_members row (role='owner')
-
-Subsequent visits
-  → bootstrapMyTenant (server, requires auth) — self-heals:
-      • resolve or default-create tenants row
-      • ensure tenant_members row for caller
-      • read all memberships, pick primary for client
-```
-
-If the bootstrap request fails, the user lands on the **bootstrap-failed** panel with a Retry button (`AdminLayout` in `src/routes/admin.tsx`).
-
-## 9.5 Middlewares
+## 9.4 Middlewares & Fail-Close Protection
 
 | Middleware | Direction | What it does |
 |---|---|---|
-| `attachSupabaseAuth` | client → server-fn RPC | Sets `Authorization: Bearer <token>` from `supabase.auth.getSession()` |
-| `requireSupabaseAuth` | server-fn inbound | Reads bearer, calls `supabase.auth.getClaims(token)`, exposes `context = { supabase, userId, claims }` |
-| `csrfMiddleware` | request filter | CSRF only for `handlerType === 'serverFn'` |
+| `attachSupabaseAuth` | Client → Server RPC | Injects `Authorization: Bearer <token>` into server requests |
+| `requireSupabaseAuth` | Inbound Server Fn | Validates JWT; **fails completely closed** for mock tokens unless `NODE_ENV` is explicitly `development` or `test` |
+| `requireTenant` | Inbound Server Fn | Resolves tenant membership, sets PostgreSQL GUC via `setTenantGuc(tenantId)`, attaches `context.supabase` |
+| `csrfMiddleware` | Request filter | CSRF enforcement on server-function RPCs |
 
-All three are registered in `src/start.ts`.
+## 9.5 Granular Authorization in Server Functions
 
-## 9.6 Application-level role
+Server functions use granular checks:
+- `requirePermission(ctx, "quotes.create")`
+- `requireAnyPermission(ctx, ["orders.manage", "orders.view"])`
+- `canWrite(role)` / `canDelete(role)`
 
-```sql
-tenant_members.role -- owner | admin | sales | worker | viewer
-```
-
-`useAuth().isStaff = memberships.some(m => m.role !== 'viewer')` gates `/admin/*`. There's no per-page granular RBAC at the UI layer — the server fns check the user's first tenant's role.
-
-## 9.7 Server-fn authorization patterns
-
-| Pattern | Where |
-|---|---|
-| Bearer verification | `requireSupabaseAuth` middleware (any fn with `.middleware([requireSupabaseAuth])`) |
-| `owner\|admin` block | `applyWastageRulesMigration`, `createAppUser` |
-| Tenant-prefix on R2 keys | `getR2DownloadUrl`, `deleteR2Object` (defense-in-depth) |
-| Service-role for reads/writes the RLS admin role can't satisfy | all of `catalog.functions.ts`, `diagnostics-db.functions.ts` (intentional) |
-| RLS as the only barrier | direct `supabase.from(...)` in UI (InternalNotes, orders, customers, etc.) — leaky by design in the current state |
-
-## 9.8 Tests covering authz
-
-`tests/rls.test.ts` covers, in `beforeAll`/`beforeEach` plus per-`it`:
-
-- Two-tenant SELECT/INSERT/UPDATE/DELETE separation via `set_config('request.jwt.claims', json, true)`.
-- Worker role cannot UPDATE `customers`.
-- Append-only tables block UPDATE/DELETE.
+Sensitive financial figures in `getProjectWorkspaceData` are masked at the server level unless the user possesses `projects.financials.view`.

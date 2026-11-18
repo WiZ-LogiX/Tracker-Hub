@@ -1,6 +1,6 @@
 # PeleCanon — Project Overview
 
-> Living document. Tracks what's done, what's in progress, tech foundation, and known risks across all phases. Verified against baseline commit `c3d472b` on `feature/atelier-prestige-homepage`.
+> Living document. Tracks what's done, what's in progress, tech foundation, and known risks across all phases. Verified against baseline commit `2608814` on `feature/atelier-prestige-homepage`.
 
 ---
 
@@ -164,3 +164,4 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 - **Unified RBAC**: ✅ 3-state permission resolver, adjustable predefined profiles, custom roles, client-safe bundling, and fail-close security.
 - **Cloudflare R2**: ✅ complete server SDK + presigned flows + 10-minute bounded customer capability URLs.
 - **Commercial Quotation & Projects**: ✅ canonical `PLC-XXXXX` numbering and unified commercial builder.
+- **Full Verification**: ✅ 1,073 Vitest tests (100% pass), 165 Playwright E2E tests (100% pass), 0 type errors, clean Cloudflare Workers production build.

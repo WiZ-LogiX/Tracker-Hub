@@ -2,7 +2,7 @@
 
 ## 3.1 High-level shape
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────────┐
 │                  Cloudflare Workers (SSR + Edge)                      │
 │  src/server.ts (entry), src/start.ts (TanStack Start config)         │
@@ -12,15 +12,15 @@
 │  └─────────────────┘     │  middleware: requireSupabaseAuth      │    │
 │                          └───────────────────────────────────────┘    │
 │  ┌──────────────────────────────────────────────────────────────┐    │
-│  │  Drizzle ORM (declared) / Supabase client (actual reads)     │    │
-│  │  src/db/schema.ts (only `attachments` typed today)            │    │
-│  │  src/db/client.server.ts (portable `postgres-js` driver)      │    │
+│  │  Drizzle ORM (34 tenant-scoped tables fully typed)           │    │
+│  │  src/db/schema.ts                                             │    │
+│  │  src/db/client.server.ts (portable `postgres` driver)         │    │
 │  └──────────────────────────────────────────────────────────────┘    │
 │  ┌─────────────────────────┐   ┌───────────────────────────────────┐   │
 │  │ Supabase Auth + Postgres│   │ Cloudflare R2 (S3-compatible)     │   │
 │  │ src/integrations/...    │   │ src/lib/r2.server.ts              │   │
-│  └─────────────────────────┘   │ presigned PUT (avatars, attach.)  │   │
-│                                 │ presigned GET (signedUrl 25min)   │   │
+│  └─────────────────────────┘   │ presigned PUT (direct uploads)    │   │
+│                                 │ presigned GET (10min bounded TTL) │   │
 │                                 └───────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────┘
                                          │
@@ -32,26 +32,30 @@
 
 ## 3.2 Request lifecycle
 
-1. Edge request → `src/server.ts` (Cloudflare Workers entry).
+1. **Edge request** → `src/server.ts` (Cloudflare Workers entry):
    - `getServerEntry()` dynamically imports `@tanstack/react-start/server-entry` (cached).
-   - `normalizeCatastrophicSsrResponse()` swaps the h3 swallowed-error body (`{"unhandled":true,"message":"HTTPError","status":500}`) for a branded `renderErrorPage()`. The real `Error` is preserved by `src/lib/error-capture.ts` (globalThis `error` + `unhandledrejection` listeners, 5-sec TTL ring buffer).
+   - `normalizeCatastrophicSsrResponse()` swaps swallowed error bodies for a branded `renderErrorPage()`. Real errors are preserved by `src/lib/error-capture.ts`.
 
-2. TanStack Start middleware (`src/start.ts`):
-   - `errorMiddleware` — catches remaining errors → branded HTML.
-   - `csrfMiddleware` — CSRF only for `handlerType === "serverFn"`.
-   - `attachSupabaseAuth` — `functionMiddleware` (client-side attacher) sets `Authorization: Bearer <token>` on every server-fn RPC (`src/integrations/supabase/auth-attacher.ts`).
+2. **TanStack Start middleware** (`src/start.ts`):
+   - `errorMiddleware`: catches remaining errors → branded HTML.
+   - `csrfMiddleware`: CSRF enforcement for `handlerType === "serverFn"`.
+   - `attachSupabaseAuth`: client-side function middleware injecting `Authorization: Bearer <token>` on every server-fn RPC.
 
-3. Server functions attach `.middleware([requireSupabaseAuth])` from `src/integrations/supabase/auth-middleware.ts`. The middleware reads the bearer, calls `supabase.auth.getClaims(token)`, and exposes `context = { supabase, userId, claims }`. Missing/invalid token throws a string error.
+3. **Server function authentication & tenancy** (`src/integrations/supabase/auth-middleware.ts` & `tenant-middleware.ts`):
+   - `requireSupabaseAuth`: validates JWT, exposes `{ supabase, userId, claims }`. Mock bearer tokens (`mock-...`) are strictly fail-close, permitted only in development or test runtimes.
+   - `requireTenant`: resolves active tenant membership from `tenant_members`, attaches `tenantId`, sets session GUC via `setTenantGuc(tenantId)`.
 
-4. Data access paths:
-   - **Browser**: `supabase.from(...)` (RLS-enforced, `src/integrations/supabase/client.ts`).
-   - **Server (admin)**: `supabaseAdmin.from(...)` (service-role, RLS bypass, `src/integrations/supabase/client.server.ts`).
-   - **Server (RLS)**: middleware-injected `supabase`.
+4. **Authorization & RBAC**:
+   - Resolved via 3-state permission engine (`src/lib/tenant-context.ts`).
+   - Granular checks (`requirePermission`, `requireAnyPermission`) guard all 22 administrative sections.
+   - UI permission constants isolated in client-safe `src/lib/tenant-permissions-data.ts`.
+
+5. **Data access**:
+   - Primary: Drizzle ORM queries via `src/db/schema.ts` (34 tables) and `requireTenant` client.
+   - Unauthenticated: Hardened public tracking (`/track`) via `orders.tracking_token` UUID lookups.
 
 ## 3.3 Multi-tenant data path
 
-- RLS policy functor: `is_tenant_member(_tenant_id uuid, _roles tenant_role[])` (SECURITY DEFINER, `search_path=public`, `supabase/migrations/20260612_tenancy_v1.sql`).
-- Every business table has `tenant_id uuid NOT NULL` + immutability trigger.
-- Application glue: `src/lib/tenant-context.ts` exposes `TENANT_ROLES`, `canWrite(role)`, `canDelete(role)`, `requireRole(ctx, allowed)`.
-- Drizzle schema mirror: `src/db/tenancy-schema.ts` for `tenants` + `tenant_members`.
-- Note from `.lovable/STATUS.md`: legacy `user_roles` is dropped; `useAuth.tsx` queries `tenant_members` directly.
+- RLS policy functor: `is_tenant_member(_tenant_id uuid, _roles tenant_role[])` (SECURITY DEFINER, `search_path=public`).
+- Every business table enforces `tenant_id uuid NOT NULL` + immutability trigger.
+- Application glue: `src/lib/tenant-context.ts` resolves user roles, effective permissions, and cache invalidation.

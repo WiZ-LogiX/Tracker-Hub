@@ -1,75 +1,105 @@
-# Security: Tenant Isolation & `supabaseAdmin` Usage
+# Security: Multi-Tenant Isolation, Authentication & Data Protection
 
-This document records all remaining `supabaseAdmin` usages and the justification for each.
+**Last Updated**: 2026-11-18  
+**Baseline Commit**: `2608814` (`feature/atelier-prestige-homepage`)  
+**Status**: Active & Enforced  
 
-## Summary
+---
 
-- **`supabaseAdmin`** is a service-role client that **bypasses RLS**.
-- All business-logic server functions now use `requireTenant` middleware + explicit `.eq('tenant_id', ctx.tenantId)` filters as defense-in-depth.
-- `setTenantGuc(tenantId)` sets Postgres GUC `app.tenant_id` for future RLS GUC compatibility.
+## 1. Multi-Tenant Isolation Architecture
 
-## Files with `supabaseAdmin` — Tenant-Scoped
+PeleCanon enforces multi-tenant defense-in-depth across the entire stack:
 
-These files use `supabaseAdmin` but apply `requireTenant` middleware + `.eq('tenant_id')` on every query:
-
-| File | Functions | Notes |
-|------|-----------|-------|
-| `src/lib/catalog.functions.ts` | 27 | Materials, finishes, veneers, suppliers, discounts, accessories — all CRUD |
-| `src/lib/pricing-factors.functions.ts` | 3 | Pricing rules, formulas, factors |
-| `src/lib/auth.functions.ts` | 20+ | User/role/permission management — resolves tenant from auth session |
-| `src/lib/order.functions.ts` | 10+ | Order creation/management — uses `requireTenant` |
-| `src/lib/invoice.functions.ts` | 5+ | Invoice generation — uses `requireTenant` |
-| `src/lib/notifications.functions.ts` | 5+ | Notification management — uses `requireTenant` |
-| `src/lib/attachments.functions.ts` | 5+ | File attachment — resolves tenant from user |
-
-## Files with `supabaseAdmin` — Intentionally Unscoped
-
-| File | Justification |
-|------|---------------|
-| `src/lib/tracking.functions.ts` | **Public, unauthenticated** endpoints for order tracking. No tenant_id — customer-facing. |
-| `src/lib/bootstrap-tenant.functions.ts` | **Tenant provisioning** — creates new tenants. Global op, no existing tenant context. |
-| `src/lib/apply-migration.functions.ts` | **DB migration tool** — applies SQL migrations. Dev/ops tool, not business logic. |
-| `src/lib/cleanup.functions.ts` | **Dev cleanup** — removes test data. Local dev tool only. |
-| `src/lib/diagnostics-db.functions.ts` | **Diagnostics** — reads `information_schema`. Read-only, no tenant data. |
-
-## Why `supabaseAdmin` Instead of RLS?
-
-Catalog tables (materials, finishes, veneers, suppliers, etc.) have restrictive RLS policies that prevent admin roles from accessing them through PostgREST. The service-role client bypasses these restrictions while app-layer `.eq('tenant_id')` provides the isolation guarantee.
-
-## Security Model
-
-```
-┌─────────────────────────────────────────┐
-│  Client (browser)                       │
-│  → Bearer token in header               │
-└────────────┬────────────────────────────┘
-             │
-┌────────────▼────────────────────────────┐
-│  auth-middleware.ts                      │
-│  → requireSupabaseAuth                  │
-│  → Validates JWT, sets userId           │
-└────────────┬────────────────────────────┘
-             │
-┌────────────▼────────────────────────────┐
-│  tenant-middleware.ts                    │
-│  → requireTenant                        │
-│  → Resolves tenant_id from tenant_members│
-│  → Sets role from tenant_members        │
-└────────────┬────────────────────────────┘
-             │
-┌────────────▼────────────────────────────┐
-│  Business logic (e.g. catalog.functions) │
-│  → setTenantGuc(tenantId)               │
-│  → .eq('tenant_id', ctx.tenantId)       │
-│  → All queries scoped to tenant         │
-└────────────┬────────────────────────────┘
-             │
-┌────────────▼────────────────────────────┐
-│  RLS policies (defense-in-depth)        │
-│  → Current: mostly permissive           │
-│  → Future: GUC-based tenant isolation   │
-└─────────────────────────────────────────┘
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│ Browser Client                                                  │
+│ Authorization: Bearer <Supabase JWT>                            │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ auth-middleware.ts (requireSupabaseAuth)                        │
+│ - Validates JWT with Supabase Auth                              │
+│ - Sets context.userId and context.claims                        │
+│ - Fail-close: mock tokens allowed ONLY in dev/test              │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ tenant-middleware.ts (requireTenant)                            │
+│ - Resolves user's tenant membership from tenant_members         │
+│ - Attaches context.tenantId and context.supabase                │
+│ - Executes setTenantGuc(tenantId) for PostgreSQL session GUC    │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Database Layer (PostgreSQL 16)                                  │
+│ - 34 tenant-scoped tables with tenant_id NOT NULL               │
+│ - Row-Level Security (RLS) policies enforcing tenant isolation  │
+│ - Tenant immutability triggers blocking cross-tenant mutation   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Last Updated
-2026-06-20
+---
+
+## 2. Dynamic RBAC & 3-State Permission Engine
+
+Authorization is resolved dynamically through four relational tables:
+`users` → `tenant_members` → `tenant_roles` → `role_permissions` → `permissions`.
+
+### 3-State Resolution
+1. **Uninitialized Roles**: Automatically seeded with safe defaults from `DEFAULT_ROLE_PERMISSIONS`.
+2. **Explicitly Saved Permissions**: Resolved directly from `role_permissions` database rows.
+3. **Explicitly Zero-Permission Roles**: If an administrator revokes all permissions from a role, it is strictly stored as empty and **never** falls back to default permissions.
+
+### Super-Administrator Bypass
+- The `owner` role is immutable and receives unconditional access across all operations, regardless of database rows.
+- All other roles (`admin`, `sales`, `worker`, `viewer`, and custom roles) are strictly evaluated against their effective resolved permissions.
+
+### Worker Workspace Restriction
+- Users with the `worker` role are restricted to `/admin/tasks`.
+- All administrative, financial, CRM, and catalog routes are hidden in the UI and return HTTP 403 Forbidden at the server function layer.
+
+---
+
+## 3. Public Endpoints & Tracking Security
+
+The public tracking page (`/track`) allows customers to check order progress without authenticating:
+
+1. **Cryptographic Token Lookup**:
+   - Tracking by reference requires the order's `tracking_token` (UUIDv4).
+   - Direct lookup by raw order ID or quote number is prohibited.
+2. **Rate Limiting & Bounding**:
+   - `handlePublicOrdersByPhone` is rate-limited to 10 requests per minute per IP using an in-memory sliding window.
+   - SQL queries are strictly bounded (`.limit(20)`).
+   - Returned order payloads are sanitized: internal costings, margins, worker notes, and supplier details are stripped.
+
+---
+
+## 4. Cloudflare R2 Storage Security
+
+- **Presigned Direct Uploads**: Browsers upload directly to Cloudflare R2 via short-lived presigned PUT URLs generated server-side. Credentials never touch the client.
+- **Short-Lived Customer URLs**: Presigned GET URLs for customer-facing documents and photos have a maximum TTL of **10 minutes**.
+- **Tenant Path Isolation**: All object storage keys enforce tenant isolation:
+  `{tenant_id}/{entity_type}/{entity_id}/{filename}`
+
+---
+
+## 5. Fail-Close Authentication Middleware
+
+Mock bearer tokens (`Bearer mock-...`) are strictly permitted only when:
+```typescript
+process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test"
+```
+If `NODE_ENV` is `"production"` or undefined (e.g. unconfigured Cloudflare Workers runtime), mock tokens are rejected immediately with HTTP 401 Unauthorized.
+
+---
+
+## 6. Service-Role Client (`supabaseAdmin`) Usage Policy
+
+`supabaseAdmin` is restricted to operations that genuinely lack tenant context:
+- **Tenant Provisioning**: `bootstrap-tenant.functions.ts` (creates new tenant records).
+- **Public Customer Tracking**: `tracking.functions.ts` (unauthenticated customer lookups).
+- **Audit Logging**: Append-only notification and delivery logs.
+- All business CRUD operations MUST use `context.supabase` or tenant-scoped Drizzle queries.
