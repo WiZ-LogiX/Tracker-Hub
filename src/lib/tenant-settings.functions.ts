@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 
 const UpdateTenantInput = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -21,11 +21,7 @@ export const updateTenant = createServerFn({ method: "POST" })
   .inputValidator((d) => UpdateTenantInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-
-    // Only owner or admin can update tenant settings
-    if (ctx.role !== "owner" && ctx.role !== "admin") {
-      throw new Error("Only owners or admins can update tenant settings");
-    }
+    requirePermission(ctx, "settings.manage");
 
     // Build update payload (only include provided fields)
     const payload: Record<string, unknown> = {};
@@ -59,6 +55,7 @@ export const getTenantSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth, requireTenant])
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "settings.view");
 
     const { data: tenant, error } = await supabaseAdmin
       .from("tenants")

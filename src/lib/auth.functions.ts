@@ -7,11 +7,21 @@ import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   requireRole,
+  requirePermission,
   hasPermission,
+  resolveEffectivePermissions,
+  invalidateRolePermissionsCache,
+  BUILTIN_ROLE_SLUGS,
+  ALL_PERMISSION_SLUGS,
+  APPLICATION_SECTIONS,
+  SPECIAL_ACCESS_ITEMS,
   type TenantRole,
   type TenantContext,
   type UserPermissions,
 } from "@/lib/tenant-context";
+import { db } from "@/db/client.server";
+import { appUsers, tenantMembers, permissions, rolePermissions, tenantRoles } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 
 /**
  * Auth server functions for username-based login.
@@ -224,27 +234,37 @@ export const listAppUsers = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     requireRole(ctx, ["owner", "admin"]);
 
-    const [usersRes, membersRes] = await Promise.all([
-      supabaseAdmin
-        .from("app_users")
-        .select("id, tenant_id, username, display_name, avatar_key, status, created_at")
-        .eq("tenant_id", ctx.tenantId)
-        .order("created_at", { ascending: true }),
-      supabaseAdmin
-        .from("tenant_members")
-        .select("user_id, role")
-        .eq("tenant_id", ctx.tenantId),
+    const [userRows, memberRows] = await Promise.all([
+      db
+        .select({
+          id: appUsers.id,
+          tenant_id: appUsers.tenantId,
+          username: appUsers.username,
+          display_name: appUsers.displayName,
+          avatar_key: appUsers.avatarKey,
+          status: appUsers.status,
+          created_at: appUsers.createdAt,
+        })
+        .from(appUsers)
+        .where(eq(appUsers.tenantId, ctx.tenantId))
+        .orderBy(appUsers.createdAt),
+      db
+        .select({
+          user_id: tenantMembers.userId,
+          role: tenantMembers.role,
+        })
+        .from(tenantMembers)
+        .where(eq(tenantMembers.tenantId, ctx.tenantId)),
     ]);
-    if (usersRes.error) throw new Error(usersRes.error.message);
-    if (membersRes.error) throw new Error(membersRes.error.message);
 
     const memberRoleMap = new Map<string, string>();
-    (membersRes.data ?? []).forEach((m) => {
+    memberRows.forEach((m) => {
       memberRoleMap.set(m.user_id, m.role);
     });
 
-    const items = (usersRes.data ?? []).map((u) => ({
+    const items = userRows.map((u) => ({
       ...u,
+      created_at: u.created_at ? (typeof u.created_at === "string" ? u.created_at : u.created_at.toISOString()) : new Date().toISOString(),
       role: memberRoleMap.get(u.id) || "viewer",
     }));
 
@@ -266,43 +286,54 @@ export const updateAppUser = createServerFn({ method: "POST" })
     requireRole(ctx, ["owner", "admin"]);
     await assertSameTenant(ctx.tenantId, data.userId);
 
+    // Safeguard: do not allow demoting or disabling the last active Owner
+    if (data.role || data.status === "disabled") {
+      const { data: currentMember } = await supabaseAdmin
+        .from("tenant_members")
+        .select("role")
+        .eq("tenant_id", ctx.tenantId)
+        .eq("user_id", data.userId)
+        .maybeSingle();
+
+      if (currentMember?.role === "owner" && (data.role !== "owner" || data.status === "disabled")) {
+        const { count, error: countErr } = await supabaseAdmin
+          .from("tenant_members")
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", ctx.tenantId)
+          .eq("role", "owner");
+        if (countErr) throw new Error(countErr.message);
+        if ((count ?? 0) <= 1) {
+          throw new Error("Cannot demote or disable the last Owner recovery account");
+        }
+      }
+    }
+
     // 1. Update role in tenant_members if provided
     if (data.role) {
-      const { error: tmErr } = await supabaseAdmin
-        .from("tenant_members")
-        .upsert(
-          {
-            tenant_id: ctx.tenantId,
-            user_id: data.userId,
-            role: data.role as TenantRole,
-          },
-          { onConflict: "tenant_id,user_id" },
-        );
-      if (tmErr) throw new Error(tmErr.message);
+      await db
+        .insert(tenantMembers)
+        .values({
+          tenantId: ctx.tenantId,
+          userId: data.userId,
+          role: data.role as TenantRole,
+        })
+        .onConflictDoUpdate({
+          target: [tenantMembers.tenantId, tenantMembers.userId],
+          set: { role: data.role as TenantRole },
+        });
+      invalidateRolePermissionsCache(ctx.tenantId, data.role);
     }
 
     // 2. Update display_name or status in app_users if provided
-    const updates: Record<string, any> = {};
-    if (data.displayName !== undefined) updates.display_name = data.displayName;
-    if (data.status !== undefined) updates.status = data.status;
+    const userUpdates: Record<string, any> = {};
+    if (data.displayName !== undefined) userUpdates.displayName = data.displayName;
+    if (data.status !== undefined) userUpdates.status = data.status;
 
-    if (Object.keys(updates).length > 0) {
-      const { error: profErr } = await supabaseAdmin
-        .from("app_users")
-        .update(updates)
-        .eq("id", data.userId)
-        .eq("tenant_id", ctx.tenantId);
-      if (profErr) throw new Error(profErr.message);
-
-      if (data.status !== undefined) {
-        try {
-          await supabaseAdmin.auth.admin.updateUserById(data.userId, {
-            ban_duration: data.status === "disabled" ? "876000h" : "none",
-          });
-        } catch (banErr: any) {
-          console.warn("[updateAppUser] auth ban sync warning:", banErr?.message);
-        }
-      }
+    if (Object.keys(userUpdates).length > 0) {
+      await db
+        .update(appUsers)
+        .set({ ...userUpdates, updatedAt: new Date() })
+        .where(and(eq(appUsers.tenantId, ctx.tenantId), eq(appUsers.id, data.userId)));
     }
 
     return { ok: true };
@@ -341,6 +372,7 @@ export const createAppUser = createServerFn({ method: "POST" })
       role: data.role,
     });
     if (tmErr) throw new Error(tmErr.message);
+    invalidateRolePermissionsCache(ctx.tenantId, data.role);
 
     return { userId };
   });
@@ -357,6 +389,27 @@ export const setUserStatus = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     requireRole(ctx, ["owner", "admin"]);
     await assertSameTenant(ctx.tenantId, data.userId);
+
+    // Safeguard: do not allow disabling the last active Owner
+    if (data.status === "disabled") {
+      const { data: currentMember } = await supabaseAdmin
+        .from("tenant_members")
+        .select("role")
+        .eq("tenant_id", ctx.tenantId)
+        .eq("user_id", data.userId)
+        .maybeSingle();
+
+      if (currentMember?.role === "owner") {
+        const { count } = await supabaseAdmin
+          .from("tenant_members")
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", ctx.tenantId)
+          .eq("role", "owner");
+        if ((count ?? 0) <= 1) {
+          throw new Error("Cannot disable the last Owner recovery account");
+        }
+      }
+    }
 
     const { error } = await supabaseAdmin
       .from("app_users")
@@ -426,13 +479,15 @@ export const updateUserAvatar = createServerFn({ method: "POST" })
 export const listPermissions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    const { data, error } = await supabaseAdmin
-      .from("permissions")
-      .select("slug, label, category")
-      .order("category", { ascending: true })
-      .order("slug", { ascending: true });
-    if (error) throw new Error(error.message);
-    return { items: data ?? [] };
+    const items = await db
+      .select({
+        slug: permissions.slug,
+        label: permissions.label,
+        category: permissions.category,
+      })
+      .from(permissions)
+      .orderBy(permissions.category, permissions.slug);
+    return { items };
   });
 
 /** Get the permissions for the current user (by role + tenant). */
@@ -440,17 +495,8 @@ export const getUserPermissions = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth, requireTenant])
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
-
-    const { data, error } = await supabaseAdmin
-      .from("role_permissions")
-      .select("permission_slug")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("role", ctx.role);
-    if (error) throw new Error(error.message);
-
-    const perms = new Set<string>((data ?? []).map((r: any) => r.permission_slug));
-    const result: UserPermissions = { role: ctx.role, permissions: perms };
-    return { role: result.role, permissions: [...result.permissions] };
+    const perms = await resolveEffectivePermissions(ctx.tenantId, ctx.role);
+    return { role: ctx.role, permissions: [...perms] };
   });
 
 /** List all tenant roles with their labels. */
@@ -459,13 +505,16 @@ export const listTenantRoles = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
 
-    const { data, error } = await supabaseAdmin
-      .from("tenant_roles")
-      .select("slug, label, description")
-      .eq("tenant_id", ctx.tenantId)
-      .order("slug", { ascending: true });
-    if (error) throw new Error(error.message);
-    return { items: data ?? [] };
+    const items = await db
+      .select({
+        slug: tenantRoles.slug,
+        label: tenantRoles.label,
+        description: tenantRoles.description,
+      })
+      .from(tenantRoles)
+      .where(eq(tenantRoles.tenantId, ctx.tenantId))
+      .orderBy(tenantRoles.slug);
+    return { items };
   });
 
 const UpdateRoleLabelInput = z.object({
@@ -482,12 +531,16 @@ export const updateTenantRole = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     requireRole(ctx, ["owner", "admin"]);
 
-    const { error } = await supabaseAdmin
-      .from("tenant_roles")
-      .update({ label: data.label, description: data.description ?? null, updated_at: new Date().toISOString() })
-      .eq("tenant_id", ctx.tenantId)
-      .eq("slug", data.slug);
-    if (error) throw new Error(error.message);
+    await db
+      .update(tenantRoles)
+      .set({
+        label: data.label,
+        description: data.description ?? null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(tenantRoles.tenantId, ctx.tenantId), eq(tenantRoles.slug, data.slug)));
+
+    invalidateRolePermissionsCache(ctx.tenantId, data.slug);
     return { ok: true };
   });
 
@@ -497,15 +550,8 @@ export const listRolePermissions = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ role: RoleSlug }).parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-
-    const { data: rows, error } = await supabaseAdmin
-      .from("role_permissions")
-      .select("permission_slug")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("role", data.role);
-    if (error) throw new Error(error.message);
-
-    return { role: data.role, permissions: (rows ?? []).map((r) => r.permission_slug) };
+    const perms = await resolveEffectivePermissions(ctx.tenantId, data.role);
+    return { role: data.role, permissions: [...perms] };
   });
 
 const SetRolePermissionsInput = z.object({
@@ -513,7 +559,7 @@ const SetRolePermissionsInput = z.object({
   permissions: z.array(z.string().min(1).max(64)),
 });
 
-/** Replace all permissions for a given role. Owner role permissions cannot be removed. */
+/** Replace all permissions for a given role atomically. Owner role cannot be modified. */
 export const setRolePermissions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requireTenant])
   .inputValidator((d) => SetRolePermissionsInput.parse(d))
@@ -521,30 +567,69 @@ export const setRolePermissions = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     requireRole(ctx, ["owner", "admin"]);
 
-    // Owner always gets everything — enforce in DB
-    const roleToSet = data.role === "owner" ? "owner" : data.role;
-
-    // Delete existing
-    const { error: delErr } = await supabaseAdmin
-      .from("role_permissions")
-      .delete()
-      .eq("tenant_id", ctx.tenantId)
-      .eq("role", roleToSet);
-    if (delErr) throw new Error(delErr.message);
-
-    // Insert new (skip empty for owner — owner is always all-permissions via hasPermission bypass)
-    if (roleToSet !== "owner" && data.permissions.length > 0) {
-      const rows = data.permissions.map((slug) => ({
-        tenant_id: ctx.tenantId,
-        role: roleToSet,
-        permission_slug: slug,
-      }));
-      const { error: insErr } = await supabaseAdmin
-        .from("role_permissions")
-        .insert(rows);
-      if (insErr) throw new Error(insErr.message);
+    // Owner always gets everything — cannot be modified or reduced
+    if (data.role === "owner") {
+      throw new Error("Owner role permissions are unconditional and cannot be modified");
     }
 
+    // Verify target role belongs to tenant or is a built-in role
+    const isBuiltin = (BUILTIN_ROLE_SLUGS as readonly string[]).includes(data.role);
+    const [roleRow] = await db
+      .select({ slug: tenantRoles.slug })
+      .from(tenantRoles)
+      .where(and(eq(tenantRoles.tenantId, ctx.tenantId), eq(tenantRoles.slug, data.role)))
+      .limit(1);
+
+    if (!roleRow && !isBuiltin) {
+      throw new Error(`Role '${data.role}' does not exist in this tenant`);
+    }
+
+    // Validate permission slugs exist in catalog
+    const allSet = new Set<string>(ALL_PERMISSION_SLUGS);
+    for (const slug of data.permissions) {
+      if (!allSet.has(slug)) {
+        throw new Error(`Invalid permission slug '${slug}'`);
+      }
+    }
+
+    // Atomic update using PostgreSQL transaction
+    await db.transaction(async (tx) => {
+      // Ensure the role is recorded as initialized in tenant_roles
+      const roleLabels: Record<string, string> = {
+        admin: "مدير النظام (Administrator)",
+        sales: "مشرف عمليات (Manager)",
+        worker: "فني مهام (Task Worker)",
+        viewer: "مشاهد (Viewer)",
+      };
+
+      await tx
+        .insert(tenantRoles)
+        .values({
+          tenantId: ctx.tenantId,
+          slug: data.role,
+          label: roleLabels[data.role] || data.role,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [tenantRoles.tenantId, tenantRoles.slug],
+          set: { updatedAt: new Date() },
+        });
+
+      await tx
+        .delete(rolePermissions)
+        .where(and(eq(rolePermissions.tenantId, ctx.tenantId), eq(rolePermissions.role, data.role)));
+
+      if (data.permissions.length > 0) {
+        const rows = data.permissions.map((slug) => ({
+          tenantId: ctx.tenantId,
+          role: data.role,
+          permissionSlug: slug,
+        }));
+        await tx.insert(rolePermissions).values(rows);
+      }
+    });
+
+    invalidateRolePermissionsCache(ctx.tenantId, data.role);
     return { ok: true };
   });
 
@@ -562,19 +647,19 @@ export const createTenantRole = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     requireRole(ctx, ["owner", "admin"]);
 
-    // Prevent creating a role with a built-in slug
-    const builtins = ["owner", "admin", "sales", "worker", "viewer"];
+    const builtins = BUILTIN_ROLE_SLUGS as readonly string[];
     if (builtins.includes(data.slug)) {
       throw new Error(`Cannot create role '${data.slug}': it is a built-in role`);
     }
 
-    const { error } = await supabaseAdmin.from("tenant_roles").insert({
-      tenant_id: ctx.tenantId,
+    await db.insert(tenantRoles).values({
+      tenantId: ctx.tenantId,
       slug: data.slug,
       label: data.label,
       description: data.description ?? null,
     });
-    if (error) throw new Error(error.message);
+
+    invalidateRolePermissionsCache(ctx.tenantId, data.slug);
     return { ok: true };
   });
 
@@ -590,36 +675,167 @@ export const deleteTenantRole = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     requireRole(ctx, ["owner", "admin"]);
 
-    const builtins = ["owner", "admin", "sales", "worker", "viewer"];
+    const builtins = BUILTIN_ROLE_SLUGS as readonly string[];
     if (builtins.includes(data.slug)) {
       throw new Error(`Cannot delete built-in role '${data.slug}'`);
     }
 
     // Check if any user has this role
-    const { data: members, error: memErr } = await supabaseAdmin
-      .from("tenant_members")
-      .select("user_id")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("role", data.slug)
+    const [assignedMember] = await db
+      .select({ userId: tenantMembers.userId })
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.role, data.slug)))
       .limit(1);
-    if (memErr) throw new Error(memErr.message);
-    if (members && members.length > 0) {
-      throw new Error(`Cannot delete role '${data.slug}': ${members.length} user(s) still have this role`);
+
+    if (assignedMember) {
+      throw new Error(`Cannot delete role '${data.slug}': users still have this role`);
     }
 
-    // Delete permissions first
-    await supabaseAdmin
-      .from("role_permissions")
-      .delete()
-      .eq("tenant_id", ctx.tenantId)
-      .eq("role", data.slug);
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(rolePermissions)
+        .where(and(eq(rolePermissions.tenantId, ctx.tenantId), eq(rolePermissions.role, data.slug)));
 
-    // Delete the role
-    const { error } = await supabaseAdmin
-      .from("tenant_roles")
-      .delete()
-      .eq("tenant_id", ctx.tenantId)
-      .eq("slug", data.slug);
-    if (error) throw new Error(error.message);
+      await tx
+        .delete(tenantRoles)
+        .where(and(eq(tenantRoles.tenantId, ctx.tenantId), eq(tenantRoles.slug, data.slug)));
+    });
+
+    invalidateRolePermissionsCache(ctx.tenantId, data.slug);
     return { ok: true };
+  });
+
+/**
+ * Returns dynamic, computed summaries for all roles in the tenant.
+ * Used by the Predefined Profiles cards and Custom Roles table to guarantee
+ * 100% backend synchronization without static claims.
+ */
+export const getRoleSummaries = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+
+    // 1. Fetch tenant custom roles
+    const customRoles = await db
+      .select({
+        slug: tenantRoles.slug,
+        label: tenantRoles.label,
+        description: tenantRoles.description,
+      })
+      .from(tenantRoles)
+      .where(eq(tenantRoles.tenantId, ctx.tenantId))
+      .orderBy(tenantRoles.slug);
+
+    // 2. Fetch user counts per role in this tenant
+    const members = await db
+      .select({ role: tenantMembers.role })
+      .from(tenantMembers)
+      .where(eq(tenantMembers.tenantId, ctx.tenantId));
+
+    const userCountMap = new Map<string, number>();
+    for (const m of members ?? []) {
+      userCountMap.set(m.role, (userCountMap.get(m.role) ?? 0) + 1);
+    }
+
+    // 3. Define the standard built-in roles metadata
+    const builtinDefs: { slug: string; label: string; description: string }[] = [
+      {
+        slug: "admin",
+        label: "مدير النظام (Administrator)",
+        description: "صلاحيات إدارية وتشغيلية شاملة وفق التكوين المعتمد",
+      },
+      {
+        slug: "sales",
+        label: "مشرف عمليات (Manager)",
+        description: "إدارة العمليات والإنتاج والمبيعات والتسليم",
+      },
+      {
+        slug: "worker",
+        label: "فني مهام (Task Worker)",
+        description: "متابعة وتنفيذ المهام المسندة والتحديث الميداني",
+      },
+      {
+        slug: "viewer",
+        label: "مشاهد (Viewer)",
+        description: "صلاحية العرض والاطلاع فقط دون أي تعديل",
+      },
+      {
+        slug: "owner",
+        label: "المالك (Owner)",
+        description: "المالك الرئيسي للنظام بصلاحيات غير مقيدة",
+      },
+    ];
+
+    // Combine custom and built-ins without duplicating built-ins
+    const builtinSlugs = new Set(builtinDefs.map((b) => b.slug));
+    const allRoles: { slug: string; label: string; description: string; isBuiltin: boolean }[] = [
+      ...builtinDefs.map((b) => ({ ...b, isBuiltin: true })),
+      ...customRoles
+        .filter((c) => !builtinSlugs.has(c.slug))
+        .map((c) => ({
+          slug: c.slug,
+          label: c.label,
+          description: c.description || "",
+          isBuiltin: false,
+        })),
+    ];
+
+    // 4. Resolve effective permissions and analyze access levels for each role
+    const items = await Promise.all(
+      allRoles.map(async (r) => {
+        const perms = await resolveEffectivePermissions(ctx.tenantId, r.slug);
+
+        let noneCount = 0;
+        let viewCount = 0;
+        let workCount = 0;
+        let manageCount = 0;
+        const accessibleNames: string[] = [];
+
+        for (const sec of APPLICATION_SECTIONS) {
+          const hasView = sec.viewPerms.every((p) => perms.has(p));
+          const hasWork = sec.workPerms.every((p) => perms.has(p));
+          const hasManage = sec.managePerms.every((p) => perms.has(p));
+
+          if (hasManage) {
+            manageCount++;
+            accessibleNames.push(sec.defaultTitle);
+          } else if (hasWork) {
+            workCount++;
+            accessibleNames.push(sec.defaultTitle);
+          } else if (hasView) {
+            viewCount++;
+            accessibleNames.push(sec.defaultTitle);
+          } else {
+            noneCount++;
+          }
+        }
+
+        let specialCount = 0;
+        for (const sp of SPECIAL_ACCESS_ITEMS) {
+          if (perms.has(sp.slug)) {
+            specialCount++;
+          }
+        }
+
+        return {
+          slug: r.slug,
+          label: r.label,
+          description: r.description,
+          isBuiltin: r.isBuiltin,
+          assignedUserCount: userCountMap.get(r.slug) ?? 0,
+          accessibleSectionCount: APPLICATION_SECTIONS.length - noneCount,
+          accessibleSectionNames: accessibleNames.slice(0, 8),
+          accessLevelCounts: {
+            none: noneCount,
+            view: viewCount,
+            work: workCount,
+            manage: manageCount,
+            special: specialCount,
+          },
+          permissions: [...perms],
+        };
+      }),
+    );
+
+    return { items };
   });

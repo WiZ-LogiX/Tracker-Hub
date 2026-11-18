@@ -73,7 +73,7 @@ async function signInAsWorker(page: Page): Promise<void> {
       body: JSON.stringify({
         id: WORKER_USER_ID,
         username: "worker1",
-        display_name: "Mahmoud Hassan",
+        display_name: "Worker User",
         status: "active",
         tenant_id: MOCK_TENANT_ID,
       }),
@@ -110,11 +110,11 @@ test.describe("PeleCanon User Access Management Simplification", () => {
 
       // Verify page title
       await expect(
-        page.getByRole("heading", { name: /الفريق والصلاحيات|Team/i }).first(),
+        page.getByRole("heading", { name: /إدارة الفريق والصلاحيات|Team & Access Management/i }).first(),
       ).toBeVisible({ timeout: 10000 });
 
-      // Click Add User button
-      const addUserBtn = page.getByRole("button", { name: /مستخدم جديد|New user/i });
+      // Click Add Employee button
+      const addUserBtn = page.getByRole("button", { name: /إضافة موظف جديد|Add Employee/i });
       await expect(addUserBtn).toBeVisible();
       await addUserBtn.click();
 
@@ -122,83 +122,94 @@ test.describe("PeleCanon User Access Management Simplification", () => {
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
 
-      // Notice for task worker profile is present when worker is selected
-      const workerNotice = dialog.getByText(
-        /يمتلك فني المهام صلاحية الوصول إلى إدارة المهام فقط|Task Workers have access to Task Management only/i,
-      );
-      await expect(workerNotice).toBeVisible();
-
-      // Check fields: Display Name, Username, Password, Role selector
-      await expect(dialog.getByLabel(/الاسم المعروض|Display name/i)).toBeVisible();
-      await expect(dialog.getByLabel(/اسم المستخدم|Username/i)).toBeVisible();
-      await expect(dialog.getByLabel(/كلمة المرور|Password/i)).toBeVisible();
+      // Check fields: Full Name, Email/Username, Initial Password, Role selector
+      await expect(dialog.getByLabel(/الاسم الكامل للموظف|Full Name/i)).toBeVisible();
+      await expect(dialog.getByLabel(/البريد الإلكتروني \/ اسم المستخدم|Email \/ Username/i)).toBeVisible();
+      await expect(dialog.getByLabel(/كلمة المرور الأولية|Initial Password/i)).toBeVisible();
+      await expect(dialog.getByLabel(/ملف الصلاحيات \/ الدور|Access Profile \/ Role/i)).toBeVisible();
 
       await page.keyboard.press("Escape");
     });
 
-    test("Scenario B: Edit User Dialog allows changing profile and toggling active/disabled status", async ({
+    test("Scenario B: Edit Access Dialog allows changing employee access profile", async ({
       page,
     }) => {
       await page.goto("/admin/team");
       await page.waitForLoadState("domcontentloaded");
 
-      // Check for an edit button on an existing user row
-      const editBtn = page.getByRole("button", { name: /تعديل|Edit/i }).first();
-      if (await editBtn.isVisible({ timeout: 5000 })) {
-        await editBtn.click();
+      // Click "Change Access" on the first user row
+      const editAccessBtn = page.getByRole("button", { name: /تغيير الصلاحية|Change Access|تعيين الصلاحية/i }).first();
+      if (await editAccessBtn.isVisible({ timeout: 5000 })) {
+        await editAccessBtn.click();
 
-        const editDialog = page.getByRole("dialog");
-        await expect(editDialog).toBeVisible();
+        const dialog = page.getByRole("dialog");
+        await expect(dialog).toBeVisible();
 
-        // Check fields in edit dialog
-        await expect(editDialog.getByLabel(/الاسم المعروض|Display name/i)).toBeVisible();
-        await expect(editDialog.getByLabel(/الملف التعريفي|Access profile/i)).toBeVisible();
-        await expect(editDialog.getByLabel(/الحالة|Status/i)).toBeVisible();
+        // Check dialog title and structure
+        await expect(
+          dialog.getByText(/تحديد مستوى صلاحيات الموظف|Choose Employee Access Level/i).first(),
+        ).toBeVisible();
+
+        // Check Predefined Profiles options
+        await expect(
+          dialog.getByText(/الملفات الأساسية المعيارية|Standard Predefined Profiles/i).first(),
+        ).toBeVisible();
 
         await page.keyboard.press("Escape");
       }
     });
 
-    test("Scenario C: Roles Tab renders the 3 Predefined Profiles cards and protects system roles", async ({
+    test("Scenario C: Predefined Profiles tab renders dynamic adjustable cards and system profiles", async ({
       page,
     }) => {
       await page.goto("/admin/team");
       await page.waitForLoadState("domcontentloaded");
 
-      // Click on Roles tab
-      const rolesTabTrigger = page.getByRole("tab", { name: /الأدوار|Roles/i });
-      await rolesTabTrigger.click();
+      // Click on Predefined Profiles tab
+      const profilesTabTrigger = page.getByRole("tab", { name: /الملفات الأساسية|Access Profiles/i });
+      await profilesTabTrigger.click();
 
-      // Check 3 Predefined Profiles cards
+      // Check 3 dynamic Predefined Profiles cards
       await expect(
-        page.getByText(/مدير النظام \(Administrator\)|Administrator/i).first(),
-      ).toBeVisible();
+        page.getByText(/مسؤول النظام \(Administrator\)|Administrator/i).first(),
+      ).toBeVisible({ timeout: 10000 });
       await expect(
-        page.getByText(/مشرف عمليات \(Manager\)|Manager/i).first(),
+        page.getByText(/مدير مبيعات وتشغيل \(Manager\)|Operations & Sales Manager/i).first(),
       ).toBeVisible();
       await expect(
         page.getByText(/فني مهام \(Task Worker\)|Task Worker/i).first(),
       ).toBeVisible();
 
-      // Check protected role indicators
-      const protectedBadges = page.getByText(/نظام أساسي محمي|محمي|Protected/i);
-      await expect(protectedBadges.first()).toBeVisible();
+      // Check reserved system profiles
+      await expect(
+        page.getByText(/المالك \(Owner\)|Owner/i).first(),
+      ).toBeVisible();
+      await expect(
+        page.getByText(/مشاهد \(Viewer\)|Viewer/i).first(),
+      ).toBeVisible();
+
+      // Dynamic profiles have Edit Access buttons
+      const editButtons = page.getByRole("button", { name: /تعديل الصلاحيات|Edit Access/i });
+      await expect(editButtons.first()).toBeVisible();
     });
 
-    test("Scenario D: Permissions Tab displays clear explanation for Worker and Admin roles", async ({
+    test("Scenario D: Custom Roles tab renders tenant-scoped roles and creation action", async ({
       page,
     }) => {
       await page.goto("/admin/team");
       await page.waitForLoadState("domcontentloaded");
 
-      // Click Permissions tab
-      const permsTabTrigger = page.getByRole("tab", { name: /الصلاحيات|Permissions/i });
-      await permsTabTrigger.click();
+      // Click Custom Roles tab
+      const rolesTabTrigger = page.getByRole("tab", { name: /الأدوار المخصصة|Custom Roles/i });
+      await rolesTabTrigger.click();
 
-      // The tab header is visible
+      // The tab header and creation button are visible
       await expect(
-        page.getByText(/صلاحيات الأدوار|Role Permissions/i).first(),
-      ).toBeVisible();
+        page.getByText(/الأدوار المخصصة لمؤسستك|Tenant Custom Roles/i).first(),
+      ).toBeVisible({ timeout: 10000 });
+
+      const createRoleBtn = page.getByRole("button", { name: /إنشاء دور مخصص جديد|Create New Custom Role|إنشاء أول دور مخصص/i });
+      await expect(createRoleBtn).toBeVisible();
     });
   });
 
@@ -216,7 +227,6 @@ test.describe("PeleCanon User Access Management Simplification", () => {
       await expect(taskNavLink).toBeVisible();
 
       // Sidebar: Verify restricted administrative navigation links are NOT in sidebar
-      // Non-workers have access to CRM, Quotes, Team, Settings. For workers, these are absent!
       const teamNavLink = page.locator("aside nav a").filter({ hasText: /^الفريق والمستخدمون$|^Team Management$/i });
       await expect(teamNavLink).toHaveCount(0);
 

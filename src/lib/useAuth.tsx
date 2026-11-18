@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 import type { TenantRole } from "@/lib/tenant-context";
 import { bootstrapMyTenant } from "@/lib/bootstrap-tenant.functions";
+import { getUserPermissions } from "@/lib/auth.functions";
 
 interface Membership {
   tenantId: string;
@@ -28,6 +29,10 @@ interface AuthCtx {
   memberships: Membership[];
   currentTenantId: string | null;
   currentRole: TenantRole | null;
+  permissions: string[];
+  permissionsLoaded: boolean;
+  hasPermission: (slug: string) => boolean;
+  hasAnyPermission: (slugs: string[]) => boolean;
   loading: boolean;
   /** True while the bootstrap server-fn is in flight. */
   bootstrapping: boolean;
@@ -49,6 +54,10 @@ const Ctx = createContext<AuthCtx>({
   memberships: [],
   currentTenantId: null,
   currentRole: null,
+  permissions: [],
+  permissionsLoaded: false,
+  hasPermission: () => false,
+  hasAnyPermission: () => false,
   loading: true,
   bootstrapping: false,
   bootstrapError: null,
@@ -65,6 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bootstrapping, setBootstrapping] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
@@ -73,6 +84,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const bootstrapTokenRef = useRef(0);
 
   const bootstrapFn = useServerFn(bootstrapMyTenant);
+  const getPermsFn = useServerFn(getUserPermissions);
+
+  const fetchPermissions = useCallback(async () => {
+    try {
+      const res = await getPermsFn();
+      if (res && Array.isArray(res.permissions)) {
+        setPermissions(res.permissions);
+      }
+    } catch (e) {
+      console.warn("[useAuth] fetchPermissions failed", e);
+    } finally {
+      setPermissionsLoaded(true);
+    }
+  }, [getPermsFn]);
 
   const runBootstrap = useCallback(
     async (uid: string) => {
@@ -228,6 +253,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const currentRole = useMemo(() => {
+    const current = memberships.find((m) => m.tenantId === currentTenantId) ?? null;
+    return current?.role ?? null;
+  }, [memberships, currentTenantId]);
+
+  useEffect(() => {
+    if (user && currentTenantId && currentRole) {
+      if (currentRole === "owner") {
+        setPermissions([]);
+        setPermissionsLoaded(true);
+      } else {
+        setPermissionsLoaded(false);
+        void fetchPermissions();
+      }
+    } else {
+      setPermissions([]);
+      setPermissionsLoaded(false);
+    }
+  }, [user, currentTenantId, currentRole, fetchPermissions]);
+
   const refresh = useCallback(async () => {
     if (!user) return;
     const list = await fetchMemberships(user.id);
@@ -235,7 +280,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (currentTenantId && !list.some((l) => l.tenantId === currentTenantId)) {
       setCurrentTenantId(list[0]?.tenantId ?? null);
     }
-  }, [user, currentTenantId]);
+    await fetchPermissions();
+  }, [user, currentTenantId, fetchPermissions]);
 
   const retryBootstrap = useCallback(async () => {
     if (!user) return;
@@ -254,6 +300,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setMemberships([]);
     setCurrentTenantId(null);
+    setPermissions([]);
+    setPermissionsLoaded(false);
     setBootstrapping(false);
     setBootstrapError(null);
     setBootstrapAttempted(false);
@@ -261,14 +309,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bootstrapTokenRef.current++;
   }, [queryClient]);
 
+  const hasPermission = useCallback(
+    (slug: string) => {
+      if (currentRole === "owner") return true;
+      return permissions.includes(slug);
+    },
+    [currentRole, permissions],
+  );
+
+  const hasAnyPermission = useCallback(
+    (slugs: string[]) => {
+      if (currentRole === "owner") return true;
+      return slugs.some((s) => permissions.includes(s));
+    },
+    [currentRole, permissions],
+  );
+
   const value = useMemo<AuthCtx>(() => {
-    const current = memberships.find((m) => m.tenantId === currentTenantId) ?? null;
     return {
       user,
       session,
       memberships,
       currentTenantId,
-      currentRole: current?.role ?? null,
+      currentRole,
+      permissions,
+      permissionsLoaded,
+      hasPermission,
+      hasAnyPermission,
       loading,
       bootstrapping,
       bootstrapError,
@@ -283,6 +350,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     memberships,
     currentTenantId,
+    currentRole,
+    permissions,
+    hasPermission,
+    hasAnyPermission,
     loading,
     bootstrapping,
     bootstrapError,

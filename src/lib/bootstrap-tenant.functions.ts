@@ -44,6 +44,44 @@ export const bootstrapMyTenant = createServerFn({ method: "POST" })
     const { userId } = context;
     const requestedRole = data?.role ?? "owner";
 
+    // 0. Check local database first for existing membership
+    try {
+      const { db } = await import("@/db/client.server");
+      const { tenantMembers, tenants } = await import("@/db/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const localMembers = await db
+        .select({
+          tenantId: tenantMembers.tenantId,
+          role: tenantMembers.role,
+          tenantSlug: tenants.slug,
+          tenantName: tenants.name,
+        })
+        .from(tenantMembers)
+        .leftJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+        .where(eq(tenantMembers.userId, userId));
+
+      if (localMembers.length > 0) {
+        const memberships: BootstrapMembership[] = localMembers.map((m) => ({
+          tenantId: m.tenantId,
+          tenantSlug: m.tenantSlug,
+          tenantName: m.tenantName,
+          role: m.role as TenantRole,
+        }));
+        const primary = memberships[0];
+        return {
+          tenantId: primary.tenantId,
+          tenantSlug: primary.tenantSlug,
+          tenantName: primary.tenantName,
+          role: primary.role,
+          memberships,
+          created: false,
+        };
+      }
+    } catch (e) {
+      console.warn("[bootstrapMyTenant] local db lookup error", e);
+    }
+
     // 1. Resolve or create the default tenant.
     let tenantId = null;
     let tenantSlug = null;
