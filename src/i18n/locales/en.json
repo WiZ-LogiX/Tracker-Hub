@@ -675,7 +675,29 @@
     "password": "Password",
     "signIn": "Sign in",
     "defaultCreds": "Default: admin / admin",
-    "loginSuccess": "Signed in successfully"
+    "loginSuccess": "Signed in successfully",
+    "signInTab": "Sign In",
+    "createWorkshopTab": "Create New Workshop",
+    "workshopName": "Workshop / Company Name",
+    "ownerName": "Owner / Manager Full Name",
+    "adminUsername": "Admin Username",
+    "businessDetailsOptional": "Business & Tax Registry (Optional)",
+    "taxNumber": "Tax Card / VAT Number",
+    "commercialRegistry": "Commercial Registry (CR)",
+    "address": "Workshop / Factory Address",
+    "phone": "Phone Number",
+    "registerAndLaunch": "Create Workspace & Launch"
+  },
+  "plans": {
+    "free": "Free Tier",
+    "pro": "Professional",
+    "enterprise": "Enterprise",
+    "freeOnboardingPill": "Free Plan — 3 Seats & 25 Quotes/mo",
+    "freeOnboardingDesc": "Includes 3 team members, 25 monthly quotations, and auto-seeded architectural categories.",
+    "activeSeats": "Active Team Seats",
+    "monthlyQuotes": "Monthly Quotations",
+    "unlimited": "Unlimited",
+    "currentPlan": "Current Subscription Plan"
   },
   "landing": {
     "subtitle": "Pricing & Production System",

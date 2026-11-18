@@ -3,7 +3,10 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { db } from "@/db/client.server";
 import { requirePermission, type TenantContext } from "@/lib/tenant-context";
+import { getTenantUsageSummary } from "@/lib/tenant-plans.server";
+import type { TenantUsageSummary } from "@/lib/tenant-plans";
 
 const UpdateTenantInput = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -68,4 +71,12 @@ export const getTenantSettings = createServerFn({ method: "GET" })
     }
 
     return tenant;
+  });
+
+export const getTenantUsage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }): Promise<TenantUsageSummary> => {
+    const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "settings.view");
+    return await getTenantUsageSummary(db, ctx.tenantId);
   });

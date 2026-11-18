@@ -675,7 +675,29 @@
     "password": "Mot de passe",
     "signIn": "Se connecter",
     "defaultCreds": "Identifiants par défaut : admin / admin",
-    "loginSuccess": "Connexion réussie"
+    "loginSuccess": "Connexion réussie",
+    "signInTab": "Se connecter",
+    "createWorkshopTab": "Créer un atelier",
+    "workshopName": "Nom de l'atelier / Société",
+    "ownerName": "Nom du propriétaire / Directeur",
+    "adminUsername": "Nom d'utilisateur admin",
+    "businessDetailsOptional": "Registre du commerce et fiscal (Facultatif)",
+    "taxNumber": "Numéro fiscal / TVA",
+    "commercialRegistry": "Registre du commerce",
+    "address": "Adresse de l'atelier",
+    "phone": "Numéro de téléphone",
+    "registerAndLaunch": "Créer et activer l'atelier"
+  },
+  "plans": {
+    "free": "Forfait Gratuit",
+    "pro": "Professionnel",
+    "enterprise": "Entreprise",
+    "freeOnboardingPill": "Forfait Gratuit — 3 sièges et 25 devis/mois",
+    "freeOnboardingDesc": "Comprend 3 membres d'équipe, 25 devis mensuels et des catégories préconfigurées.",
+    "activeSeats": "Sièges d'équipe actifs",
+    "monthlyQuotes": "Devis mensuels",
+    "unlimited": "Illimité",
+    "currentPlan": "Forfait d'abonnement actuel"
   },
   "landing": {
     "subtitle": "Système de tarification et production",

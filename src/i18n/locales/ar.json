@@ -675,7 +675,29 @@
     "password": "كلمة المرور",
     "signIn": "دخول",
     "defaultCreds": "اسم المستخدم الافتراضي: admin • كلمة المرور: admin",
-    "loginSuccess": "تم تسجيل الدخول"
+    "loginSuccess": "تم تسجيل الدخول",
+    "signInTab": "تسجيل الدخول",
+    "createWorkshopTab": "إنشاء ورشة جديدة",
+    "workshopName": "اسم الورشة / الشركة",
+    "ownerName": "اسم المالك / المدير المسؤول",
+    "adminUsername": "اسم مستخدم المشرف",
+    "businessDetailsOptional": "بيانات السجل التجاري والضريبي (اختياري)",
+    "taxNumber": "البطاقة الضريبية",
+    "commercialRegistry": "السجل التجاري",
+    "address": "عنوان المقر أو المصنع",
+    "phone": "رقم الهاتف",
+    "registerAndLaunch": "إنشاء وتفعيل ورشة العمل"
+  },
+  "plans": {
+    "free": "الباقة المجانية",
+    "pro": "الباقة الاحترافية",
+    "enterprise": "باقة المؤسسات",
+    "freeOnboardingPill": "الباقة المجانية — 3 مقاعد و 25 مقايسة شهرياً",
+    "freeOnboardingDesc": "تتضمن 3 أعضاء فريق و 25 مقايسة شهرياً مع تهيئة تلقائية لكافة التصنيفات المعمارية.",
+    "activeSeats": "المقاعد وفريق العمل",
+    "monthlyQuotes": "المقايسات الشهرية",
+    "unlimited": "غير محدود",
+    "currentPlan": "باقة الاشتراك الحالية"
   },
   "landing": {
     "subtitle": "نظام التسعير والإنتاج",

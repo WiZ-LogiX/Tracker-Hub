@@ -145,6 +145,8 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 | Fast CRM intake server engine | `src/lib/crm-fast-intake.server.ts` |
 | Production workflow & QC server engine | `src/lib/production-workflow.server.ts` |
 | Inventory movement & stock server engine | `src/lib/inventory-stock.server.ts` |
+| SaaS tenant onboarding server engine | `src/lib/onboarding.server.ts` |
+| Subscription plan & quota enforcement | `src/lib/tenant-plans.ts`, `src/lib/tenant-plans.server.ts` |
 | Production stages definition | `src/lib/stages.ts` |
 | Playwright E2E global setup | `e2e/global-setup.ts` |
 | R2 documentation | `docs/R2.md` |
@@ -166,6 +168,10 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
    - Directional Stock In (+) and Stock Out (-) modal with quick-add chips (`+1`, `+5`, `+10`, `+25`, `+50`), directional reasons, and reserved stock floor protection.
    - `StockMovementsDrawer` providing a paginated chronological audit ledger of all inventory transactions.
    - Restock row shortcut and interactive Low Stock KPI filter on `/admin/inventory`.
+5. **Sprint 5 — SaaS Tenant Onboarding & Subscription Plan Enforcement**:
+   - `executeWorkshopOnboarding` provisioning new workshops with Free plan, unique slug, owner role, and starter categories (`kitchen`, `dressing`, `door`).
+   - Hard quota enforcement on active seats (`assertActiveSeatAvailable`) and monthly quotes (`assertMonthlyQuoteQuota`) based on tier (`Free`: 3 seats / 25 quotes/mo, `Pro`: 15 seats / unlimited quotes, `Enterprise`: unlimited).
+   - Read-only Subscription Plan & Usage card in `/admin/settings` (system tab) and seat count badge in `/admin/team`.
 
 ---
 
@@ -177,4 +183,5 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 - **Cloudflare R2**: ✅ complete server SDK + presigned flows + 10-minute bounded customer capability URLs.
 - **Commercial Quotation & Projects**: ✅ canonical `PLC-XXXXX` numbering and unified commercial builder.
 - **Inventory & Shop Floor**: ✅ directional adjustments, global audit ledger, and QC gating.
-- **Full Verification**: ✅ 1,107 Vitest tests across 66 suites (100% pass), 165 Playwright E2E tests, 0 type errors, clean production build.
+- **SaaS Onboarding & Quotas**: ✅ self-serve registration, seat limits, and monthly quotation quota enforcement.
+- **Full Verification**: ✅ 1,121 Vitest tests across 67 suites (100% pass), 165 Playwright E2E tests, 0 type errors, clean production build.

@@ -208,11 +208,12 @@ fcf80b3 fix(security): fail-close mock auth bypass and harden public tracking en
 795b004 chore(core): update router guards, client middleware, operational tests and documentation
 ```
 
-### Recent Completed Sprints (Sprints 1 - 4)
+### Recent Completed Sprints (Sprints 1 - 5)
 - **Sprint 1 (Milestone Billing & Project Financial Health)**: Migration `20261118_milestone_billing_and_margin.sql`, milestone schedule creation (Deposit, Progress, Delivery), margin calculations, and `projects.financials.view` protection.
 - **Sprint 2 (Fast CRM Intake & Relational Opportunity Sync)**: `FastCrmIntakeDrawer` modal, quick lead/opportunity creation, bidirectional quote opportunity sync and auto stage advancement.
 - **Sprint 3 (Guided Production Stage, QC Gate & Remake Loop)**: Server-side `executeOrderStageTransition` and `executeQcInspection` in `production-workflow.server.ts`, strict QC gate on completion, automated remake task creation.
 - **Sprint 4 (Standalone Inventory Polish & Movement Audit Ledger)**: Directional Stock In (+) and Stock Out (-) modal with quick-add chips and reserved stock protection; `StockMovementsDrawer` global audit ledger; restock row shortcuts.
+- **Sprint 5 (SaaS Tenant Onboarding & Subscription Plan Enforcement)**: Self-serve workshop registration (`executeWorkshopOnboarding`), subscription plan tiers (`free`, `pro`, `enterprise`), active seat quota enforcement (`assertActiveSeatAvailable`), and monthly quotation quota limit checks (`assertMonthlyQuoteQuota`).
 
 ---
 

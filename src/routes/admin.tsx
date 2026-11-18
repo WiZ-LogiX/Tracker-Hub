@@ -368,11 +368,19 @@ function AdminLayout() {
                 "Your account belongs to no team yet. Click Set up my workspace to create one."}
             </p>
           )}
-          <div className="flex gap-2 justify-center pt-2">
+          <div className="flex flex-wrap gap-2 justify-center pt-2">
             <Button onClick={retryBootstrap}>
               {bootstrapError
                 ? (t("common.retry") ?? "Retry")
                 : (t("admin.setupWorkspace") ?? "Set up my workspace")}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                nav({ to: "/auth", search: { tab: "register" } as any });
+              }}
+            >
+              {t("auth.createWorkshopTab", "إنشاء ورشة جديدة")}
             </Button>
             <Button
               variant="outline"

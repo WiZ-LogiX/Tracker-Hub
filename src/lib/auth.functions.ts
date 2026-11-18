@@ -22,6 +22,7 @@ import {
 import { db } from "@/db/client.server";
 import { appUsers, tenantMembers, permissions, rolePermissions, tenantRoles } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import { assertActiveSeatAvailable } from "@/lib/tenant-plans.server";
 
 /**
  * Auth server functions for username-based login.
@@ -327,7 +328,19 @@ export const updateAppUser = createServerFn({ method: "POST" })
     // 2. Update display_name or status in app_users if provided
     const userUpdates: Record<string, any> = {};
     if (data.displayName !== undefined) userUpdates.displayName = data.displayName;
-    if (data.status !== undefined) userUpdates.status = data.status;
+    if (data.status !== undefined) {
+      if (data.status === "active") {
+        const [currentUser] = await db
+          .select({ status: appUsers.status })
+          .from(appUsers)
+          .where(and(eq(appUsers.tenantId, ctx.tenantId), eq(appUsers.id, data.userId)))
+          .limit(1);
+        if (currentUser && currentUser.status !== "active") {
+          await assertActiveSeatAvailable(db, ctx.tenantId);
+        }
+      }
+      userUpdates.status = data.status;
+    }
 
     if (Object.keys(userUpdates).length > 0) {
       await db
@@ -345,6 +358,9 @@ export const createAppUser = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     requireRole(ctx, ["owner", "admin"]);
+
+    // Enforce SaaS plan seat quota
+    await assertActiveSeatAvailable(db, ctx.tenantId);
 
     const email = proxyEmailFor(data.username);
     const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
@@ -408,6 +424,18 @@ export const setUserStatus = createServerFn({ method: "POST" })
         if ((count ?? 0) <= 1) {
           throw new Error("Cannot disable the last Owner recovery account");
         }
+      }
+    }
+
+    // Enforce SaaS plan seat quota when activating a disabled account
+    if (data.status === "active") {
+      const [currentUser] = await db
+        .select({ status: appUsers.status })
+        .from(appUsers)
+        .where(and(eq(appUsers.tenantId, ctx.tenantId), eq(appUsers.id, data.userId)))
+        .limit(1);
+      if (currentUser && currentUser.status !== "active") {
+        await assertActiveSeatAvailable(db, ctx.tenantId);
       }
     }
 

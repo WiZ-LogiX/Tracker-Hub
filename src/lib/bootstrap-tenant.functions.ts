@@ -168,3 +168,22 @@ export const bootstrapMyTenant = createServerFn({ method: "POST" })
       created: !existingMembership,
     };
   });
+
+const RegisterWorkshopInput = z.object({
+  workshopName: z.string().trim().min(2, "Workshop name is required"),
+  ownerName: z.string().trim().min(2, "Owner name is required"),
+  username: z.string().trim().min(3, "Username must be at least 3 characters"),
+  password: z.string().min(5, "Password must be at least 5 characters"),
+  phone: z.string().trim().optional().nullable(),
+  address: z.string().trim().optional().nullable(),
+  taxNumber: z.string().trim().optional().nullable(),
+  commercialRegistry: z.string().trim().optional().nullable(),
+});
+
+export const registerWorkshopTenant = createServerFn({ method: "POST" })
+  .validator((input: unknown) => RegisterWorkshopInput.parse(input))
+  .handler(async ({ data }) => {
+    const { db } = await import("@/db/client.server");
+    const { executeWorkshopOnboarding } = await import("@/lib/onboarding.server");
+    return await executeWorkshopOnboarding(db, data);
+  });

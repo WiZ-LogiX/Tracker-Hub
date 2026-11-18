@@ -19,6 +19,7 @@ import { log } from "@/lib/log";
 import { findProjectByQuoteOrOrder, findProjectsByQuoteOrOrderBatch } from "@/lib/project-store.server";
 import { syncQuoteOpportunity } from "@/lib/crm-fast-intake.server";
 import { generatePLCId, isCanonicalQuoteNumber } from "@/lib/numbering";
+import { assertMonthlyQuoteQuota } from "@/lib/tenant-plans.server";
 import {
   priceQuote,
   type QuoteInput,
@@ -121,6 +122,7 @@ export const createQuote = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     requirePermission(ctx, "quotes.create");
+    await assertMonthlyQuoteQuota(db, ctx.tenantId);
     const client = (context as any).supabase;
 
     // Ensure canonical PLC-XXXXX format with collision retry logic
@@ -2393,6 +2395,11 @@ async function executeSaveCommercialQuote(
 ) {
   requirePermission(ctx, data.quoteId ? "quotes.edit" : "quotes.create");
   const { tenantId, userId } = ctx;
+
+  // Enforce monthly quota on new quotation creation only (edits are quota-free)
+  if (!data.quoteId) {
+    await assertMonthlyQuoteQuota(db, tenantId);
+  }
 
   // 1. Calculate authoritative totals
   const totals = calculateCommercialQuoteTotals({

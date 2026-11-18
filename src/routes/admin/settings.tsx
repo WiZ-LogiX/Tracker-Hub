@@ -1,11 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { Settings, ShieldCheck, Activity, Users, Bell } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Settings, ShieldCheck, Activity, Users, Bell, Sparkles, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/useAuth";
+import { getTenantUsage } from "@/lib/tenant-settings.functions";
 
 export const Route = createFileRoute("/admin/settings")({ component: SettingsPage });
 
@@ -13,6 +16,13 @@ function SettingsPage() {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const { currentTenantId, currentRole } = useAuth();
+
+  const getUsageFn = useServerFn(getTenantUsage);
+  const { data: usage } = useQuery({
+    queryKey: ["tenant-usage", currentTenantId],
+    queryFn: () => getUsageFn(),
+    staleTime: 30_000,
+  });
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -47,6 +57,96 @@ function SettingsPage() {
 
         {/* Tab 1: Operational System Defaults */}
         <TabsContent value="system" className="space-y-6">
+          {/* Subscription Plan & Usage Quotas Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <span>{isRtl ? "باقة الاشتراك وحدود الاستخدام" : "Subscription Plan & Quotas"}</span>
+                </CardTitle>
+                <Badge
+                  variant={usage?.plan === "enterprise" ? "outline" : usage?.plan === "pro" ? "default" : "secondary"}
+                  className="capitalize font-semibold text-xs"
+                >
+                  {usage?.plan ? t(`plans.${usage.plan}`, usage.plan) : "Free"}
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                {isRtl
+                  ? "مستوى ترخيص بيئة العمل، حصص المستخدمين النشطين، والحد الشهري للمقايسات التجارية."
+                  : "Workspace licensing tier, active team member seats, and monthly quotation allowance."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Active Seats */}
+                <div className="p-3 border rounded-lg bg-card/60 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-primary" />
+                      <span>{isRtl ? "المقاعد وفريق العمل" : "Active Team Seats"}</span>
+                    </span>
+                    <span className="font-bold font-mono">
+                      {usage ? `${usage.activeSeats} / ${usage.maxActiveSeats ?? (isRtl ? "غير محدود" : "Unlimited")}` : "—"}
+                    </span>
+                  </div>
+                  {usage && usage.maxActiveSeats !== null && (
+                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          usage.activeSeats >= usage.maxActiveSeats ? "bg-rose-500" : "bg-primary"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, Math.round((usage.activeSeats / usage.maxActiveSeats) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    {usage?.maxActiveSeats === null
+                      ? (isRtl ? "مقاعد غير محدودة لباقة المؤسسات" : "Unlimited team seats on Enterprise tier")
+                      : isRtl
+                        ? `متاح ${usage?.seatsRemaining ?? 0} مقعد إضافي`
+                        : `${usage?.seatsRemaining ?? 0} seat(s) remaining`}
+                  </p>
+                </div>
+
+                {/* Monthly Quotations */}
+                <div className="p-3 border rounded-lg bg-card/60 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-primary" />
+                      <span>{isRtl ? "المقايسات الجديدة هذا الشهر" : "Monthly Quotations"}</span>
+                    </span>
+                    <span className="font-bold font-mono">
+                      {usage ? `${usage.monthlyQuotes} / ${usage.maxMonthlyQuotes ?? (isRtl ? "غير محدود" : "Unlimited")}` : "—"}
+                    </span>
+                  </div>
+                  {usage && usage.maxMonthlyQuotes !== null && (
+                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          usage.monthlyQuotes >= usage.maxMonthlyQuotes ? "bg-rose-500" : "bg-primary"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, Math.round((usage.monthlyQuotes / usage.maxMonthlyQuotes) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    {usage?.maxMonthlyQuotes === null
+                      ? (isRtl ? "مقايسات غير محدودة" : "Unlimited monthly quotations")
+                      : isRtl
+                        ? `متاح ${usage?.quotesRemaining ?? 0} مقايسة متبقية للشهر الحالي`
+                        : `${usage?.quotesRemaining ?? 0} quote(s) remaining for this calendar month`}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">

@@ -94,6 +94,8 @@ import {
   listPermissions,
   getRoleSummaries,
 } from "@/lib/auth.functions";
+import { getTenantUsage } from "@/lib/tenant-settings.functions";
+import type { TenantUsageSummary } from "@/lib/tenant-plans";
 import { AvatarUploader } from "@/components/admin/AvatarUploader";
 import { useAuth } from "@/lib/useAuth";
 import {
@@ -231,6 +233,7 @@ export default function TeamPage() {
   const [users, setUsers] = useState<AppUserRow[]>([]);
   const [summaries, setSummaries] = useState<RoleSummaryData[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [usage, setUsage] = useState<TenantUsageSummary | null>(null);
 
   // Active Editor Dialog State
   const [editorRole, setEditorRole] = useState<RoleSummaryData | null>(null);
@@ -242,13 +245,19 @@ export default function TeamPage() {
 
   const listUsersFn = useServerFn(listAppUsers);
   const getSummariesFn = useServerFn(getRoleSummaries);
+  const getUsageFn = useServerFn(getTenantUsage);
 
   async function refreshData() {
     setLoadingData(true);
     try {
-      const [uRes, sRes] = await Promise.all([listUsersFn(), getSummariesFn()]);
+      const [uRes, sRes, usageRes] = await Promise.all([
+        listUsersFn(),
+        getSummariesFn(),
+        getUsageFn().catch(() => null),
+      ]);
       setUsers((uRes.items as AppUserRow[]) ?? []);
       setSummaries((sRes.items as RoleSummaryData[]) ?? []);
+      if (usageRes) setUsage(usageRes);
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to load team data");
     } finally {
@@ -338,6 +347,7 @@ export default function TeamPage() {
           <UsersTabContent
             users={users}
             summaries={summaries}
+            usage={usage}
             loading={loadingData}
             onRefresh={refreshData}
             onAssignAccess={(u) => {
@@ -417,12 +427,14 @@ export default function TeamPage() {
 function UsersTabContent({
   users,
   summaries,
+  usage,
   loading,
   onRefresh,
   onAssignAccess,
 }: {
   users: AppUserRow[];
   summaries: RoleSummaryData[];
+  usage?: TenantUsageSummary | null;
   loading: boolean;
   onRefresh: () => Promise<void>;
   onAssignAccess: (user: AppUserRow) => void;
@@ -524,10 +536,27 @@ function UsersTabContent({
           </div>
         </div>
 
-        <Button onClick={() => setCreateDialogOpen(true)} className="gap-2 h-9">
-          <Plus className="h-4 w-4" />
-          <span>{isRtl ? "إضافة موظف جديد" : "Add Employee"}</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          {usage && (
+            <Badge
+              variant="outline"
+              className={`text-xs px-2.5 py-1 font-mono gap-1.5 ${
+                usage.maxActiveSeats !== null && usage.activeSeats >= usage.maxActiveSeats
+                  ? "border-rose-400 text-rose-700 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-950/20"
+                  : "border-primary/30 text-primary bg-primary/5"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>
+                {usage.activeSeats} / {usage.maxActiveSeats ?? (isRtl ? "غير محدود" : "Unlimited")} {isRtl ? "مقاعد" : "seats"}
+              </span>
+            </Badge>
+          )}
+          <Button onClick={() => setCreateDialogOpen(true)} className="gap-2 h-9">
+            <Plus className="h-4 w-4" />
+            <span>{isRtl ? "إضافة موظف جديد" : "Add Employee"}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Users Table */}
