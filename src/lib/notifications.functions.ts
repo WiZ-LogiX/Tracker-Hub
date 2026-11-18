@@ -5,7 +5,7 @@ import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { db } from "@/db/client.server";
 import { notificationLog, appUsers } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import { log } from "@/lib/log";
 import { deliverToN8n, type NotifyPayload } from "@/lib/whatsapp-share.functions";
 import { getStageLabelAr } from "@/lib/stages";
@@ -29,9 +29,7 @@ export const sendTestNotification = createServerFn({ method: "POST" })
   .inputValidator((d) => TestInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (!["owner", "admin", "sales"].includes(ctx.role)) {
-      throw new Error("Forbidden: insufficient role");
-    }
+    requirePermission(ctx, "notifications.send");
 
     const payload: NotifyPayload = {
       event: "test",
@@ -101,9 +99,7 @@ export const sendNotification = createServerFn({ method: "POST" })
   .inputValidator((d) => Input.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (!["owner", "admin", "sales"].includes(ctx.role)) {
-      throw new Error("Forbidden: insufficient role");
-    }
+    requirePermission(ctx, "notifications.send");
 
     const client = (context as any).supabase;
     const entity = await loadEntity(data.entityType, data.entityId, ctx.tenantId, client);
@@ -178,9 +174,7 @@ export const replayFromDLQ = createServerFn({ method: "POST" })
   .inputValidator((d) => ReplayInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (!["owner", "admin"].includes(ctx.role)) {
-      throw new Error("Forbidden: insufficient role");
-    }
+    requirePermission(ctx, "notifications.templates.manage");
 
     // Fetch DLQ entry
     const { data: dlqEntry, error } = await (context as any).supabase
@@ -264,9 +258,7 @@ export const listNotificationTemplates = createServerFn({ method: "POST" })
   .inputValidator((d) => ListTemplatesInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (!["owner", "admin"].includes(ctx.role)) {
-      throw new Error("Forbidden: insufficient role");
-    }
+    requirePermission(ctx, "notifications.view");
 
     let q = (context as any).supabase
       .from("notification_templates")
@@ -313,9 +305,7 @@ export const upsertNotificationTemplate = createServerFn({ method: "POST" })
   .inputValidator((d) => UpsertTemplateInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (!["owner", "admin"].includes(ctx.role)) {
-      throw new Error("Forbidden: insufficient role");
-    }
+    requirePermission(ctx, "notifications.templates.manage");
 
     const payload = {
       tenant_id: ctx.tenantId,
@@ -378,9 +368,7 @@ export const deleteNotificationTemplate = createServerFn({ method: "POST" })
   .inputValidator((d) => DeleteTemplateInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (!["owner", "admin"].includes(ctx.role)) {
-      throw new Error("Forbidden: insufficient role");
-    }
+    requirePermission(ctx, "notifications.templates.manage");
     const { data: row, error } = await (context as any).supabase
       .from("notification_templates")
       .select("id, tenant_id")
@@ -421,9 +409,7 @@ export const previewNotificationTemplate = createServerFn({ method: "POST" })
   .inputValidator((d) => PreviewTemplateInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (!["owner", "admin"].includes(ctx.role)) {
-      throw new Error("Forbidden: insufficient role");
-    }
+    requirePermission(ctx, "notifications.view");
 
     let { data: tpl } = await (context as any).supabase
       .from("notification_templates")

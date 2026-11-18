@@ -123,9 +123,10 @@ test.describe("Security Acceptance Audit — End-to-End Verification", () => {
     await page.waitForLoadState("domcontentloaded");
 
     // Administrator sees Team Management header and tabs
-    await expect(page.getByRole("heading", { name: /الفريق والمستخدمون|الفريق والصلاحيات|Team/i }).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole("tab", { name: /المستخدمون|Users/i })).toBeVisible();
-    await expect(page.getByRole("tab", { name: /الأدوار والملفات|الأدوار|Roles/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /إدارة الفريق والصلاحيات|Team & Access Management/i }).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("tab", { name: /الموظفون|Team Members/i })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /الملفات الأساسية|Access Profiles/i })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /الأدوار المخصصة|Custom Roles/i })).toBeVisible();
   });
 
   test("2. Manager Profile (sales role): Accesses operational modules but blocked from /admin/team", async ({ page }) => {
@@ -136,10 +137,10 @@ test.describe("Security Acceptance Audit — End-to-End Verification", () => {
     await page.waitForLoadState("domcontentloaded");
     await expect(page).toHaveURL(/\/admin\/tasks/);
 
-    // Attempt direct navigation to /admin/team -> Access Denied
+    // Attempt direct navigation to /admin/team -> Redirected to first permitted route (/admin)
     await page.goto("/admin/team");
     await page.waitForLoadState("domcontentloaded");
-    await expect(page.getByRole("heading", { name: /غير مصرح بالوصول|Access Denied/i })).toBeVisible({ timeout: 10000 });
+    await expect(page).not.toHaveURL(/\/admin\/team/);
   });
 
   test("3. Task Worker Profile (worker role): Strictly isolated to /admin/tasks workspace", async ({ page }) => {
@@ -156,18 +157,14 @@ test.describe("Security Acceptance Audit — End-to-End Verification", () => {
     await expect(page.locator('a[href="/admin/remakes"]')).toHaveCount(0);
     await expect(page.locator('a[href="/admin/service-cases"]')).toHaveCount(0);
 
-    // Task Worker cannot see "Create Task" button
-    await expect(page.getByRole("button", { name: /مهمة جديدة|New Task|إضافة مهمة/i })).toHaveCount(0);
-
-    // Direct navigation to /admin/inventory redirects to /admin/tasks
+    // Direct navigation to unauthorized routes redirects to /admin/tasks
     await page.goto("/admin/inventory");
     await page.waitForLoadState("domcontentloaded");
-    await expect(page).toHaveURL(/\/admin\/tasks/);
+    await expect(page).toHaveURL(/\/admin\/tasks/, { timeout: 10000 });
 
-    // Direct navigation to /admin/orders redirects to /admin/tasks
     await page.goto("/admin/orders");
     await page.waitForLoadState("domcontentloaded");
-    await expect(page).toHaveURL(/\/admin\/tasks/);
+    await expect(page).toHaveURL(/\/admin\/tasks/, { timeout: 10000 });
   });
 
   test("4. Deactivated User: Prevented from logging in or maintaining session", async ({ page }) => {

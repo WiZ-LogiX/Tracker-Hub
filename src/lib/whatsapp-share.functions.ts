@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import { log } from "@/lib/log";
 import { getStageLabelAr } from "@/lib/stages";
 import { templateRender } from "@/lib/template-render";
@@ -189,9 +189,7 @@ export const sendTrackingWhatsapp = createServerFn({ method: "POST" })
   .inputValidator((d) => SendTrackingInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (!["owner", "admin", "sales"].includes(ctx.role)) {
-      throw new Error("Forbidden: insufficient role");
-    }
+    requirePermission(ctx, "orders.view");
 
     const client = (context as any).supabase;
     let orderQuery = client

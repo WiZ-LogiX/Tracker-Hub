@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/useAuth";
 import { Button } from "@/components/ui/button";
@@ -38,53 +38,56 @@ import { NotificationBell } from "@/components/NotificationBell";
 
 export const Route = createFileRoute("/admin")({ component: AdminLayout });
 
+interface NavItem {
+  to: string;
+  labelKey: string;
+  icon: any;
+  exact?: boolean;
+  badge?: string;
+  requiredPerm?: string | string[];
+}
+
 interface NavSection {
   titleKey: string;
-  items: {
-    to: string;
-    labelKey: string;
-    icon: any;
-    exact?: boolean;
-    badge?: string;
-  }[];
+  items: NavItem[];
 }
 
 const NAV_SECTIONS: NavSection[] = [
   {
     titleKey: "admin.nav.sectionCore",
     items: [
-      { to: "/admin", labelKey: "admin.nav.home", icon: LayoutDashboard, exact: true },
-      { to: "/admin/crm", labelKey: "admin.nav.crm", icon: TrendingUp },
-      { to: "/admin/crm/sales", labelKey: "admin.nav.salesWorkspace", icon: UserCheck },
-      { to: "/admin/quotes", labelKey: "admin.nav.quotes", icon: FileText },
-      { to: "/admin/projects", labelKey: "admin.nav.projects", icon: FolderKanban },
-      { to: "/admin/orders", labelKey: "admin.nav.orders", icon: ClipboardList },
-      { to: "/admin/deliveries", labelKey: "admin.nav.deliveries", icon: Truck },
-      { to: "/admin/invoices", labelKey: "admin.nav.invoices", icon: Receipt },
-      { to: "/admin/tasks", labelKey: "admin.nav.tasks", icon: CheckSquare },
-      { to: "/admin/cost-analysis", labelKey: "admin.nav.costAnalysis", icon: BarChart3 },
-      { to: "/admin/crm/analytics", labelKey: "admin.nav.crmAnalytics", icon: BarChart3 },
-      { to: "/admin/crm/after-sales", labelKey: "admin.nav.afterSales", icon: Headphones },
-      { to: "/admin/discounts", labelKey: "admin.nav.discounts", icon: Ticket },
-      { to: "/admin/customers", labelKey: "admin.nav.customers", icon: UserCircle },
+      { to: "/admin", labelKey: "admin.nav.home", icon: LayoutDashboard, exact: true, requiredPerm: "dashboard.view" },
+      { to: "/admin/crm", labelKey: "admin.nav.crm", icon: TrendingUp, requiredPerm: "crm.view" },
+      { to: "/admin/crm/sales", labelKey: "admin.nav.salesWorkspace", icon: UserCheck, requiredPerm: "crm.sales_workspace.view" },
+      { to: "/admin/quotes", labelKey: "admin.nav.quotes", icon: FileText, requiredPerm: "quotes.view" },
+      { to: "/admin/projects", labelKey: "admin.nav.projects", icon: FolderKanban, requiredPerm: "projects.view" },
+      { to: "/admin/orders", labelKey: "admin.nav.orders", icon: ClipboardList, requiredPerm: "orders.view" },
+      { to: "/admin/deliveries", labelKey: "admin.nav.deliveries", icon: Truck, requiredPerm: "deliveries.view" },
+      { to: "/admin/invoices", labelKey: "admin.nav.invoices", icon: Receipt, requiredPerm: "invoices.view" },
+      { to: "/admin/tasks", labelKey: "admin.nav.tasks", icon: CheckSquare, requiredPerm: ["tasks.view_assigned", "tasks.view_all"] },
+      { to: "/admin/cost-analysis", labelKey: "admin.nav.costAnalysis", icon: BarChart3, requiredPerm: "cost-analysis.view" },
+      { to: "/admin/crm/analytics", labelKey: "admin.nav.crmAnalytics", icon: BarChart3, requiredPerm: "crm.analytics.view" },
+      { to: "/admin/crm/after-sales", labelKey: "admin.nav.afterSales", icon: Headphones, requiredPerm: "after-sales.view" },
+      { to: "/admin/discounts", labelKey: "admin.nav.discounts", icon: Ticket, requiredPerm: "discounts.view" },
+      { to: "/admin/customers", labelKey: "admin.nav.customers", icon: UserCircle, requiredPerm: "customers.view" },
     ],
   },
   {
     titleKey: "admin.nav.sectionCatalog",
     items: [
-      { to: "/admin/products", labelKey: "admin.nav.products", icon: Package },
-      { to: "/admin/inventory", labelKey: "admin.nav.inventory", icon: Boxes },
-      { to: "/admin/work-orders", labelKey: "admin.nav.workOrders", icon: Hammer },
-      { to: "/admin/workers", labelKey: "admin.nav.workers", icon: Users },
-      { to: "/admin/remakes", labelKey: "admin.nav.remakes", icon: RefreshCcw },
+      { to: "/admin/products", labelKey: "admin.nav.products", icon: Package, requiredPerm: "products.view" },
+      { to: "/admin/inventory", labelKey: "admin.nav.inventory", icon: Boxes, requiredPerm: "inventory.view" },
+      { to: "/admin/work-orders", labelKey: "admin.nav.workOrders", icon: Hammer, requiredPerm: "work-orders.view" },
+      { to: "/admin/workers", labelKey: "admin.nav.workers", icon: Users, requiredPerm: "workers.view" },
+      { to: "/admin/remakes", labelKey: "admin.nav.remakes", icon: RefreshCcw, requiredPerm: "remakes.view" },
     ],
   },
   {
     titleKey: "admin.nav.sectionSystem",
     items: [
-      { to: "/admin/team", labelKey: "admin.nav.teamManagement", icon: Users },
-      { to: "/admin/notifications", labelKey: "admin.nav.notifications", icon: Bell },
-      { to: "/admin/settings", labelKey: "admin.nav.settings", icon: Settings },
+      { to: "/admin/team", labelKey: "admin.nav.teamManagement", icon: Users, requiredPerm: "team.view" },
+      { to: "/admin/notifications", labelKey: "admin.nav.notifications", icon: Bell, requiredPerm: "notifications.view" },
+      { to: "/admin/settings", labelKey: "admin.nav.settings", icon: Settings, requiredPerm: "settings.view" },
     ],
   },
 ];
@@ -93,23 +96,30 @@ const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap((s) => s.items);
 
 function SidebarContent() {
   const loc = useLocation();
-  const { signOut, user, currentRole } = useAuth();
+  const { signOut, user, currentRole, hasPermission } = useAuth();
   const nav = useNavigate();
   const { t } = useTranslation();
 
-  const isWorker = currentRole === "worker";
-  const activeSections: NavSection[] = isWorker
-    ? [
-        {
-          titleKey: "admin.nav.sectionCore",
-          items: [
-            { to: "/admin/tasks", labelKey: "admin.nav.tasks", icon: CheckSquare },
-          ],
-        },
-      ]
-    : NAV_SECTIONS;
+  const isOwner = currentRole === "owner";
+  const isTaskWorkerWorkspace = !hasPermission("dashboard.view") && (hasPermission("tasks.view_assigned") || currentRole === "worker");
+
+  // Filter sections and items based on effective permissions
+  const activeSections: NavSection[] = useMemo(() => {
+    if (isOwner) return NAV_SECTIONS;
+    return NAV_SECTIONS.map((sec) => {
+      const allowedItems = sec.items.filter((item) => {
+        if (!item.requiredPerm) return true;
+        if (Array.isArray(item.requiredPerm)) {
+          return item.requiredPerm.some((p) => hasPermission(p));
+        }
+        return hasPermission(item.requiredPerm);
+      });
+      return { ...sec, items: allowedItems };
+    }).filter((sec) => sec.items.length > 0);
+  }, [isOwner, hasPermission]);
 
   const activeNavItems = activeSections.flatMap((s) => s.items);
+  const homeTarget = activeNavItems[0]?.to || "/";
 
   const path = loc.pathname;
   let bestTo: string | null = null;
@@ -126,14 +136,14 @@ function SidebarContent() {
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground select-none">
       {/* Brand Header */}
       <div className="px-5 py-5 border-b border-sidebar-border/80 flex items-center justify-between">
-        <Link to={isWorker ? "/admin/tasks" : "/"} className="flex flex-col gap-1.5 group py-0.5">
+        <Link to={homeTarget} className="flex flex-col gap-1.5 group py-0.5">
           <img
             src="/images/brand-logo-dark.png"
             alt="PeleCanon"
             className="h-8 sm:h-9 w-auto max-w-[190px] object-contain hover:opacity-90 transition-opacity"
           />
           <div className="text-xs text-sidebar-foreground/70 font-medium tracking-wide">
-            {isWorker ? t("tasks.workerWorkspace", "Task Workspace") : t("admin.panel", "Manufacturing SaaS")}
+            {isTaskWorkerWorkspace ? t("tasks.workerWorkspace", "Task Workspace") : t("admin.panel", "Manufacturing SaaS")}
           </div>
         </Link>
       </div>
@@ -209,12 +219,46 @@ function AdminLayout() {
     bootstrapError,
     retryBootstrap,
     signOut: doSignOut,
+    hasPermission,
+    permissionsLoaded,
   } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
-  const isWorker = currentRole === "worker";
+
+  const permittedNavItems = useMemo(() => {
+    return ALL_NAV_ITEMS.filter((item) => {
+      if (!item.requiredPerm) return true;
+      if (Array.isArray(item.requiredPerm)) {
+        return item.requiredPerm.some((p) => hasPermission(p));
+      }
+      return hasPermission(item.requiredPerm);
+    });
+  }, [hasPermission]);
+
+  const firstPermitted = permittedNavItems[0];
+
+  const matchedItem = useMemo(() => {
+    return [...ALL_NAV_ITEMS]
+      .sort((a, b) => b.to.length - a.to.length)
+      .find((item) => {
+        if (item.exact) {
+          return loc.pathname === item.to;
+        }
+        return loc.pathname === item.to || loc.pathname.startsWith(item.to + "/");
+      });
+  }, [loc.pathname]);
+
+  const isCurrentRoutePermitted = useMemo(() => {
+    if (currentRole === "owner") return true;
+    if (!matchedItem) return true;
+    if (!matchedItem.requiredPerm) return true;
+    if (Array.isArray(matchedItem.requiredPerm)) {
+      return matchedItem.requiredPerm.some((p) => hasPermission(p));
+    }
+    return hasPermission(matchedItem.requiredPerm);
+  }, [currentRole, matchedItem, hasPermission]);
 
   useEffect(() => {
     if (!loading && !user && loc.pathname.startsWith("/admin")) {
@@ -229,12 +273,11 @@ function AdminLayout() {
   }, [loading, user, nav, loc.pathname, loc.searchStr]);
 
   useEffect(() => {
-    if (!loading && user && isWorker) {
-      if (loc.pathname !== "/admin/tasks") {
-        nav({ to: "/admin/tasks" });
-      }
+    if (loading || !user || !permissionsLoaded || bootstrapping) return;
+    if (!isCurrentRoutePermitted && firstPermitted) {
+      nav({ to: firstPermitted.to, replace: true });
     }
-  }, [loading, user, isWorker, loc.pathname, nav]);
+  }, [loading, user, permissionsLoaded, bootstrapping, isCurrentRoutePermitted, firstPermitted, nav]);
 
   if (loading || !user) {
     return (
@@ -266,7 +309,7 @@ function AdminLayout() {
     );
   }
 
-  if (isWorker && loc.pathname !== "/admin/tasks") {
+  if (permissionsLoaded && !isCurrentRoutePermitted && firstPermitted) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-background">
         <div className="text-center space-y-3">
@@ -275,8 +318,32 @@ function AdminLayout() {
             aria-label="loading"
           />
           <p className="text-sm text-muted-foreground font-medium">
-            {t("tasks.redirectingToTasks", "Redirecting to your task workspace…")}
+            {t("admin.redirectingToPermitted", "Redirecting to your permitted workspace…")}
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (permissionsLoaded && !isCurrentRoutePermitted && !firstPermitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 text-center bg-background">
+        <div className="max-w-md p-6 border rounded-xl bg-card shadow-sm space-y-4">
+          <p className="text-base font-semibold text-destructive">
+            {t("admin.noAccess", "Access Restricted")}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {t("admin.noPermissionsAssigned", "Your account does not have permission to access any administrative sections. Please contact your administrator to configure your access profile.")}
+          </p>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              await doSignOut();
+              nav({ to: "/auth" });
+            }}
+          >
+            {t("common.logout", "Log out")}
+          </Button>
         </div>
       </div>
     );
@@ -352,7 +419,7 @@ function AdminLayout() {
               <SidebarContent />
             </SheetContent>
           </Sheet>
-          <Link to={isWorker ? "/admin/tasks" : "/"} className="md:hidden flex items-center">
+          <Link to={firstPermitted?.to || "/"} className="md:hidden flex items-center">
             <img src="/images/brand-logo.png" alt="PeleCanon" className="h-7 w-auto object-contain dark:hidden" />
             <img src="/images/brand-logo-dark.png" alt="PeleCanon" className="h-7 w-auto object-contain hidden dark:block" />
           </Link>

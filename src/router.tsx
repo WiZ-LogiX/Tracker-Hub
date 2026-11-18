@@ -6,12 +6,12 @@ export const getRouter = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        // Operational freshness policy: 5 seconds staleTime avoids duplicate network requests
-        // during rapid subroute navigation while ensuring operational data (orders, stock, tasks)
-        // remains fresh and automatically updates on window refocus.
-        staleTime: 5_000,
+        // High-performance operational caching policy: 30 seconds staleTime
+        // ensures warm navigation between related routes reuses valid cached data instantly
+        // without flashing skeletons or repeating fetches, while gcTime retains cache in memory.
+        staleTime: 30_000,
         gcTime: 10 * 60 * 1000,
-        refetchOnWindowFocus: true,
+        refetchOnWindowFocus: false,
       },
     },
   });

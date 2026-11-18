@@ -976,6 +976,24 @@ PeleCanon CRM transforms the platform into an end-to-end commercial operating sy
    - Historical V2 quotations remain fully viewable in read-only mode in `/admin/quotes/$id` via `TreeConfigurator` and `QuoteCatalogSummary` without data loss or changes to database records.
    - Downstream operations (quote-to-order conversions, invoice ledgers, payments, BOMs, inventory stock allocations, work orders, remakes, deliveries) and CRM synchronization remain 100% intact and unaffected.
 
+6. **Unified Role Assignment, Dynamic RBAC & Non-Technical Access Management Architecture**:
+   - **One Source of Truth Database Model**: Effective permissions are resolved strictly dynamically from `tenant_members` (user assignment, 1 role per tenant) → `tenant_roles` (tenant-scoped custom roles) → `role_permissions` (persisted permission mappings) → `permissions` (121 granular catalog entries). Hardcoded permission maps never override persisted database records.
+   - **Adjustable Predefined Profiles & Reserved System Roles**:
+     - Predefined profiles (`admin`, `sales` [Manager], `worker` [Task Worker]) are fully adjustable in the database. Code defaults in `DEFAULT_ROLE_PERMISSIONS` serve purely as unseeded fallbacks.
+     - `owner` is the reserved, immutable super-administrator with unconditional full access across all operations, regardless of database rows.
+     - `viewer` is the reserved backward-compatible read-only profile.
+   - **High-Performance In-Memory Caching & Immediate Invalidation**: Effective permissions are cached in-memory with a 60-second TTL per `tenantId:role` key. Any permission update, custom role creation/deletion, or user role reassignment invokes `invalidateRolePermissionsCache(tenantId, role)` for instantaneous propagation across all active sessions.
+   - **Authoritative Server Function Protection**: All module mutations and queries across all 22 navigation sections enforce granular permission checks (`requirePermission`, `requireAnyPermission`, `canWrite`, `canDelete`), replacing legacy hardcoded role checks. Sensitive financial figures in `getProjectWorkspaceData` are masked at the server level (totals zeroed, invoices/payments arrays emptied) unless the user possesses `projects.financials.view`.
+   - **Simple & Non-Technical Access Management Experience (`/admin/team`)**:
+     - **3 Clean Main Tabs**: Team Members (`users`), Predefined Access Profiles (`profiles`), and Custom Roles (`roles`). Replaces legacy 120+ checkbox grids with intuitive management interfaces.
+     - **Dynamic Profile Cards**: Real-time cards for Administrator, Manager, and Task Worker displaying active user counts, live accessible section metrics (X / 22), and 1-click "Edit Access" triggers, alongside immutable Owner and Viewer reference cards.
+     - **Visual Access Editor (`AccessEditorDialog`)**: Fast 4-level segmented controls (`No Access`, `View Only`, `Work`, `Manage`) across all 22 sections in 3 categories; isolated "Special Access" card for high-risk operations (approvals, payments, deletions, stage changes, settings); bidirectional synchronization with an expandable granular permissions accordion; top toolbar with statistics, live search, reset, copy access from existing profiles, and active user impact warnings.
+     - **Employee Access Assignment Dialog**: Clear business-oriented dialog categorizing choices into Predefined Profiles and Custom Roles with accessible section summaries and direct access editor links.
+   - **Dynamic Navigation Filtering & Direct URL Protection**:
+     - All 22 navigation sections in `src/routes/admin.tsx` declare explicit `requiredPerm` dependencies.
+     - Sidebar navigation dynamically filters sections and items based on effective permissions via `useAuth().hasPermission`.
+     - Direct URL visits to unauthorized modules automatically redirect users to their first permitted section without UI flashes or error dialogs; users with zero accessible sections see a friendly "Access Restricted" card.
+
 ---
 
 Project Context Management

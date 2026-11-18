@@ -3,15 +3,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { DEFAULT_FORMULA } from "@/lib/pricing/engine";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 
 export const ensurePricingSetup = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth, requireTenant])
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
-    if (ctx.role !== "owner" && ctx.role !== "admin") {
-      throw new Error("Forbidden: only owner or admin can seed data");
-    }
+    requirePermission(ctx, "seed.manage");
     const tenantId = ctx.tenantId;
     const results: string[] = [];
 

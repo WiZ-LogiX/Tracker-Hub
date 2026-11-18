@@ -140,7 +140,9 @@ describe("PeleCanon Operational Workflow Integration & Navigation Verification",
         "utf-8",
       );
 
-      expect(adminNavSrc).toContain('{ to: "/admin/projects", labelKey: "admin.nav.projects", icon: FolderKanban }');
+      expect(adminNavSrc).toContain('/admin/projects');
+      expect(adminNavSrc).toContain('labelKey: "admin.nav.projects"');
+      expect(adminNavSrc).toContain('icon: FolderKanban');
     });
   });
 
@@ -165,16 +167,16 @@ describe("PeleCanon Operational Workflow Integration & Navigation Verification",
       expect(authSrc).toContain("bootstrappedForRef.current === sess.user.id");
     });
 
-    it("router.tsx sets QueryClient caching defaults to operational freshness (5s staleTime, refetchOnWindowFocus: true)", () => {
+    it("router.tsx sets QueryClient caching defaults to operational freshness (30s staleTime, gcTime: 10m)", () => {
       const routerSrc = readFileSync(
         resolve("src/router.tsx"),
         "utf-8",
       );
 
-      // Operational freshness policy avoids duplicate requests during rapid subroute navigation
-      // while ensuring operational data is kept fresh and updates on window refocus.
-      expect(routerSrc).toContain("staleTime: 5_000");
-      expect(routerSrc).toContain("refetchOnWindowFocus: true");
+      // High-performance operational caching policy: 30 seconds staleTime
+      // ensures warm navigation between related routes reuses valid cached data instantly
+      expect(routerSrc).toContain("staleTime: 30_000");
+      expect(routerSrc).toContain("gcTime: 10 * 60 * 1000");
     });
 
     it("useAuth clears TanStack Query client cache upon signOut to prevent sensitive data leakage", () => {

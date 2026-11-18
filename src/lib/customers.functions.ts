@@ -21,7 +21,7 @@ import {
   serviceCases,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, hasEffectivePermission, type TenantContext } from "@/lib/tenant-context";
 import { calculateWarrantyStatus } from "@/lib/after-sales.pure";
 import type {
   ServiceCaseItem,
@@ -103,7 +103,7 @@ export const listCustomersWithStats = createServerFn({ method: "GET" })
     totalPages: number;
   }> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Customer Management");
+    requirePermission(ctx, "customers.view");
     const { tenantId } = ctx;
 
     const conditions = [eq(customers.tenantId, tenantId)];
@@ -274,7 +274,7 @@ export const getCustomer360 = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetCustomer360Input.parse(input))
   .handler(async ({ data, context }): Promise<Customer360Data> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Customer Management");
+    requirePermission(ctx, "customers.view");
     const { tenantId } = ctx;
 
     // 1. Fetch customer details
@@ -1425,11 +1425,8 @@ export const upsertCustomer = createServerFn({ method: "POST" })
   .validator((input: unknown) => UpsertCustomerInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, data.id ? "customers.edit" : "customers.create");
     const { userId, tenantId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: insufficient permissions to manage customers");
-    }
 
     if (data.id) {
       // Update
@@ -1485,11 +1482,8 @@ export const deleteCustomer = createServerFn({ method: "POST" })
   .validator((input: unknown) => DeleteCustomerInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "customers.delete");
     const { tenantId, role } = ctx;
-
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: insufficient permissions to delete customers");
-    }
 
     // Check if customer has active orders
     const [existingOrder] = await db

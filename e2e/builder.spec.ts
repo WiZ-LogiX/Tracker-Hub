@@ -7,9 +7,9 @@ test.describe("Quote Builder — Commercial Quotation Workflow & Legacy Configur
       const customerRecord = {
         id: MOCK_CUSTOMER_ID,
         tenant_id: MOCK_TENANT_ID,
-        name: "مستر شاهين",
+        name: "العميل المحترم",
         phone: "+20 11 16322271",
-        email: "shaheen@example.com",
+        email: "client@example.com",
         address: "القاهرة - التجمع الخامس",
       };
       await route.fulfill({

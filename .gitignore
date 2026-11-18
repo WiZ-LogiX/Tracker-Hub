@@ -44,3 +44,4 @@ playwright-report/
 # Temporary and local artifacts
 *.dump
 supabase/.temp/
+.data/

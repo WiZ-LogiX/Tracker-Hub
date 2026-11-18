@@ -159,7 +159,7 @@ function SettingsPage() {
               </div>
               <div className="flex items-center justify-between p-2.5 rounded border bg-card/60">
                 <span className="text-muted-foreground">{isRtl ? "إصدار المنصة (Release Baseline)" : "Release Baseline"}</span>
-                <span className="font-mono">PeleCanon v2.0 (Commit e820b8c)</span>
+                <span className="font-mono">PeleCanon (Commit e820b8c)</span>
               </div>
             </CardContent>
           </Card>

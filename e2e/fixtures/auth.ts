@@ -2,7 +2,7 @@ import { test as base, type Page } from "@playwright/test";
 
 const ADMIN_USER = process.env.E2E_USERNAME ?? "admin";
 const ADMIN_PASS = process.env.E2E_PASSWORD ?? "admin";
-export const MOCK_USER_ID = "11111111-1111-1111-1111-111111111111";
+export const MOCK_USER_ID = "3577b1a6-5c6e-4e67-b09a-e0e97ab92739";
 export const MOCK_TENANT_ID = "2bf7cd99-d567-42d3-b5fc-22cc40654293";
 export const MOCK_CUSTOMER_ID = "33333333-3333-3333-3333-333333333331";
 
@@ -145,6 +145,7 @@ export async function signIn(page: Page): Promise<void> {
       ]),
     });
   });
+
 
   // 5. Inject session into localStorage before navigation
   await page.addInitScript(

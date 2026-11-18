@@ -9,7 +9,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
+
+function requireHierarchyEdit(ctx: TenantContext) {
+  requireAnyPermission(ctx, ["quotes.edit", "quotes.create"]);
+}
 
 // ── Input schemas ──────────────────────────────────────────────────────────
 
@@ -148,6 +152,7 @@ export const loadHierarchy = createServerFn({ method: "POST" })
   .inputValidator((d) => quotationIdInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "quotes.view");
     const tid = ctx.tenantId;
     const qid = data.quotationId;
 
@@ -294,6 +299,7 @@ export const addProduct = createServerFn({ method: "POST" })
   .inputValidator((d) => productInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { data: row, error } = await (context as any).supabase
       .from("quotation_products")
       .insert({
@@ -315,6 +321,7 @@ export const updateProduct = createServerFn({ method: "POST" })
   .inputValidator((d) => productUpdateInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { id, ...patch } = data;
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (patch.label !== undefined) updates.label = patch.label;
@@ -336,6 +343,7 @@ export const deleteProduct = createServerFn({ method: "POST" })
   .inputValidator((d) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { error } = await (context as any).supabase
       .from("quotation_products")
       .delete()
@@ -351,6 +359,7 @@ export const reorderProducts = createServerFn({ method: "POST" })
   .inputValidator((d) => reorderInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     // Update each product's position in order
     const updates = data.ids.map((id, i) =>
       (context as any).supabase
@@ -372,6 +381,7 @@ export const addSection = createServerFn({ method: "POST" })
   .inputValidator((d) => sectionInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     if (data.materialId) {
       await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "material", data.materialId);
     }
@@ -405,6 +415,7 @@ export const updateSection = createServerFn({ method: "POST" })
   .inputValidator((d) => sectionUpdateInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { id, ...patch } = data;
     if (patch.materialId) {
       await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "material", patch.materialId);
@@ -438,6 +449,7 @@ export const deleteSection = createServerFn({ method: "POST" })
   .inputValidator((d) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { error } = await (context as any).supabase
       .from("sections")
       .delete()
@@ -453,6 +465,7 @@ export const reorderSections = createServerFn({ method: "POST" })
   .inputValidator((d) => reorderInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const updates = data.ids.map((id, i) =>
       (context as any).supabase
         .from("sections")
@@ -473,6 +486,7 @@ export const addUnit = createServerFn({ method: "POST" })
   .inputValidator((d) => unitInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     if (data.finishId) {
       await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "finish", data.finishId);
     }
@@ -506,6 +520,7 @@ export const updateUnit = createServerFn({ method: "POST" })
   .inputValidator((d) => unitUpdateInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { id, ...patch } = data;
     if (patch.finishId) {
       await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, "finish", patch.finishId);
@@ -539,6 +554,7 @@ export const deleteUnit = createServerFn({ method: "POST" })
   .inputValidator((d) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { error } = await (context as any).supabase
       .from("units")
       .delete()
@@ -554,6 +570,7 @@ export const reorderUnits = createServerFn({ method: "POST" })
   .inputValidator((d) => reorderInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const updates = data.ids.map((id, i) =>
       (context as any).supabase
         .from("units")
@@ -574,6 +591,7 @@ export const addComponent = createServerFn({ method: "POST" })
   .inputValidator((d) => componentInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     if (data.catalogId) {
       await validateCatalogItemTenant((context as any).supabase, ctx.tenantId, data.kind, data.catalogId);
     }
@@ -617,6 +635,7 @@ export const updateComponent = createServerFn({ method: "POST" })
   .inputValidator((d) => componentUpdateInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { id, ...patch } = data;
 
     if (patch.catalogId) {
@@ -669,6 +688,7 @@ export const deleteComponent = createServerFn({ method: "POST" })
   .inputValidator((d) => deleteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const { error } = await (context as any).supabase
       .from("components")
       .delete()
@@ -684,6 +704,7 @@ export const reorderComponents = createServerFn({ method: "POST" })
   .inputValidator((d) => reorderInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireHierarchyEdit(ctx);
     const updates = data.ids.map((id, i) =>
       (context as any).supabase
         .from("components")

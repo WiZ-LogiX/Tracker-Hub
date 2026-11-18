@@ -13,8 +13,9 @@ import { eq, and } from "drizzle-orm";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { tenantDb, schema } from "@/lib/tenant";
-import { type TenantContext } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import { log } from "@/lib/log";
+import { createProjectRecord } from "@/lib/project-store.server";
 
 const ConvertQuoteInput = z.object({
   quoteId: z.string().uuid(),
@@ -25,6 +26,7 @@ export const convertQuoteToOrder = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ConvertQuoteInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "quotes.convert");
     const tenantId = ctx.tenantId;
     const t0 = Date.now();
 
@@ -167,10 +169,26 @@ export const convertQuoteToOrder = createServerFn({ method: "POST" })
         });
       }
 
-      // 6. Return ids for notification (outside transaction)
+      // 6. Create or link real Project Record upon quote acceptance/conversion
+      const projectNumber = `PRJ-${quoteRow.quoteNumber.replace(/^(QUO|ORD)-/, "")}`;
+      const projectRecord = await createProjectRecord({
+        tenantId,
+        customerId: quoteRow.customerId,
+        quoteId: quoteRow.id,
+        orderId: order.id,
+        opportunityId: linkedOpportunityId || null,
+        title: quoteRow.notes ? `مشروع: ${quoteRow.notes}` : `مشروع تصنيع وتوريد ${quoteRow.quoteNumber}`,
+        projectType: "residential",
+        totalValue: quoteRow.total,
+        customProjectNumber: projectNumber,
+      });
+
+      // 7. Return ids for notification and navigation
       return {
         orderId: order.id,
         invoiceId: invoice.id,
+        projectId: projectRecord.id,
+        projectNumber: projectRecord.projectNumber,
         orderNumber: quoteRow.quoteNumber,
         plcId: quoteRow.quoteNumber,
       };

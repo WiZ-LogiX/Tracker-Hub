@@ -5,6 +5,16 @@
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { loadEnv } from "vite";
+
+// Ensure non-VITE_* variables in .env (like DATABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+// are populated into process.env for TanStack Start server functions during dev.
+const loadedEnv = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
+for (const [key, val] of Object.entries(loadedEnv)) {
+  if (!process.env[key]) {
+    process.env[key] = val;
+  }
+}
 
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.

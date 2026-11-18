@@ -15,7 +15,7 @@ import {
   auditLog,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
 import {
   inferItemCategory,
   type StockItem,
@@ -175,7 +175,7 @@ export const listStock = createServerFn({ method: "GET" })
   .validator((input: unknown) => ListStockInput.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<PaginatedStockResult> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Inventory Management");
+    requirePermission(ctx, "inventory.view");
     const { tenantId } = ctx;
 
     // Ensure catalog items are represented in stock items
@@ -344,7 +344,7 @@ export const getStockItem = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetStockItemInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Inventory Management");
+    requirePermission(ctx, "inventory.view");
     const { tenantId } = ctx;
 
     const [item] = await db
@@ -452,12 +452,8 @@ export const adjustStock = createServerFn({ method: "POST" })
   .validator((input: unknown) => AdjustStockInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: boolean; newQuantity: number }> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Inventory Management");
+    requirePermission(ctx, "inventory.adjust");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot adjust inventory stock");
-    }
 
     const result = await db.transaction(async (tx) => {
       // Row lock the stock item
@@ -547,12 +543,8 @@ export const createInventoryItem = createServerFn({ method: "POST" })
   .validator((input: unknown) => CreateInventoryItemInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Inventory Management");
+    requirePermission(ctx, "inventory.create");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot add inventory items");
-    }
 
     const skuUpper = data.sku.trim().toUpperCase();
 
@@ -660,12 +652,8 @@ export const updateInventoryItem = createServerFn({ method: "POST" })
   .validator((input: unknown) => UpdateInventoryItemInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Inventory Management");
+    requirePermission(ctx, "inventory.edit");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot edit inventory items");
-    }
 
     const skuUpper = data.sku.trim().toUpperCase();
 
@@ -761,12 +749,8 @@ export const deleteInventoryItem = createServerFn({ method: "POST" })
   .validator((input: unknown) => DeleteInventoryItemInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Inventory Management");
+    requirePermission(ctx, "inventory.delete");
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot delete inventory items");
-    }
 
     return await db.transaction(async (tx) => {
       const [item] = await tx
@@ -843,6 +827,7 @@ export const getOrderMaterialRequirements = createServerFn({ method: "GET" })
   .validator((input: unknown) => OrderIdInput.parse(input))
   .handler(async ({ data, context }): Promise<OrderMaterialReadinessSummary> => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "inventory.view");
     const { tenantId } = ctx;
 
     // Ensure catalog is synced
@@ -1033,11 +1018,8 @@ export const reserveOrderMaterials = createServerFn({ method: "POST" })
   .validator((input: unknown) => OrderIdInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireAnyPermission(ctx, ["inventory.reserve", "inventory.adjust"]);
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot reserve stock materials");
-    }
 
     // Get current requirements
     const reqs = await getOrderMaterialRequirements({ data: { orderId: data.orderId } });
@@ -1162,11 +1144,8 @@ export const releaseOrderReservation = createServerFn({ method: "POST" })
   .validator((input: unknown) => OrderIdInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requireAnyPermission(ctx, ["inventory.reserve", "inventory.adjust"]);
     const { tenantId, userId, role } = ctx;
-
-    if (role === "viewer") {
-      throw new Error("Forbidden: viewers cannot release stock reservations");
-    }
 
     const result = await db.transaction(async (tx) => {
       const activeRes = await tx
