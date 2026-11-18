@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { getCrmAnalytics } from "@/lib/crm-analytics.functions";
 import { listSalesMembers } from "@/lib/crm.functions";
@@ -41,7 +42,8 @@ import {
 import { toast } from "sonner";
 
 const crmAnalyticsSearchSchema = z.object({
-  window: z.enum(["today", "this_week", "this_month", "this_quarter", "custom"]).optional().default("this_month"),
+  window: z.enum(["today", "this_week", "this_month", "this_quarter", "all_time", "custom"]).optional(),
+  timeWindow: z.enum(["today", "this_week", "this_month", "this_quarter", "all_time", "custom"]).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   salesOwnerId: z.string().optional(),
@@ -58,60 +60,64 @@ function CrmAnalyticsPage() {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const searchParams = (Route.useSearch?.() || {}) as CrmAnalyticsSearchParams;
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: Route.fullPath });
 
   const getAnalyticsFn = useServerFn(getCrmAnalytics);
   const listMembersFn = useServerFn(listSalesMembers);
 
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<CrmAnalyticsDashboardData | null>(null);
-  const [salesMembers, setSalesMembers] = useState<Array<{ id: string; name: string }>>([]);
-
-  // Time Window Filters
-  const [activeWindow, setActiveWindow] = useState<TimeWindow>(searchParams.window || "this_month");
+  // Time Window Filters with full URL parameter persistence
+  const resolvedInitialWindow = (searchParams.timeWindow || searchParams.window || "this_month") as TimeWindow;
+  const [activeWindow, setActiveWindow] = useState<TimeWindow>(resolvedInitialWindow);
   const [customStart, setCustomStart] = useState<string>(searchParams.startDate || "");
   const [customEnd, setCustomEnd] = useState<string>(searchParams.endDate || "");
   const [selectedOwner, setSelectedOwner] = useState<string>(searchParams.salesOwnerId || "all");
 
-  const loadData = async (
-    targetWindow = activeWindow,
-    tStart = customStart,
-    tEnd = customEnd,
-    tOwner = selectedOwner,
-  ) => {
-    setLoading(true);
-    try {
-      const res = await getAnalyticsFn({
-        data: {
-          timeWindow: targetWindow,
-          startDate: targetWindow === "custom" ? tStart : undefined,
-          endDate: targetWindow === "custom" ? tEnd : undefined,
-          salesOwnerId: tOwner !== "all" ? tOwner : undefined,
-        },
-      });
-      setData(res);
-    } catch (err: any) {
-      console.error("Failed to load CRM analytics:", err);
-      toast.error(isRtl ? "فشل تحميل تحليلات المبيعات" : "Failed to load CRM analytics");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data = null, isLoading: loading, refetch } = useQuery<CrmAnalyticsDashboardData | null>({
+    queryKey: ["crm-analytics", activeWindow, customStart, customEnd, selectedOwner],
+    queryFn: async () => {
+      try {
+        const res = await getAnalyticsFn({
+          data: {
+            timeWindow: activeWindow,
+            startDate: activeWindow === "custom" ? customStart : undefined,
+            endDate: activeWindow === "custom" ? customEnd : undefined,
+            salesOwnerId: selectedOwner !== "all" ? selectedOwner : undefined,
+          },
+        });
+        return res || null;
+      } catch (err: any) {
+        console.error("Failed to load CRM analytics:", err);
+        toast.error(isRtl ? "فشل تحميل تحليلات المبيعات" : "Failed to load CRM analytics");
+        return null;
+      }
+    },
+    staleTime: 30_000,
+    gcTime: 10 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    loadData();
-    listMembersFn()
-      .then((members) => {
-        setSalesMembers(members.map((m) => ({ id: m.id, name: m.name })));
-      })
-      .catch((err) => console.warn("Failed to load team members:", err));
-  }, []);
+  const { data: salesMembers = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["sales-members"],
+    queryFn: async () => {
+      try {
+        const members = await listMembersFn();
+        return members.map((m) => ({ id: m.id, name: m.name }));
+      } catch (err) {
+        console.warn("Failed to load team members:", err);
+        return [];
+      }
+    },
+    staleTime: 60_000,
+  });
 
   const handleWindowChange = (newWindow: TimeWindow) => {
     setActiveWindow(newWindow);
-    if (newWindow !== "custom") {
-      loadData(newWindow, customStart, customEnd, selectedOwner);
-    }
+    navigate({
+      search: (prev: any) => ({
+        ...prev,
+        timeWindow: newWindow,
+        window: newWindow,
+      }),
+    });
   };
 
   const handleApplyCustomRange = () => {
@@ -119,12 +125,25 @@ function CrmAnalyticsPage() {
       toast.error(isRtl ? "يرجى تحديد تاريخ البداية والنهاية" : "Please select both start and end dates");
       return;
     }
-    loadData("custom", customStart, customEnd, selectedOwner);
+    navigate({
+      search: (prev: any) => ({
+        ...prev,
+        timeWindow: "custom",
+        window: "custom",
+        startDate: customStart,
+        endDate: customEnd,
+      }),
+    });
   };
 
   const handleOwnerChange = (newOwner: string) => {
     setSelectedOwner(newOwner);
-    loadData(activeWindow, customStart, customEnd, newOwner);
+    navigate({
+      search: (prev: any) => ({
+        ...prev,
+        salesOwnerId: newOwner !== "all" ? newOwner : undefined,
+      }),
+    });
   };
 
   return (
@@ -154,7 +173,7 @@ function CrmAnalyticsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => loadData()}
+            onClick={() => refetch()}
             disabled={loading}
             className="gap-1.5 h-9"
           >

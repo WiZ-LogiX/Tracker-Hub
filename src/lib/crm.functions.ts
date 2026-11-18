@@ -17,7 +17,7 @@ import {
   auditLog,
 } from "@/db/schema";
 import { eq, and, desc, asc, sql, inArray, or, isNull, lt } from "drizzle-orm";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
 import type {
   LeadItem,
   OpportunityItem,
@@ -368,9 +368,7 @@ export const listLeads = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, role } = ctx;
 
-    if (role === "worker") {
-      throw new Error("Forbidden: Workers do not have access to CRM");
-    }
+    requirePermission(ctx, "crm.view");
 
     try {
       const conditions = [eq(leads.tenantId, tenantId)];
@@ -503,9 +501,7 @@ export const getLeadById = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, role } = ctx;
 
-    if (role === "worker") {
-      throw new Error("Forbidden: Workers do not have access to CRM");
-    }
+    requirePermission(ctx, "crm.view");
 
     try {
       const [r] = await db
@@ -581,9 +577,7 @@ export const createLead = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to create leads");
-    }
+    requirePermission(ctx, "crm.leads.create");
 
     const leadNumber = await getNextLeadCode(tenantId);
 
@@ -655,9 +649,7 @@ export const updateLead = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to update leads");
-    }
+    requirePermission(ctx, "crm.leads.edit");
 
     const updatePayload: Record<string, any> = {
       updatedAt: new Date(),
@@ -744,9 +736,7 @@ export const convertLead = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to convert leads");
-    }
+    requirePermission(ctx, "crm.convert");
 
     // 1. Fetch Lead
     const [lead] = await db
@@ -943,9 +933,7 @@ export const listOpportunities = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    if (role === "worker") {
-      throw new Error("Forbidden: Workers do not have access to CRM");
-    }
+    requirePermission(ctx, "crm.view");
 
     try {
       const conditions = [eq(opportunities.tenantId, tenantId)];
@@ -1164,9 +1152,7 @@ export const getOpportunityById = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, role } = ctx;
 
-    if (role === "worker") {
-      throw new Error("Forbidden: Workers do not have access to CRM");
-    }
+    requirePermission(ctx, "crm.view");
 
     try {
       const [opp] = await db
@@ -1515,9 +1501,7 @@ export const createOpportunity = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to create opportunities");
-    }
+    requirePermission(ctx, "crm.opportunities.create");
 
     const opportunityNumber = await getNextOpportunityCode(tenantId);
     const assignedSalesOwner = data.salesOwner || (role === "sales" ? userId : null);
@@ -1593,9 +1577,7 @@ export const updateOpportunity = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to update opportunities");
-    }
+    requirePermission(ctx, "crm.opportunities.edit");
 
     const updatePayload: Record<string, any> = {
       updatedAt: new Date(),
@@ -1681,9 +1663,7 @@ export const changeOpportunityStage = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to change stage");
-    }
+    requirePermission(ctx, "crm.stage.change");
 
     if (data.stage === "lost" && (!data.lostReason || !data.lostReason.trim())) {
       throw new Error("A lost reason is required when marking an opportunity as lost");
@@ -1739,9 +1719,7 @@ export const createOpportunityTask = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to create tasks");
-    }
+    requireAnyPermission(ctx, ["crm.opportunities.edit", "tasks.create"]);
 
     const [opp] = await db
       .select()
@@ -1822,9 +1800,7 @@ export const getCRMStats = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, role } = ctx;
 
-    if (role === "worker") {
-      throw new Error("Forbidden: Workers do not have access to CRM");
-    }
+    requirePermission(ctx, "crm.view");
 
     const defaultStats: CRMStats = {
       totalPipelineValue: 0,
@@ -1923,6 +1899,7 @@ export const listSalesMembers = createServerFn({ method: "GET" })
   .handler(async ({ context }): Promise<Array<{ id: string; name: string; email: string; role: string }>> => {
     const ctx = context.tenantContext as TenantContext;
     const { tenantId } = ctx;
+    requirePermission(ctx, "crm.view");
 
     try {
       const rows = await db
@@ -2006,10 +1983,7 @@ export const getSalesWorkspaceData = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    // Security: Workers have no access to CRM
-    if (role === "worker") {
-      throw new Error("Forbidden: Workers do not have access to Sales Workspace");
-    }
+    requirePermission(ctx, "crm.sales_workspace.view");
 
     const selectedOwner = data?.selectedSalesOwner || "all";
     const targetRepId = selectedOwner !== "all" ? selectedOwner : userId;
@@ -2505,10 +2479,7 @@ export const logCRMActivity = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    // Security: Workers and Viewers cannot log activities
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to log CRM activity");
-    }
+    requireAnyPermission(ctx, ["crm.leads.edit", "crm.opportunities.edit"]);
 
     const {
       entityType,
@@ -2634,10 +2605,7 @@ export const assignCRMEntity = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    // Role check: Only owner, admin, or sales can assign/reassign
-    if (role === "worker" || role === "viewer") {
-      throw new Error("Forbidden: Insufficient permissions to assign CRM entities");
-    }
+    requirePermission(ctx, "crm.assign");
 
     const { entityType, entityId, salesOwnerId } = data;
 
@@ -2738,10 +2706,7 @@ export const bulkAssignCRMEntities = createServerFn({ method: "POST" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, userId, role } = ctx;
 
-    // Role check: Only admin or owner can bulk assign
-    if (role !== "owner" && role !== "admin") {
-      throw new Error("Forbidden: Only owners and admins can perform bulk assignments");
-    }
+    requirePermission(ctx, "crm.assign");
 
     const { entityType, entityIds, salesOwnerId } = data;
 

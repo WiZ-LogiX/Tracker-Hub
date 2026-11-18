@@ -99,7 +99,7 @@ function DashboardPage() {
   const isRtl = i18n.language === "ar";
   const getDashboardFn = useServerFn(getExecutiveDashboard);
 
-  const { data = DEFAULT_DASHBOARD, isLoading } = useQuery<ExecutiveDashboardData>({
+  const { data, isLoading } = useQuery<ExecutiveDashboardData>({
     queryKey: ["executive-dashboard"],
     queryFn: async () => {
       try {
@@ -109,10 +109,36 @@ function DashboardPage() {
         return DEFAULT_DASHBOARD;
       }
     },
-    initialData: DEFAULT_DASHBOARD,
+    staleTime: 30_000,
+    gcTime: 10 * 60 * 1000,
     refetchInterval: 30000,
   });
 
+  if (isLoading && !data) {
+    return (
+      <div className="space-y-8 pb-16 animate-pulse">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-5">
+          <div className="h-10 w-72 bg-muted rounded" />
+          <div className="flex gap-2">
+            <div className="h-9 w-28 bg-muted rounded" />
+            <div className="h-9 w-20 bg-muted rounded" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="h-32 bg-muted rounded-lg" />
+          <div className="h-32 bg-muted rounded-lg" />
+          <div className="h-32 bg-muted rounded-lg" />
+          <div className="h-32 bg-muted rounded-lg" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="h-72 bg-muted rounded-lg col-span-2" />
+          <div className="h-72 bg-muted rounded-lg" />
+        </div>
+      </div>
+    );
+  }
+
+  const activeData = data || DEFAULT_DASHBOARD;
   const {
     financial,
     commercial,
@@ -124,7 +150,7 @@ function DashboardPage() {
     customerCount,
     attentionItems,
     recentActivities,
-  } = data;
+  } = activeData;
 
   return (
     <div className="space-y-8 pb-16">

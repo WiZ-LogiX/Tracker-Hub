@@ -36,13 +36,21 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { z } from "zod";
+
+const crmSearchSchema = z.object({
+  opportunityId: z.string().optional(),
+});
+
 export const Route = createFileRoute("/admin/crm/")({
+  validateSearch: (search: Record<string, unknown>) => crmSearchSchema.parse(search),
   component: CRMPage,
 });
 
 function CRMPage() {
   const { i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
+  const { opportunityId } = Route.useSearch();
 
   const listLeadsFn = useServerFn(listLeads);
   const listOpportunitiesFn = useServerFn(listOpportunities);
@@ -108,6 +116,14 @@ function CRMPage() {
 
   const [isOppModalOpen, setIsOppModalOpen] = useState(false);
   const [oppToEdit, setOppToEdit] = useState<OpportunityItem | null>(null);
+
+  // Auto-open opportunity drawer on deep link navigation
+  useEffect(() => {
+    if (opportunityId) {
+      setSelectedOppId(opportunityId);
+      setIsOppDrawerOpen(true);
+    }
+  }, [opportunityId]);
 
   // 1. Fetch Stats
   const loadStats = async () => {

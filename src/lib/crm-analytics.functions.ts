@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import {
   CrmAnalyticsInput,
   resolveDateRange,
@@ -58,192 +58,215 @@ export const getCrmAnalytics = createServerFn({ method: "GET" })
     const ctx = context.tenantContext as TenantContext;
     const { tenantId, role } = ctx;
 
-    if (!canViewCrmAnalytics(role)) {
-      throw new Error("Forbidden: your role does not have access to commercial analytics");
-    }
+    requirePermission(ctx, "crm.analytics.view");
 
     const dateRange = resolveDateRange(data.timeWindow, data.startDate, data.endDate);
     const startTs = new Date(dateRange.startDate);
     const endTs = new Date(dateRange.endDate);
     const now = new Date();
 
-    // Default empty structures
-    let rawLeads: any[] = [];
-    let rawOpportunities: any[] = [];
-    let rawQuotes: any[] = [];
-    let rawCustomers: any[] = [];
-    let rawOrders: any[] = [];
-    let rawCases: any[] = [];
-    let rawRemakes: any[] = [];
-    let rawTeamMembers: any[] = [];
+    // Concurrently ingest all datasets in parallel
+    const [
+      rawLeads,
+      rawOpportunities,
+      rawQuotes,
+      rawTeamMembers,
+      custOrdersRes,
+      rawCases,
+      rawRemakes,
+    ] = await Promise.all([
+      // 1. Leads
+      (async () => {
+        try {
+          const leadConditions = [
+            eq(leads.tenantId, tenantId),
+            gte(leads.createdAt, startTs),
+            lte(leads.createdAt, endTs),
+          ];
+          if (data.salesOwnerId) {
+            leadConditions.push(eq(leads.assignedSalesperson, data.salesOwnerId));
+          }
+          return await db
+            .select({
+              id: leads.id,
+              source: leads.source,
+              status: leads.status,
+              assignedSalesperson: leads.assignedSalesperson,
+              convertedCustomerId: leads.convertedCustomerId,
+              convertedOpportunityId: leads.convertedOpportunityId,
+              createdAt: leads.createdAt,
+            })
+            .from(leads)
+            .where(and(...leadConditions));
+        } catch (err: any) {
+          if (err?.code !== "42P01") console.warn("[crm-analytics] leads query fallback:", err?.message);
+          return [];
+        }
+      })(),
 
-    // ── 1. Ingest Leads Data ──────────────────────────────────────────────────
-    try {
-      const leadConditions = [
-        eq(leads.tenantId, tenantId),
-        gte(leads.createdAt, startTs),
-        lte(leads.createdAt, endTs),
-      ];
-      if (data.salesOwnerId) {
-        leadConditions.push(eq(leads.assignedSalesperson, data.salesOwnerId));
-      }
+      // 2. Opportunities
+      (async () => {
+        try {
+          const oppConditions = [
+            eq(opportunities.tenantId, tenantId),
+            gte(opportunities.createdAt, startTs),
+            lte(opportunities.createdAt, endTs),
+          ];
+          if (data.salesOwnerId) {
+            oppConditions.push(eq(opportunities.salesOwner, data.salesOwnerId));
+          }
+          return await db
+            .select({
+              id: opportunities.id,
+              leadId: opportunities.leadId,
+              customerId: opportunities.customerId,
+              salesOwner: opportunities.salesOwner,
+              stage: opportunities.stage,
+              source: opportunities.source,
+              status: opportunities.status,
+              value: opportunities.value,
+              lostReason: opportunities.lostReason,
+              nextAction: opportunities.nextAction,
+              nextActionDate: opportunities.nextActionDate,
+              createdAt: opportunities.createdAt,
+            })
+            .from(opportunities)
+            .where(and(...oppConditions));
+        } catch (err: any) {
+          if (err?.code !== "42P01") console.warn("[crm-analytics] opportunities query fallback:", err?.message);
+          return [];
+        }
+      })(),
 
-      rawLeads = await db
-        .select({
-          id: leads.id,
-          source: leads.source,
-          status: leads.status,
-          assignedSalesperson: leads.assignedSalesperson,
-          convertedCustomerId: leads.convertedCustomerId,
-          convertedOpportunityId: leads.convertedOpportunityId,
-          createdAt: leads.createdAt,
-        })
-        .from(leads)
-        .where(and(...leadConditions));
-    } catch (err: any) {
-      if (err?.code !== "42P01") console.warn("[crm-analytics] leads query fallback:", err?.message);
-    }
+      // 3. Quotes
+      (async () => {
+        try {
+          const quoteConditions = [
+            eq(quotes.tenantId, tenantId),
+            gte(quotes.createdAt, startTs),
+            lte(quotes.createdAt, endTs),
+          ];
+          return await db
+            .select({
+              id: quotes.id,
+              status: quotes.status,
+              total: quotes.total,
+              opportunityId: sql<string | null>`COALESCE(${quotes.opportunityId}::text, (${quotes.snapshot}->>'opportunityId'))`.as("opportunity_id"),
+              createdBy: quotes.createdBy,
+              createdAt: quotes.createdAt,
+            })
+            .from(quotes)
+            .where(and(...quoteConditions));
+        } catch (err: any) {
+          if (err?.code !== "42P01") console.warn("[crm-analytics] quotes query fallback:", err?.message);
+          return [];
+        }
+      })(),
 
-    // ── 2. Ingest Opportunities Data ──────────────────────────────────────────
-    try {
-      const oppConditions = [
-        eq(opportunities.tenantId, tenantId),
-        gte(opportunities.createdAt, startTs),
-        lte(opportunities.createdAt, endTs),
-      ];
-      if (data.salesOwnerId) {
-        oppConditions.push(eq(opportunities.salesOwner, data.salesOwnerId));
-      }
+      // 4. Team Members
+      (async () => {
+        try {
+          return await db
+            .select({
+              id: appUsers.id,
+              displayName: appUsers.displayName,
+              username: appUsers.username,
+              role: tenantMembers.role,
+            })
+            .from(tenantMembers)
+            .innerJoin(appUsers, eq(tenantMembers.userId, appUsers.id))
+            .where(
+              and(
+                eq(tenantMembers.tenantId, tenantId),
+                inArray(tenantMembers.role, ["owner", "admin", "sales"]),
+              ),
+            )
+            .orderBy(asc(appUsers.displayName));
+        } catch (err: any) {
+          if (err?.code !== "42P01") console.warn("[crm-analytics] team members fallback:", err?.message);
+          return [];
+        }
+      })(),
 
-      rawOpportunities = await db
-        .select({
-          id: opportunities.id,
-          leadId: opportunities.leadId,
-          customerId: opportunities.customerId,
-          salesOwner: opportunities.salesOwner,
-          stage: opportunities.stage,
-          source: opportunities.source,
-          status: opportunities.status,
-          value: opportunities.value,
-          lostReason: opportunities.lostReason,
-          nextAction: opportunities.nextAction,
-          nextActionDate: opportunities.nextActionDate,
-          createdAt: opportunities.createdAt,
-        })
-        .from(opportunities)
-        .where(and(...oppConditions));
-    } catch (err: any) {
-      if (err?.code !== "42P01") console.warn("[crm-analytics] opportunities query fallback:", err?.message);
-    }
+      // 5. Customers & Orders
+      (async () => {
+        try {
+          const [cList, oList] = await Promise.all([
+            db
+              .select({
+                id: customers.id,
+                createdAt: customers.createdAt,
+              })
+              .from(customers)
+              .where(eq(customers.tenantId, tenantId)),
+            db
+              .select({
+                id: orders.id,
+                customerId: orders.customerId,
+                currentStage: orders.currentStage,
+                deliveredAt: orders.deliveredAt,
+                total: orders.total,
+                createdAt: orders.createdAt,
+              })
+              .from(orders)
+              .where(eq(orders.tenantId, tenantId)),
+          ]);
+          return { customers: cList, orders: oList };
+        } catch (err: any) {
+          if (err?.code !== "42P01") console.warn("[crm-analytics] customers/orders fallback:", err?.message);
+          return { customers: [], orders: [] };
+        }
+      })(),
 
-    // ── 3. Ingest Quotes Data ─────────────────────────────────────────────────
-    try {
-      const quoteConditions = [
-        eq(quotes.tenantId, tenantId),
-        gte(quotes.createdAt, startTs),
-        lte(quotes.createdAt, endTs),
-      ];
+      // 6. Service Cases
+      (async () => {
+        try {
+          return await db
+            .select({
+              id: serviceCases.id,
+              type: serviceCases.type,
+              status: serviceCases.status,
+              createdAt: serviceCases.createdAt,
+            })
+            .from(serviceCases)
+            .where(
+              and(
+                eq(serviceCases.tenantId, tenantId),
+                gte(serviceCases.createdAt, startTs),
+                lte(serviceCases.createdAt, endTs),
+              ),
+            );
+        } catch (err: any) {
+          if (err?.code !== "42P01") console.warn("[crm-analytics] service_cases fallback:", err?.message);
+          return [];
+        }
+      })(),
 
-      rawQuotes = await db
-        .select({
-          id: quotes.id,
-          status: quotes.status,
-          total: quotes.total,
-          opportunityId: sql<string | null>`(${quotes.snapshot}->>'opportunityId')`.as("opportunity_id"),
-          createdBy: quotes.createdBy,
-          createdAt: quotes.createdAt,
-        })
-        .from(quotes)
-        .where(and(...quoteConditions));
-    } catch (err: any) {
-      if (err?.code !== "42P01") console.warn("[crm-analytics] quotes query fallback:", err?.message);
-    }
+      // 7. Remakes
+      (async () => {
+        try {
+          return await db
+            .select({
+              id: remakes.id,
+              createdAt: remakes.createdAt,
+            })
+            .from(remakes)
+            .where(
+              and(
+                eq(remakes.tenantId, tenantId),
+                gte(remakes.createdAt, startTs),
+                lte(remakes.createdAt, endTs),
+              ),
+            );
+        } catch (err: any) {
+          if (err?.code !== "42P01") console.warn("[crm-analytics] remakes fallback:", err?.message);
+          return [];
+        }
+      })(),
+    ]);
 
-    // ── 4. Ingest Team Members ────────────────────────────────────────────────
-    try {
-      rawTeamMembers = await db
-        .select({
-          id: appUsers.id,
-          displayName: appUsers.displayName,
-          username: appUsers.username,
-          role: tenantMembers.role,
-        })
-        .from(tenantMembers)
-        .innerJoin(appUsers, eq(tenantMembers.userId, appUsers.id))
-        .where(
-          and(
-            eq(tenantMembers.tenantId, tenantId),
-            inArray(tenantMembers.role, ["owner", "admin", "sales"]),
-          ),
-        )
-        .orderBy(asc(appUsers.displayName));
-    } catch (err: any) {
-      if (err?.code !== "42P01") console.warn("[crm-analytics] team members fallback:", err?.message);
-    }
-
-    // ── 5. Ingest Customers & Orders Data ─────────────────────────────────────
-    try {
-      rawCustomers = await db
-        .select({
-          id: customers.id,
-          createdAt: customers.createdAt,
-        })
-        .from(customers)
-        .where(eq(customers.tenantId, tenantId));
-
-      rawOrders = await db
-        .select({
-          id: orders.id,
-          customerId: orders.customerId,
-          currentStage: orders.currentStage,
-          deliveredAt: orders.deliveredAt,
-          total: orders.total,
-          createdAt: orders.createdAt,
-        })
-        .from(orders)
-        .where(eq(orders.tenantId, tenantId));
-    } catch (err: any) {
-      if (err?.code !== "42P01") console.warn("[crm-analytics] customers/orders fallback:", err?.message);
-    }
-
-    // ── 6. Ingest After-Sales Data ────────────────────────────────────────────
-    try {
-      rawCases = await db
-        .select({
-          id: serviceCases.id,
-          type: serviceCases.type,
-          status: serviceCases.status,
-          createdAt: serviceCases.createdAt,
-        })
-        .from(serviceCases)
-        .where(
-          and(
-            eq(serviceCases.tenantId, tenantId),
-            gte(serviceCases.createdAt, startTs),
-            lte(serviceCases.createdAt, endTs),
-          ),
-        );
-    } catch (err: any) {
-      if (err?.code !== "42P01") console.warn("[crm-analytics] service_cases fallback:", err?.message);
-    }
-
-    try {
-      rawRemakes = await db
-        .select({
-          id: remakes.id,
-          createdAt: remakes.createdAt,
-        })
-        .from(remakes)
-        .where(
-          and(
-            eq(remakes.tenantId, tenantId),
-            gte(remakes.createdAt, startTs),
-            lte(remakes.createdAt, endTs),
-          ),
-        );
-    } catch (err: any) {
-      if (err?.code !== "42P01") console.warn("[crm-analytics] remakes fallback:", err?.message);
-    }
+    const rawCustomers = custOrdersRes.customers;
+    const rawOrders = custOrdersRes.orders;
 
     // ── Aggregation Logic ─────────────────────────────────────────────────────
 
