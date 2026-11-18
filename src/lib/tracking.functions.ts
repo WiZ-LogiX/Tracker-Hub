@@ -10,7 +10,7 @@ import {
 } from "@/lib/r2.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
 import {
   mapInternalStageToCustomerStage,
   customerStageIndex,
@@ -129,49 +129,112 @@ export function isTrackingTokenUuid(val: string): boolean {
   return UUID_REGEX.test(val);
 }
 
+// In-memory sliding rate limiter for public phone lookups
+interface PhoneRateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const phoneLookupRateLimitStore = new Map<string, PhoneRateLimitEntry>();
+export const PHONE_LOOKUP_RATE_LIMIT_MAX = 10; // Max 10 lookups per window
+export const PHONE_LOOKUP_RATE_LIMIT_WINDOW_MS = 60 * 1000; // 60 seconds
+
+export function checkPhoneLookupRateLimit(identifier: string): void {
+  const now = Date.now();
+  const entry = phoneLookupRateLimitStore.get(identifier);
+  if (!entry || now > entry.resetAt) {
+    phoneLookupRateLimitStore.set(identifier, {
+      count: 1,
+      resetAt: now + PHONE_LOOKUP_RATE_LIMIT_WINDOW_MS,
+    });
+    return;
+  }
+  if (entry.count >= PHONE_LOOKUP_RATE_LIMIT_MAX) {
+    const retryAfterSec = Math.ceil((entry.resetAt - now) / 1000);
+    throw new Error(
+      `تم تجاوز الحد المسموح به من الطلبات. يرجى المحاولة بعد ${retryAfterSec} ثانية.`,
+    );
+  }
+  entry.count += 1;
+}
+
+export function resetPhoneLookupRateLimitStore(identifier?: string): void {
+  if (identifier) {
+    phoneLookupRateLimitStore.delete(identifier);
+  } else {
+    phoneLookupRateLimitStore.clear();
+  }
+}
+
 export async function handlePublicOrdersByPhone(
   data: { phone: string },
   client = supabaseAdmin,
 ) {
   const norm = normalizePhone(data.phone);
   if (norm.length < 6) throw new Error("رقم الهاتف غير صالح");
-  const { data: rows, error } = await client
+
+  // Enforce request rate limiting by normalized phone
+  checkPhoneLookupRateLimit(norm);
+
+  // 1. Query orders with SQL-level phone filter, strict LIMIT 20, minimal fields
+  let orderQuery: any = client
     .from("orders")
     .select(
-      "id, order_number, current_stage, expected_delivery, delivered_at, customers!inner(name, phone)",
-    )
-    .order("created_at", { ascending: false });
+      "id, tracking_token, order_number, current_stage, expected_delivery, delivered_at, customers!inner(name, phone)",
+    );
 
+  if (typeof orderQuery.ilike === "function") {
+    orderQuery = orderQuery.ilike("customers.phone", `%${norm}%`);
+  }
+  if (typeof orderQuery.limit === "function") {
+    orderQuery = orderQuery.limit(20);
+  }
+  if (typeof orderQuery.order === "function") {
+    orderQuery = orderQuery.order("created_at", { ascending: false });
+  }
+
+  const { data: rows, error } = await orderQuery;
   if (error) throw new Error(error.message);
 
-  const matches = (rows ?? []).filter((o) => {
+  const matches = (rows ?? []).filter((o: any) => {
     const row = asRow(o);
     if (!row.order_number) return false;
     const customer = firstRelation(row.customers);
     return normalizePhone(asString(customer.phone)) === norm;
   });
 
-  // Also query quotes for this phone
-  const { data: quoteRows } = await client
+  // 2. Query quotes with SQL-level phone filter, strict LIMIT 20, minimal fields
+  let quoteQuery: any = client
     .from("quotes")
     .select(
       "id, quote_number, status, snapshot, customers!inner(name, phone)",
-    )
-    .order("created_at", { ascending: false });
+    );
 
-  const quoteMatches = (quoteRows ?? []).filter((q) => {
+  if (typeof quoteQuery.ilike === "function") {
+    quoteQuery = quoteQuery.ilike("customers.phone", `%${norm}%`);
+  }
+  if (typeof quoteQuery.limit === "function") {
+    quoteQuery = quoteQuery.limit(20);
+  }
+  if (typeof quoteQuery.order === "function") {
+    quoteQuery = quoteQuery.order("created_at", { ascending: false });
+  }
+
+  const { data: quoteRows } = await quoteQuery;
+
+  const quoteMatches = (quoteRows ?? []).filter((q: any) => {
     const row = asRow(q);
     if (!row.quote_number) return false;
     const customer = firstRelation(row.customers);
     return normalizePhone(asString(customer.phone)) === norm;
   });
 
-  const formattedOrders = matches.map((o) => {
+  const formattedOrders = matches.slice(0, 20).map((o: any) => {
     const row = asRow(o);
     const customer = firstRelation(row.customers);
     return {
       order_number: asNullableString(row.order_number),
-      tracking_token: asNullableString(row.tracking_token) || asNullableString(row.id),
+      tracking_token: asNullableString(row.tracking_token),
       current_stage: asNullableString(row.current_stage),
       expected_delivery: asNullableString(row.expected_delivery),
       delivered_at: asNullableString(row.delivered_at),
@@ -181,11 +244,11 @@ export async function handlePublicOrdersByPhone(
     };
   });
 
-  const formattedQuotes = quoteMatches.map((q) => {
+  const formattedQuotes = quoteMatches.slice(0, 20).map((q: any) => {
     const row = asRow(q);
     const customer = firstRelation(row.customers);
     const snap = ((row.snapshot as any) || {}) as Record<string, any>;
-    const token = snap.tracking_token || snap.trackingToken || asString(row.id);
+    const token = snap.tracking_token || snap.trackingToken || null;
     const progStatus = getQuotationProgressiveStatus(q);
     return {
       order_number: asNullableString(row.quote_number),
@@ -199,7 +262,7 @@ export async function handlePublicOrdersByPhone(
     };
   });
 
-  return [...formattedOrders, ...formattedQuotes];
+  return [...formattedOrders, ...formattedQuotes].slice(0, 20);
 }
 
 export const getPublicOrdersByPhone = createServerFn({ method: "POST" })
@@ -317,13 +380,13 @@ export async function handlePublicTrackingByRef(
     throw new Error("رابط التتبع يتطلب التحقق برقم الهاتف المسجل مع الطلب");
   }
 
-  // 1. Try to find matching Order
+  // 1. Try to find matching Order exclusively by unguessable tracking_token
   const { data: order } = await client
     .from("orders")
     .select(
-      "id, order_number, current_stage, total, deposit, contract_date, expected_delivery, delivered_at, quote_id, customers(name, phone)",
+      "id, tracking_token, order_number, current_stage, total, deposit, contract_date, expected_delivery, delivered_at, quote_id, customers(name, phone)",
     )
-    .eq("id", ref)
+    .eq("tracking_token", ref)
     .maybeSingle();
 
   if (order) {
@@ -366,7 +429,7 @@ export async function handlePublicTrackingByRef(
       order: {
         id: asString(order.id),
         order_number: asString(order.order_number),
-        tracking_token: asNullableString((order as any).tracking_token) || asString(order.id),
+        tracking_token: asNullableString((order as any).tracking_token),
         current_stage: asString(order.current_stage),
         customer_stage: custStage,
         customer_stage_label_ar: CUSTOMER_STAGE_LABEL_AR[custStage],
@@ -386,35 +449,21 @@ export async function handlePublicTrackingByRef(
     };
   }
 
-  // 2. Try to find matching Quote (by id or snapshot tracking_token)
+  // 2. Try to find matching Quote (by snapshot tracking_token exclusively, never raw ID)
   let quote: any = null;
-  const quoteByIdQuery = client
+  const quoteSelectQuery = client
     .from("quotes")
     .select(
       "id, quote_number, status, total, deposit_pct, valid_until, snapshot, created_at, tenant_id, customers(name, phone)",
-    )
-    .eq("id", ref);
+    );
 
-  if (typeof (quoteByIdQuery as any)?.maybeSingle === "function") {
-    const { data: qById } = await quoteByIdQuery.maybeSingle();
-    quote = qById ?? null;
-  }
+  if (typeof (quoteSelectQuery as any)?.filter === "function") {
+    const { data: quotesByToken } = await (quoteSelectQuery as any)
+      .filter("snapshot->>tracking_token", "eq", ref)
+      .limit(1);
 
-  if (!quote) {
-    const quoteSelectQuery = client
-      .from("quotes")
-      .select(
-        "id, quote_number, status, total, deposit_pct, valid_until, snapshot, created_at, tenant_id, customers(name, phone)",
-      );
-
-    if (typeof (quoteSelectQuery as any)?.filter === "function") {
-      const { data: quotesByToken } = await (quoteSelectQuery as any)
-        .filter("snapshot->>tracking_token", "eq", ref)
-        .limit(1);
-
-      if (quotesByToken && quotesByToken.length > 0) {
-        quote = quotesByToken[0];
-      }
+    if (quotesByToken && quotesByToken.length > 0) {
+      quote = quotesByToken[0];
     }
   }
 
@@ -624,7 +673,7 @@ export const uploadProductionPhoto = createServerFn({ method: "POST" })
   .inputValidator((d) => UploadPhotoInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Photos");
+    requireAnyPermission(ctx, ["orders.edit", "work-orders.edit"]);
     const userId = ctx.userId;
     const tenantId = ctx.tenantId;
 
@@ -676,7 +725,7 @@ export const deleteProductionPhoto = createServerFn({ method: "POST" })
   .inputValidator((d) => DeletePhotoInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Photos");
+    requireAnyPermission(ctx, ["orders.edit", "work-orders.edit"]);
     const tenantId = ctx.tenantId;
 
     // Get photo to verify ownership and get R2 key
@@ -724,7 +773,7 @@ export const logStageTransition = createServerFn({ method: "POST" })
   .inputValidator((d) => LogStageInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Tracking");
+    requireAnyPermission(ctx, ["orders.status.update", "orders.edit"]);
     const { orderId, stageFrom, stageTo, notes } = data;
     const { error } = await supabaseAdmin.from("production_logs").insert({
       order_id: orderId,
@@ -748,7 +797,7 @@ export const updateOrderStage = createServerFn({ method: "POST" })
   .inputValidator((d) => UpdateOrderStageInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Tracking");
+    requireAnyPermission(ctx, ["orders.status.update", "orders.edit"]);
     const { orderId, nextStage, markDelivered } = data;
     const patch: Record<string, unknown> = { current_stage: nextStage as any };
     if (markDelivered) patch.delivered_at = new Date().toISOString();
@@ -773,7 +822,7 @@ export const assignProductionWorker = createServerFn({ method: "POST" })
   .inputValidator((d) => AssignmentInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Tracking");
+    requireAnyPermission(ctx, ["orders.assign", "work-orders.assign"]);
     const { error } = await supabaseAdmin.from("production_assignments").insert({
       order_id: data.orderId,
       stage: data.stage as any,
@@ -794,7 +843,7 @@ export const updateProductionAssignment = createServerFn({ method: "POST" })
   .inputValidator((d) => UpdateAssignmentInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Tracking");
+    requireAnyPermission(ctx, ["orders.assign", "work-orders.assign"]);
     const { error } = await supabaseAdmin
       .from("production_assignments")
       .update(data.patch)
@@ -810,7 +859,7 @@ export const deleteProductionAssignment = createServerFn({ method: "POST" })
   .inputValidator((d) => DeleteAssignmentInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Tracking");
+    requireAnyPermission(ctx, ["orders.assign", "work-orders.assign"]);
     const { error } = await supabaseAdmin
       .from("production_assignments")
       .delete()
@@ -832,7 +881,7 @@ export const recordQCInspection = createServerFn({ method: "POST" })
   .inputValidator((d) => RecordQCInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Tracking");
+    requireAnyPermission(ctx, ["orders.qc", "work-orders.edit"]);
     const { error } = await supabaseAdmin.from("qc_inspections").insert({
       order_id: data.orderId,
       stage: data.stage as any,
@@ -856,7 +905,7 @@ export const recordRemake = createServerFn({ method: "POST" })
   .inputValidator((d) => RecordRemakeInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Production Tracking");
+    requirePermission(ctx, "remakes.create");
     const { error } = await supabaseAdmin.from("remakes").insert({
       order_id: data.orderId,
       reason: data.reason,

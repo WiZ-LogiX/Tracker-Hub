@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import {
@@ -9,6 +9,8 @@ import {
   handlePublicOrder,
   handlePublicOrdersByPhone,
   handlePublicOrderAttachments,
+  resetPhoneLookupRateLimitStore,
+  PHONE_LOOKUP_RATE_LIMIT_MAX,
 } from "@/lib/tracking.functions";
 
 // ── 1. Database Migration & Schema Parity ────────────────────────────────────
@@ -33,11 +35,10 @@ describe("Order tracking token schema & migration parity", () => {
     expect(sql).toContain("ALTER TABLE public.orders DROP COLUMN IF EXISTS tracking_token");
   });
 
-  // Skipped until 20260902_order_tracking_tokens.sql is applied on remote Postgres
-  it.skip("drizzle schema.ts defines trackingToken on orders table with unique index", () => {
+  it("drizzle schema.ts defines trackingToken on orders table with unique index", () => {
     const schema = readFileSync(resolve("src/db/schema.ts"), "utf-8");
     expect(schema).toContain('trackingToken: uuid("tracking_token").notNull().defaultRandom().unique()');
-    expect(schema).toContain('index("orders_tracking_token_idx").on(t.trackingToken)');
+    expect(schema).toMatch(/(?:uniqueIndex|index)\("orders_tracking_token_idx"\)\.on\(t\.trackingToken\)/);
   });
 });
 
@@ -387,5 +388,165 @@ describe("Carrier Normalization & Sensitive Field Non-Exposure", () => {
     expect((result.order as any).worker_id).toBeUndefined();
     expect((result.order as any).margin_pct).toBeUndefined();
     expect((result.order as any).internal_notes).toBeUndefined();
+  });
+});
+
+// ── 8. Public Tracking Hardening Regressions ──────────────────────────────────
+
+describe("Public Tracking Hardening & Bounding Regressions", () => {
+  beforeEach(() => {
+    resetPhoneLookupRateLimitStore();
+  });
+
+  describe("UUID fallback rejection (tracking_token exclusivity)", () => {
+    it("rejects lookup by raw order primary key UUID when tracking_token is different", async () => {
+      const orderId = "11111111-2222-4333-8444-555555555555";
+      const actualTrackingToken = "99999999-8888-4777-8666-555555555555";
+
+      const mockAdmin: any = {
+        from: vi.fn((table: string) => {
+          if (table === "orders") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn((col: string, val: string) => {
+                // Only matches if queried by tracking_token == actualTrackingToken
+                const matches = col === "tracking_token" && val === actualTrackingToken;
+                return {
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: matches ? { id: orderId, tracking_token: actualTrackingToken } : null,
+                    error: null,
+                  }),
+                };
+              }),
+            };
+          }
+          return {
+            select: vi.fn().mockReturnThis(),
+            filter: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: [] }) }),
+          };
+        }),
+      };
+
+      // Querying with raw orderId MUST FAIL even though orderId is a valid UUID
+      await expect(
+        handlePublicTrackingByRef({ reference: orderId }, mockAdmin),
+      ).rejects.toThrow("رابط التتبع غير صالح أو منتهي الصلاحية");
+    });
+
+    it("rejects lookup by raw quote primary key UUID when snapshot tracking_token is different", async () => {
+      const quoteId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+      const actualQuoteToken = "ffffffff-1111-4222-8333-444444444444";
+
+      const mockAdmin: any = {
+        from: vi.fn((table: string) => {
+          if (table === "orders") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            };
+          }
+          if (table === "quotes") {
+            return {
+              select: vi.fn().mockReturnThis(),
+              filter: vi.fn((path: string, op: string, val: string) => ({
+                limit: vi.fn().mockImplementation((n: number) => {
+                  const matches = val === actualQuoteToken;
+                  return Promise.resolve({
+                    data: matches ? [{ id: quoteId, snapshot: { tracking_token: actualQuoteToken } }] : [],
+                  });
+                }),
+              })),
+            };
+          }
+          return { select: vi.fn().mockReturnThis() };
+        }),
+      };
+
+      // Querying with raw quoteId MUST FAIL
+      await expect(
+        handlePublicTrackingByRef({ reference: quoteId }, mockAdmin),
+      ).rejects.toThrow("رابط التتبع غير صالح أو منتهي الصلاحية");
+    });
+  });
+
+  describe("SQL query bounding & result limits in handlePublicOrdersByPhone", () => {
+    it("applies SQL-level phone filter and limits results to 20 rows", async () => {
+      let capturedOrderLimit: number | null = null;
+      let capturedPhoneFilter: string | null = null;
+
+      // Mock 30 orders
+      const thirtyOrders = Array.from({ length: 30 }, (_, i) => ({
+        id: `order-${i}`,
+        order_number: `ORD-${i}`,
+        tracking_token: `token-${i}`,
+        current_stage: "cutting",
+        customers: [{ name: `عميل ${i}`, phone: "01012345678" }],
+      }));
+
+      const mockAdmin: any = {
+        from: vi.fn((table: string) => {
+          const builder: any = {
+            select: vi.fn().mockReturnThis(),
+            ilike: vi.fn((col: string, val: string) => {
+              capturedPhoneFilter = val;
+              return builder;
+            }),
+            limit: vi.fn((n: number) => {
+              capturedOrderLimit = n;
+              return builder;
+            }),
+            order: vi.fn().mockImplementation(() =>
+              Promise.resolve({
+                data: thirtyOrders.slice(0, 20),
+                error: null,
+              }),
+            ),
+          };
+          return builder;
+        }),
+      };
+
+      const results = await handlePublicOrdersByPhone({ phone: "01012345678" }, mockAdmin);
+
+      expect(capturedPhoneFilter).toContain("12345678");
+      expect(capturedOrderLimit).toBe(20);
+      expect(results.length).toBeLessThanOrEqual(20);
+    });
+  });
+
+  describe("Rate-limit enforcement for public phone lookups", () => {
+    it("blocks requests after exceeding PHONE_LOOKUP_RATE_LIMIT_MAX", async () => {
+      const mockAdmin: any = {
+        from: vi.fn(() => {
+          const builder: any = {
+            select: vi.fn().mockReturnThis(),
+            ilike: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            order: vi.fn().mockResolvedValue({ data: [], error: null }),
+          };
+          return builder;
+        }),
+      };
+
+      const phone = "01099998888";
+
+      // Make exactly PHONE_LOOKUP_RATE_LIMIT_MAX (10) requests
+      for (let i = 0; i < PHONE_LOOKUP_RATE_LIMIT_MAX; i++) {
+        await handlePublicOrdersByPhone({ phone }, mockAdmin);
+      }
+
+      // The 11th request MUST be blocked by rate limiter
+      await expect(
+        handlePublicOrdersByPhone({ phone }, mockAdmin),
+      ).rejects.toThrow("تم تجاوز الحد المسموح به من الطلبات");
+
+      // After reset, request succeeds again
+      resetPhoneLookupRateLimitStore();
+      await expect(
+        handlePublicOrdersByPhone({ phone }, mockAdmin),
+      ).resolves.toBeDefined();
+    });
   });
 });

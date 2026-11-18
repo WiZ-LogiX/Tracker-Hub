@@ -2,9 +2,39 @@ import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "./client.server";
+import fs from "node:fs";
+import path from "node:path";
+
+function ensureEnvLoaded() {
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_PUBLISHABLE_KEY) return;
+  try {
+    const envPath = path.resolve(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eqIdx = trimmed.indexOf("=");
+        if (eqIdx > 0) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) process.env[key] = val;
+        }
+      }
+    }
+  } catch {}
+}
+
+export function isMockAuthAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === "development" || env.NODE_ENV === "test";
+}
 
 export const requireSupabaseAuth = createMiddleware({ type: "function" }).server(
   async ({ next }) => {
+    ensureEnvLoaded();
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
 
@@ -39,8 +69,27 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
       throw new Error("Unauthorized: No token provided");
     }
 
-    if (token === "mock-access-token-admin-session") {
-      const mockUserId = "3577b1a6-5c6e-4e67-b09a-e0e97ab92739";
+    if (token.startsWith("mock-")) {
+      if (!isMockAuthAllowed()) {
+        throw new Error(
+          "Unauthorized: Mock authentication tokens are not allowed in this environment",
+        );
+      }
+
+      let mockUserId = "3577b1a6-5c6e-4e67-b09a-e0e97ab92739";
+      let mockEmail = "admin@pelecanon.local";
+
+      if (token.includes("worker")) {
+        mockUserId = "22222222-2222-2222-2222-222222222222";
+        mockEmail = "worker@pelecanon.local";
+      } else if (token.includes("warehouse")) {
+        mockUserId = "44444444-4444-4444-4444-444444444444";
+        mockEmail = "warehouse_user@pelecanon.local";
+      } else if (token.includes("manager")) {
+        mockUserId = "22222222-2222-2222-2222-222222222221";
+        mockEmail = "manager1@pelecanon.local";
+      }
+
       const { data } = await supabaseAdmin.auth.getClaims(token).catch(() => ({ data: null }));
       return next({
         context: {
@@ -53,7 +102,7 @@ export const requireSupabaseAuth = createMiddleware({ type: "function" }).server
             iat: Math.floor(Date.now() / 1000),
             iss: "supabase",
             role: "authenticated",
-            email: "admin@pelecanon.local",
+            email: mockEmail,
             app_metadata: {},
             user_metadata: {},
           }) as NonNullable<typeof data>["claims"],
