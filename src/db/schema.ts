@@ -446,8 +446,10 @@ export const quotes = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     quoteNumber: text("quote_number").notNull().unique(),
+    legacyQuoteNumber: text("legacy_quote_number"),
     requestId: uuid("request_id").references(() => quoteRequests.id, { onDelete: "set null" }),
     customerId: uuid("customer_id").notNull().references(() => customers.id, { onDelete: "restrict" }),
+    opportunityId: uuid("opportunity_id").references(() => opportunities.id, { onDelete: "set null" }),
     status: text("status").notNull().default("draft"),
     subtotal: numeric("subtotal", { precision: 14, scale: 2 }).notNull().default("0"),
     discountAmount: numeric("discount_amount", { precision: 14, scale: 2 }).notNull().default("0"),
@@ -468,6 +470,8 @@ export const quotes = pgTable(
     index("quotes_tenant_id_created_at_idx").on(t.tenantId, t.createdAt),
     index("quotes_tenant_status_idx").on(t.tenantId, t.status),
     index("quotes_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("quotes_tenant_opportunity_idx").on(t.tenantId, t.opportunityId),
+    index("quotes_tenant_legacy_quote_idx").on(t.tenantId, t.legacyQuoteNumber),
   ],
 );
 
@@ -515,6 +519,8 @@ export const invoices = pgTable(
   (t) => [
     index("invoices_tenant_id_idx").on(t.tenantId),
     index("invoices_tenant_id_created_at_idx").on(t.tenantId, t.issuedAt),
+    index("invoices_tenant_quote_idx").on(t.tenantId, t.quoteId),
+    index("invoices_tenant_customer_idx").on(t.tenantId, t.customerId),
   ],
 );
 
@@ -522,6 +528,7 @@ export const orders = pgTable(
   "orders",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    trackingToken: uuid("tracking_token").notNull().defaultRandom().unique(),
     orderNumber: text("order_number").notNull().unique(),
     quoteId: uuid("quote_id").references(() => quotes.id, { onDelete: "set null" }),
     invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
@@ -539,6 +546,11 @@ export const orders = pgTable(
   (t) => [
     index("orders_tenant_id_idx").on(t.tenantId),
     index("orders_tenant_id_created_at_idx").on(t.tenantId, t.createdAt),
+    index("orders_tenant_stage_idx").on(t.tenantId, t.currentStage),
+    index("orders_tenant_quote_idx").on(t.tenantId, t.quoteId),
+    index("orders_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("orders_tenant_invoice_idx").on(t.tenantId, t.invoiceId),
+    uniqueIndex("orders_tracking_token_idx").on(t.trackingToken),
   ],
 );
 
@@ -1871,6 +1883,60 @@ export type LeadDb = typeof leads.$inferSelect;
 export type NewLeadDb = typeof leads.$inferInsert;
 export type OpportunityDb = typeof opportunities.$inferSelect;
 export type NewOpportunityDb = typeof opportunities.$inferInsert;
+
+// ── Projects Entity ────────────────────────────────────────────────────────
+
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectNumber: text("project_number").notNull(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    quoteId: uuid("quote_id").references(() => quotes.id, {
+      onDelete: "set null",
+    }),
+    orderId: uuid("order_id").references(() => orders.id, {
+      onDelete: "set null",
+    }),
+    opportunityId: uuid("opportunity_id").references(() => opportunities.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    projectType: text("project_type").notNull().default("residential"),
+    status: text("status").notNull().default("active"),
+    currentStage: text("current_stage").notNull().default("production"),
+    totalValue: numeric("total_value", { precision: 14, scale: 2 })
+      .notNull()
+      .default("0"),
+    salesOwner: uuid("sales_owner").references(() => appUsers.id, {
+      onDelete: "set null",
+    }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+  },
+  (t) => [
+    index("projects_tenant_id_idx").on(t.tenantId),
+    index("projects_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("projects_tenant_quote_idx").on(t.tenantId, t.quoteId),
+    index("projects_tenant_order_idx").on(t.tenantId, t.orderId),
+    index("projects_tenant_status_idx").on(t.tenantId, t.status),
+    index("projects_tenant_created_at_idx").on(t.tenantId, t.createdAt),
+    uniqueIndex("projects_unique_number_idx").on(t.tenantId, t.projectNumber),
+  ],
+);
+
+export type ProjectDb = typeof projects.$inferSelect;
+export type NewProjectDb = typeof projects.$inferInsert;
 
 // ── After-Sales CRM: Service Cases & Warranty ──────────────────────────────
 
