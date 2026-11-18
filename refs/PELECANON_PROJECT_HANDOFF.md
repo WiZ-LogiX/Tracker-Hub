@@ -194,19 +194,25 @@ Before Playwright workers launch, `global-setup.ts` connects to `localhost:5433/
 
 ## 10. Local Git History & Commit Record
 
-The branch `feature/atelier-prestige-homepage` is 9 commits ahead of remote with a clean working tree:
+The branch `feature/atelier-prestige-homepage` is 14 commits ahead of remote with a clean working tree:
 
 ```text
+549823b feat(inventory): add directional stock-in/out controls and global movement ledger
+b53bcf8 feat(production): add atomic stage sync, server qc gate, and project shop-floor controls
+b4209c8 feat(crm): add fast crm intake drawer and relational opportunity quote sync
+1354f5b feat(finance): implement milestone billing schedules and project margin tracking
+bd658fe docs: archive project references, update memory bank, and align status report
 2608814 test(e2e): resolve fixture-dependent failures, preview runtime, and align documentation
 c3d472b test(fixtures): provide self-seeding fixtures and isolate client rbac metadata for clean bundle compilation
 fcf80b3 fix(security): fail-close mock auth bypass and harden public tracking endpoints
 795b004 chore(core): update router guards, client middleware, operational tests and documentation
-464ae3e test(acceptance): complete phase 1 acceptance test suites and visual artifacts
-b91bbce fix(rbac): resolve 3-state permission engine and simplify access management ui
-4b5ea17 feat(projects): integrate projects entity, workspace, and operational navigation
-6a3df7a feat(quotation): implement commercial quotation builder and canonical numbering
-0174cb8 feat(atelier-prestige): complete homepage redesign, brand palette, operational workflow
 ```
+
+### Recent Completed Sprints (Sprints 1 - 4)
+- **Sprint 1 (Milestone Billing & Project Financial Health)**: Migration `20261118_milestone_billing_and_margin.sql`, milestone schedule creation (Deposit, Progress, Delivery), margin calculations, and `projects.financials.view` protection.
+- **Sprint 2 (Fast CRM Intake & Relational Opportunity Sync)**: `FastCrmIntakeDrawer` modal, quick lead/opportunity creation, bidirectional quote opportunity sync and auto stage advancement.
+- **Sprint 3 (Guided Production Stage, QC Gate & Remake Loop)**: Server-side `executeOrderStageTransition` and `executeQcInspection` in `production-workflow.server.ts`, strict QC gate on completion, automated remake task creation.
+- **Sprint 4 (Standalone Inventory Polish & Movement Audit Ledger)**: Directional Stock In (+) and Stock Out (-) modal with quick-add chips and reserved stock protection; `StockMovementsDrawer` global audit ledger; restock row shortcuts.
 
 ---
 

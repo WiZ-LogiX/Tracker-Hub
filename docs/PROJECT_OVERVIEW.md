@@ -142,18 +142,30 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 | Public tracking handler | `src/routes/track.tsx`, `src/lib/tracking.functions.ts` |
 | Commercial quotation builder | `src/routes/admin/quotes/new.tsx` (legacy `configurator.tsx` redirects here) |
 | Projects workspace | `src/routes/admin/projects.tsx`, `src/routes/admin/projects/$id.tsx` |
+| Fast CRM intake server engine | `src/lib/crm-fast-intake.server.ts` |
+| Production workflow & QC server engine | `src/lib/production-workflow.server.ts` |
+| Inventory movement & stock server engine | `src/lib/inventory-stock.server.ts` |
 | Production stages definition | `src/lib/stages.ts` |
 | Playwright E2E global setup | `e2e/global-setup.ts` |
 | R2 documentation | `docs/R2.md` |
 
 ---
 
-## 🏁 Roadmap (Suggested Order)
+## 🚀 Recent Feature Sprints (Completed)
 
-1. **Wire tenant middleware in every remaining server fn** (`tenantDb()` pattern).
-2. **Move remaining legacy queries from Supabase REST to Drizzle ORM**.
-3. **PDF quotation renders** via react-pdf with tenant logo.
-4. **Realtime on production workflow** (SSE / TanStack Realtime).
+1. **Sprint 1 — Milestone Billing & Project Financial Health**:
+   - Drizzle schema & PostgreSQL migration adding `project_id`, `milestone_index`, `milestone_total_count`, `milestone_label`, `milestone_pct`, `billing_status`, and `due_stage` to `invoices`.
+   - Milestone schedule generator (Deposit, Progress, Final) with project financial margin analytics guarded by `projects.financials.view`.
+2. **Sprint 2 — Fast CRM Intake & Relational Opportunity Sync**:
+   - `FastCrmIntakeDrawer` for sub-minute lead & opportunity registration directly from CRM and Quotes index.
+   - Relational opportunity syncing updating pipeline value and advancing stage (`proposal_presented` / `closed_won`) on quote confirmation.
+3. **Sprint 3 — Guided Production Stage, QC Gate & Remake Loop**:
+   - `executeOrderStageTransition` and `executeQcInspection` in `production-workflow.server.ts`.
+   - Strict QC gate blocking `completed` stage progression until formal inspection passes; automated remake task creation for defective items.
+4. **Sprint 4 — Standalone Inventory Polish & Movement Audit Ledger**:
+   - Directional Stock In (+) and Stock Out (-) modal with quick-add chips (`+1`, `+5`, `+10`, `+25`, `+50`), directional reasons, and reserved stock floor protection.
+   - `StockMovementsDrawer` providing a paginated chronological audit ledger of all inventory transactions.
+   - Restock row shortcut and interactive Low Stock KPI filter on `/admin/inventory`.
 
 ---
 
@@ -164,4 +176,5 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 - **Unified RBAC**: ✅ 3-state permission resolver, adjustable predefined profiles, custom roles, client-safe bundling, and fail-close security.
 - **Cloudflare R2**: ✅ complete server SDK + presigned flows + 10-minute bounded customer capability URLs.
 - **Commercial Quotation & Projects**: ✅ canonical `PLC-XXXXX` numbering and unified commercial builder.
-- **Full Verification**: ✅ 1,073 Vitest tests (100% pass), 165 Playwright E2E tests (100% pass), 0 type errors, clean Cloudflare Workers production build.
+- **Inventory & Shop Floor**: ✅ directional adjustments, global audit ledger, and QC gating.
+- **Full Verification**: ✅ 1,107 Vitest tests across 66 suites (100% pass), 165 Playwright E2E tests, 0 type errors, clean production build.
