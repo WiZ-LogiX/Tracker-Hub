@@ -994,6 +994,12 @@ PeleCanon CRM transforms the platform into an end-to-end commercial operating sy
      - Sidebar navigation dynamically filters sections and items based on effective permissions via `useAuth().hasPermission`.
      - Direct URL visits to unauthorized modules automatically redirect users to their first permitted section without UI flashes or error dialogs; users with zero accessible sections see a friendly "Access Restricted" card.
 
+7. **Security Hardening, Test Isolation & Production Verification Baseline**:
+   - **Fail-Close Mock Authentication Guard**: The mock Bearer token bypass (`token.startsWith("mock-")`) and fallback mock user ID in `auth-middleware.ts` and `tenant-middleware.ts` are strictly gated behind `isMockAuthAllowed()` (`(process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test")`), failing completely closed in production and Cloudflare Workers runtime if `NODE_ENV` is unset or undefined.
+   - **Hardened Public Tracking**: `handlePublicTrackingByRef` matches exclusively on cryptographic `orders.tracking_token` (UUID) with complete removal of raw `orders.id` fallback. `handlePublicOrdersByPhone` is SQL-bounded (`.limit(20)`), rate-limited via sliding window in memory, and sanitizes returned order payloads to prevent sensitive commercial data leaks.
+   - **Client/Server Bundle Boundary Protection**: UI metadata, labels, and access level definitions are decoupled into `src/lib/tenant-permissions-data.ts`, ensuring client-side React routes (e.g. `/admin/team`) do not pull server database drivers or `postgres` into the Vite browser build.
+   - **Self-Seeding Deterministic Test Fixtures**: `project-entity-workflow.test.ts` and `performance-benchmark.test.ts` deterministically seed and clean up isolated test fixtures against `localhost:5433/pelecanon_test` without depending on pre-populated database states.
+
 ---
 
 Project Context Management

@@ -103,7 +103,7 @@ import {
   type SimpleAccessLevel,
   type SectionMeta,
   type SpecialAccessItem,
-} from "@/lib/tenant-context";
+} from "@/lib/tenant-permissions-data";
 
 export const Route = createFileRoute("/admin/team")({ component: TeamPage });
 

@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { db } from "@/db/client.server";
 import {
+  tenants,
   quotes,
   customers,
   orders,
@@ -9,7 +10,7 @@ import {
   deliveryHandovers,
   invoicePayments,
 } from "@/db/schema";
-import { eq, sql, inArray, and } from "drizzle-orm";
+import { eq, sql, inArray, and, or } from "drizzle-orm";
 import { fetchExecutiveDashboardData } from "./dashboard.server";
 import {
   CANONICAL_QUOTE_NUMBER_REGEX,
@@ -20,6 +21,138 @@ import { findProjectsByQuoteOrOrderBatch } from "./project-store.server";
 
 describe("PeleCanon Performance Benchmark & Quotation Standardization Suite", () => {
   const testTenantId = "2bf7cd99-d567-42d3-b5fc-22cc40654293";
+  const customerId = "c0000000-0000-4000-8000-000000000001";
+  const legacyQuoteId = "a0000000-0000-4000-8000-000000000001";
+  const dcdQuoteId = "a0000000-0000-4000-8000-000000000002";
+  const dcdOrderId = "b0000000-0000-4000-8000-000000000001";
+  const dcdInvoiceId = "d0000000-0000-4000-8000-000000000001";
+  const dcdProjectId = "e0000000-0000-4000-8000-000000000001";
+
+  beforeAll(async () => {
+    // Clean up any stale records from previous aborted runs
+    try {
+      await db.delete(projects).where(or(eq(projects.id, dcdProjectId), eq(projects.projectNumber, "PRJ-DCD02")));
+      await db.delete(invoices).where(or(eq(invoices.id, dcdInvoiceId), eq(invoices.invoiceNumber, "PLC-DCD02")));
+      await db.delete(orders).where(or(eq(orders.id, dcdOrderId), eq(orders.orderNumber, "PLC-DCD02")));
+      await db.delete(quotes).where(or(
+        inArray(quotes.id, [legacyQuoteId, dcdQuoteId]),
+        inArray(quotes.quoteNumber, ["PLC-LEG01", "PLC-DCD02"]),
+      ));
+      await db.delete(customers).where(eq(customers.id, customerId));
+    } catch {
+      // Ignore cleanup errors on initial empty DB
+    }
+
+    // 1. Ensure test tenant exists
+    await db
+      .insert(tenants)
+      .values({
+        id: testTenantId,
+        slug: "atelier-prestige-benchmark",
+        name: "Atelier Prestige Benchmark",
+      })
+      .onConflictDoNothing();
+
+    // 2. Ensure test customer exists
+    await db
+      .insert(customers)
+      .values({
+        id: customerId,
+        tenantId: testTenantId,
+        name: "عميل تجريبي دسكفري",
+        phone: "01000000001",
+      })
+      .onConflictDoNothing();
+
+    // 3. Seed legacy migrated quote (for search and conformance tests)
+    await db
+      .insert(quotes)
+      .values({
+        id: legacyQuoteId,
+        tenantId: testTenantId,
+        customerId: customerId,
+        quoteNumber: "PLC-LEG01",
+        legacyQuoteNumber: "PLC-QUOTE-2026-0001",
+        status: "draft",
+        subtotal: "50000",
+        total: "50000",
+        validUntil: "2026-12-31",
+      })
+      .onConflictDoNothing();
+
+    // 4. Seed cross-module linked quote
+    await db
+      .insert(quotes)
+      .values({
+        id: dcdQuoteId,
+        tenantId: testTenantId,
+        customerId: customerId,
+        quoteNumber: "PLC-DCD02",
+        status: "accepted",
+        subtotal: "80000",
+        total: "80000",
+        validUntil: "2026-12-31",
+      })
+      .onConflictDoNothing();
+
+    // 5. Seed cross-module linked order
+    await db
+      .insert(orders)
+      .values({
+        id: dcdOrderId,
+        tenantId: testTenantId,
+        customerId: customerId,
+        quoteId: dcdQuoteId,
+        orderNumber: "PLC-DCD02",
+        currentStage: "assembly",
+        total: "80000",
+        contractDate: "2026-11-01",
+      })
+      .onConflictDoNothing();
+
+    // 6. Seed cross-module linked invoice
+    await db
+      .insert(invoices)
+      .values({
+        id: dcdInvoiceId,
+        tenantId: testTenantId,
+        customerId: customerId,
+        quoteId: dcdQuoteId,
+        invoiceNumber: "PLC-DCD02",
+        total: "80000",
+        paidAmount: "0",
+      })
+      .onConflictDoNothing();
+
+    // 7. Seed cross-module linked project
+    await db
+      .insert(projects)
+      .values({
+        id: dcdProjectId,
+        tenantId: testTenantId,
+        customerId: customerId,
+        quoteId: dcdQuoteId,
+        orderId: dcdOrderId,
+        projectNumber: "PRJ-DCD02",
+        title: "مشروع دسكفري المتكامل",
+        status: "active",
+        currentStage: "assembly",
+        totalValue: "80000",
+      })
+      .onConflictDoNothing();
+  });
+
+  afterAll(async () => {
+    try {
+      await db.delete(projects).where(eq(projects.id, dcdProjectId));
+      await db.delete(invoices).where(eq(invoices.id, dcdInvoiceId));
+      await db.delete(orders).where(eq(orders.id, dcdOrderId));
+      await db.delete(quotes).where(inArray(quotes.id, [legacyQuoteId, dcdQuoteId]));
+      await db.delete(customers).where(eq(customers.id, customerId));
+    } catch {
+      // Best-effort cleanup
+    }
+  });
 
   // ── 1. Priority 1: High-Performance Data Loading & SQL Aggregations ─────────
   describe("1. Database & Dashboard Performance", () => {

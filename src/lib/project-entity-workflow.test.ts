@@ -1,4 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { db } from "@/db/client.server";
+import { tenants, customers, quotes, orders, projects } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import {
   createProjectRecord,
   findProjectById,
@@ -8,11 +13,89 @@ import {
 import { resolveDateRange } from "./crm-analytics-types";
 
 describe("Project Entity Architecture & Workflow Integrity", () => {
-  const testTenantId = "77777777-7777-7777-7777-777777777777";
-  const customerId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-  const quoteId = "qqqqqqqq-qqqq-qqqq-qqqq-qqqqqqqqqqqq";
-  const orderId = "oooooooo-oooo-oooo-oooo-oooooooooooo";
-  const oppId = "11111111-1111-1111-1111-111111111111";
+  const testTenantId = "77777777-7777-4777-8777-777777777777";
+  const customerId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const quoteId = "a1111111-1111-4111-8111-111111111111";
+  const orderId = "b2222222-2222-4222-8222-222222222222";
+  const oppId = null;
+
+  beforeAll(async () => {
+    // 1. Ensure test tenant exists in DB
+    await db
+      .insert(tenants)
+      .values({
+        id: testTenantId,
+        slug: "test-tenant-prj",
+        name: "Test Tenant PRJ",
+      })
+      .onConflictDoNothing();
+
+    // 2. Ensure test customer exists in DB
+    await db
+      .insert(customers)
+      .values({
+        id: customerId,
+        tenantId: testTenantId,
+        name: "عميل تجريبي النخيل",
+        phone: "01012345678",
+      })
+      .onConflictDoNothing();
+
+    // 3. Ensure test quote exists for FK relationship
+    await db
+      .insert(quotes)
+      .values({
+        id: quoteId,
+        tenantId: testTenantId,
+        customerId: customerId,
+        quoteNumber: "PLC-PRJ01",
+        status: "accepted",
+        validUntil: "2026-12-31",
+        subtotal: "125000",
+        total: "125000",
+      })
+      .onConflictDoNothing();
+
+    // 4. Ensure test order exists for FK relationship
+    await db
+      .insert(orders)
+      .values({
+        id: orderId,
+        tenantId: testTenantId,
+        customerId: customerId,
+        quoteId: quoteId,
+        orderNumber: "ORD-PRJ01",
+        currentStage: "assembly",
+        contractDate: "2026-11-01",
+        total: "125000",
+      })
+      .onConflictDoNothing();
+
+    // 5. Clear any existing project records for this test tenant from DB
+    await db.delete(projects).where(eq(projects.tenantId, testTenantId));
+
+    // 6. Clean fallback store file of testTenantId records
+    const fallbackPath = path.resolve(process.cwd(), ".data", "projects-fallback.json");
+    if (fs.existsSync(fallbackPath)) {
+      try {
+        const records = JSON.parse(fs.readFileSync(fallbackPath, "utf-8"));
+        const cleaned = records.filter((r: any) => r.tenantId !== testTenantId);
+        fs.writeFileSync(fallbackPath, JSON.stringify(cleaned, null, 2), "utf-8");
+      } catch {}
+    }
+  });
+
+  afterAll(async () => {
+    try {
+      await db.delete(projects).where(eq(projects.tenantId, testTenantId));
+      await db.delete(orders).where(eq(orders.id, orderId));
+      await db.delete(quotes).where(eq(quotes.id, quoteId));
+      await db.delete(customers).where(eq(customers.id, customerId));
+      await db.delete(tenants).where(eq(tenants.id, testTenantId));
+    } catch {
+      // Clean up silently
+    }
+  });
 
   it("creates a real persistent project entity with PRJ numbering upon quote conversion", async () => {
     const project = await createProjectRecord({
@@ -71,7 +154,7 @@ describe("Project Entity Architecture & Workflow Integrity", () => {
   });
 
   it("returns null when searching project for an unconverted quote", async () => {
-    const unconvertedQuoteId = "uuuuuuuu-uuuu-uuuu-uuuu-uuuuuuuuuuuu";
+    const unconvertedQuoteId = "e4444444-4444-4444-8444-444444444444";
     const res = await findProjectByQuoteOrOrder(testTenantId, unconvertedQuoteId, null);
     expect(res).toBeNull();
   });
