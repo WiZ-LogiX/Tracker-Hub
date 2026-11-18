@@ -12,6 +12,7 @@ import {
   productionWorkOrders,
   deliveryHandovers,
   remakes,
+  qcInspections,
   invoices,
   invoicePayments,
   stockReservations,
@@ -710,6 +711,29 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
       };
     });
 
+    // 9.5 Fetch QC Inspections
+    let qcInspectionRows: any[] = [];
+    if (orderIdList.length > 0) {
+      try {
+        qcInspectionRows = await db
+          .select({
+            id: qcInspections.id,
+            orderId: qcInspections.orderId,
+            stage: qcInspections.stage,
+            passed: qcInspections.passed,
+            notes: qcInspections.notes,
+            inspectorId: qcInspections.inspectorId,
+            createdAt: qcInspections.createdAt,
+          })
+          .from(qcInspections)
+          .where(and(eq(qcInspections.tenantId, tenantId), inArray(qcInspections.orderId, orderIdList)))
+          .orderBy(desc(qcInspections.createdAt))
+          .limit(100);
+      } catch (err: any) {
+        if (err?.code !== "42P01") throw err;
+      }
+    }
+
     // 10. Fetch Stock Reservations / Material Allocation
     let stockAllocations: ProjectInventoryAllocation[] = [];
     if (orderIdList.length > 0) {
@@ -984,6 +1008,19 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
       });
     }
 
+    // Add QC Inspections
+    for (const q of qcInspectionRows) {
+      timelineItems.push({
+        id: `qc-${q.id}`,
+        entityType: "order",
+        entityId: q.orderId,
+        action: q.passed ? "qc_passed" : "qc_failed",
+        title: `فحص جودة: ${q.stage} (${q.passed ? "مطابق للمواصفات" : "غير مطابق"})`,
+        description: q.notes || (q.passed ? "اجتاز الفحص بنجاح" : "تم رفض المطابقة وإنشاء طلب إعادة تصنيع"),
+        timestamp: q.createdAt.toISOString(),
+      });
+    }
+
     // Add Tasks
     for (const t of projectTasks) {
       timelineItems.push({
@@ -1079,7 +1116,9 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
         nextActionDate: opp.nextActionDate?.toISOString() || null,
         quotes: !canSeeFinancials ? [] : projectQuotes,
       },
-      orders: !canSeeFinancials ? [] : projectOrders,
+      orders: !canSeeFinancials
+        ? projectOrders.map((o) => ({ ...o, total: 0, deposit: 0, paidAmount: 0 }))
+        : projectOrders,
       production: {
         workOrders: projectWorkOrders,
         activeStage: projectOrders[0]?.currentStage || null,
@@ -1091,6 +1130,21 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
             : projectOrders.some((o) => o.currentStage === "completed")
               ? 100
               : 0,
+        qcInspections: qcInspectionRows.map((q) => ({
+          id: q.id,
+          orderId: q.orderId,
+          stage: q.stage,
+          passed: q.passed,
+          notes: q.notes,
+          inspectorId: q.inspectorId,
+          createdAt: q.createdAt.toISOString(),
+        })),
+        hasPassedQC: qcInspectionRows.some(
+          (q) =>
+            q.orderId === projectOrders[0]?.id &&
+            q.stage === "quality_check" &&
+            q.passed === true,
+        ),
       },
       tasks: projectTasks,
       inventory: {
@@ -1104,7 +1158,7 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
       financials: projectFinancials,
       quality: {
         remakes: projectRemakes,
-        qcCount: projectWorkOrders.filter((w) => w.status === "qc_pending" || w.status === "completed").length,
+        qcCount: qcInspectionRows.length || projectWorkOrders.filter((w) => w.status === "qc_pending" || w.status === "completed").length,
         defectsCount: projectRemakes.length,
       },
       documents: projectDocuments,

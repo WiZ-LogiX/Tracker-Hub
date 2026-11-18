@@ -176,6 +176,16 @@ export interface ProjectWorkspaceData {
     workOrders: ProductionWorkOrder[];
     activeStage: string | null;
     completionPercentage: number;
+    qcInspections?: Array<{
+      id: string;
+      orderId: string;
+      stage: string;
+      passed: boolean;
+      notes?: string | null;
+      inspectorId?: string | null;
+      createdAt: string;
+    }>;
+    hasPassedQC?: boolean;
   };
   tasks: TaskItem[];
   inventory: {

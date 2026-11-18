@@ -1045,5 +1045,33 @@
     "saveToPipeline": "Save to Pipeline",
     "saveAndBuildQuote": "Save & Build Quote",
     "convertAndBuildQuote": "Convert & Build Quote"
+  },
+  "productionWorkflow": {
+    "title": "Shop-Floor Execution & Stages",
+    "advanceStage": "Advance Stage",
+    "advancing": "Advancing...",
+    "stageAdvanced": "Stage advanced successfully",
+    "advanceGateBlocked": "Quality Check Gate Active: Passing inspection required before moving forward",
+    "logQC": "Log QC Check",
+    "logQCDescription": "Record quality inspection results and trigger corrective remakes if rejected.",
+    "createWorkOrder": "Create Work Order",
+    "stage": "Stage",
+    "result": "Inspection Result",
+    "pass": "Pass (Meets Standards)",
+    "fail": "Fail (Defect Detected)",
+    "inspector": "Inspector / Technician",
+    "inspectorPlaceholder": "Select technician...",
+    "qcNotes": "Inspection Notes / Defect Details",
+    "qcNotesPlaceholder": "Record measurements, visual flaws, or acceptance criteria...",
+    "submittingQC": "Recording Inspection...",
+    "submitQC": "Record QC Inspection",
+    "qcPassedSuccess": "Quality inspection recorded: Stage passed",
+    "qcFailedRemakeCreated": "Quality inspection failed: Remake and corrective task generated",
+    "qcHistory": "Quality Inspections History",
+    "noQCYet": "No quality inspections recorded yet for this order.",
+    "passedBadge": "Passed",
+    "failedBadge": "Failed",
+    "orderSelector": "Select Order",
+    "noOrdersFound": "No production orders linked to this project yet."
   }
 }

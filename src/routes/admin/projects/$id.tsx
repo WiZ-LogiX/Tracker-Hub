@@ -252,6 +252,8 @@ function ProjectWorkspacePage() {
           <ProjectProductionTab
             production={data.production}
             orders={data.orders}
+            onRefresh={() => loadData()}
+            currentUserRole={data.currentUserRole}
           />
         </TabsContent>
 

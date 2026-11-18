@@ -2,6 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
+  executeOrderStageTransition,
+  executeQCInspectionWithRemakeLoop,
+} from "@/lib/production-workflow.server";
+import {
   deleteObject,
   generateObjectKey,
   getDownloadUrl,
@@ -790,6 +794,8 @@ const UpdateOrderStageInput = z.object({
   orderId: z.string().uuid(),
   nextStage: z.string(),
   markDelivered: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+  autoCreateWorkOrder: z.boolean().optional(),
 });
 
 export const updateOrderStage = createServerFn({ method: "POST" })
@@ -798,16 +804,14 @@ export const updateOrderStage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     requireAnyPermission(ctx, ["orders.status.update", "orders.edit"]);
-    const { orderId, nextStage, markDelivered } = data;
-    const patch: Record<string, unknown> = { current_stage: nextStage as any };
-    if (markDelivered) patch.delivered_at = new Date().toISOString();
-    const { error } = await supabaseAdmin
-      .from("orders")
-      .update(patch)
-      .eq("id", orderId)
-      .eq("tenant_id", ctx.tenantId);
-    if (error) throw new Error(error.message);
-    return { ok: true };
+    return await executeOrderStageTransition(undefined, {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      orderId: data.orderId,
+      nextStage: data.nextStage,
+      notes: data.notes,
+      autoCreateWorkOrder: data.autoCreateWorkOrder ?? true,
+    });
   });
 
 const AssignmentInput = z.object({
@@ -872,8 +876,9 @@ const RecordQCInput = z.object({
   orderId: z.string().uuid(),
   stage: z.string(),
   passed: z.boolean(),
-  notes: z.string().nullable(),
-  inspectorId: z.string().uuid().nullable(),
+  notes: z.string().nullable().optional(),
+  inspectorId: z.string().uuid().nullable().optional(),
+  assignedTo: z.string().uuid().nullable().optional(),
 });
 
 export const recordQCInspection = createServerFn({ method: "POST" })
@@ -882,15 +887,16 @@ export const recordQCInspection = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
     requireAnyPermission(ctx, ["orders.qc", "work-orders.edit"]);
-    const { error } = await supabaseAdmin.from("qc_inspections").insert({
-      order_id: data.orderId,
-      stage: data.stage as any,
+    return await executeQCInspectionWithRemakeLoop(undefined, {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      orderId: data.orderId,
+      stage: data.stage,
       passed: data.passed,
       notes: data.notes,
-      inspector_id: data.inspectorId ?? ctx.userId,
+      inspectorId: data.inspectorId ?? ctx.userId,
+      assignedTo: data.assignedTo,
     });
-    if (error) throw new Error(error.message);
-    return { ok: true };
   });
 
 const RecordRemakeInput = z.object({

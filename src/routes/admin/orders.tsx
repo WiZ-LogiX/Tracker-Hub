@@ -369,20 +369,10 @@ function OrdersPage() {
         },
       });
       if (!passed) {
-        await createRemakeFn({
-          data: {
-            orderId: selected.id,
-            customerId: selected.customer_id || null,
-            type: "qc_failure",
-            severity: "high",
-            reason: qcNotes || `QC failed at stage: ${stage}`,
-            defectDescription: qcNotes || `Quality check rejected at stage ${stage}`,
-            initialStatus: "reported",
-            createLinkedTask: true,
-          },
-        });
         toast.warning(t("orders.qcFail"));
-      } else toast.success(t("orders.qcPass"));
+      } else {
+        toast.success(t("orders.qcPass"));
+      }
       await reloadOrderData(selected.id);
     } catch (e: any) {
       toast.error(e?.message ?? t("common.error"));

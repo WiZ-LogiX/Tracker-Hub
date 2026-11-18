@@ -1045,5 +1045,33 @@
     "saveToPipeline": "Enregistrer dans le pipeline",
     "saveAndBuildQuote": "Enregistrer & Créer le devis",
     "convertAndBuildQuote": "Convertir & Créer le devis"
+  },
+  "productionWorkflow": {
+    "title": "Exécution d'atelier et étapes de production",
+    "advanceStage": "Étape suivante",
+    "advancing": "Mise à jour...",
+    "stageAdvanced": "Étape mise à jour avec succès",
+    "advanceGateBlocked": "Porte de contrôle qualité active : inspection réussie requise avant d'avancer",
+    "logQC": "Enregistrer contrôle qualité",
+    "logQCDescription": "Enregistrer le contrôle qualité et déclencher un remake en cas de non-conformité.",
+    "createWorkOrder": "Créer bon de travail",
+    "stage": "Étape",
+    "result": "Résultat du contrôle",
+    "pass": "Conforme (Réussi)",
+    "fail": "Non conforme (Défaut détecté)",
+    "inspector": "Inspecteur / Technicien",
+    "inspectorPlaceholder": "Sélectionner un technicien...",
+    "qcNotes": "Remarques / Description du défaut",
+    "qcNotesPlaceholder": "Noter les mesures, défauts visuels ou critères d'acceptation...",
+    "submittingQC": "Enregistrement...",
+    "submitQC": "Valider le contrôle QC",
+    "qcPassedSuccess": "Contrôle qualité enregistré : Étape validée",
+    "qcFailedRemakeCreated": "Échec du contrôle qualité : Remake et tâche corrective générés",
+    "qcHistory": "Historique des contrôles qualité",
+    "noQCYet": "Aucun contrôle qualité enregistré pour cette commande.",
+    "passedBadge": "Conforme",
+    "failedBadge": "Non conforme",
+    "orderSelector": "Sélectionner commande",
+    "noOrdersFound": "Aucune commande de production liée à ce projet pour le moment."
   }
 }
