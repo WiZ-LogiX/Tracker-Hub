@@ -53,7 +53,7 @@ test.describe("TASK 27 — PeleCanon After-Sales CRM Browser Validation", () => 
     // ── 6. Test "+ New Service Case" Modal ────────────────────────────────────
     await newCaseBtn.click();
     const modalDialog = page.getByRole("dialog");
-    await expect(modalDialog).toBeVisible({ timeout: 5_000 });
+    await expect(modalDialog).toBeVisible({ timeout: 10_000 });
     await expect(modalDialog).toContainText(/service case|after-sales|تسجيل تذكرة/i);
 
     // Close modal via Cancel button

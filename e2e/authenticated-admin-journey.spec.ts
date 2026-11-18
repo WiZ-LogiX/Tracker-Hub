@@ -94,12 +94,32 @@ test.describe("Full Authenticated Admin & Worker Journey", () => {
   });
 
   test("verifies Worker role: restricted navigation and enforcement to /admin/tasks", async ({ page }) => {
+    const WORKER_USER_ID = "44444444-4444-4444-4444-444444444444";
+    const WORKER_SESSION = {
+      access_token: "mock-access-token-worker-session",
+      token_type: "bearer",
+      expires_in: 86400,
+      expires_at: Math.floor(Date.now() / 1000) + 86400,
+      refresh_token: "mock-refresh-token",
+      user: {
+        id: WORKER_USER_ID,
+        aud: "authenticated",
+        role: "authenticated",
+        email: "worker@pelecanon.local",
+        phone: "",
+        app_metadata: { provider: "email", providers: ["email"] },
+        user_metadata: { username: "worker" },
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      },
+    };
+
     // Intercept Supabase Auth endpoints for worker
     await page.route("**/auth/v1/token**", async (route) => {
       await route.fulfill({
         status: 200,
         headers: { "content-type": "application/json; charset=utf-8" },
-        body: JSON.stringify(MOCK_SESSION),
+        body: JSON.stringify(WORKER_SESSION),
       });
     });
 
@@ -107,7 +127,7 @@ test.describe("Full Authenticated Admin & Worker Journey", () => {
       await route.fulfill({
         status: 200,
         headers: { "content-type": "application/json; charset=utf-8" },
-        body: JSON.stringify(MOCK_SESSION.user),
+        body: JSON.stringify(WORKER_SESSION.user),
       });
     });
 
@@ -120,39 +140,10 @@ test.describe("Full Authenticated Admin & Worker Journey", () => {
           {
             tenant_id: MOCK_TENANT_ID,
             role: "worker",
-            user_id: MOCK_USER_ID,
+            user_id: WORKER_USER_ID,
           },
         ]),
       });
-    });
-
-    // Intercept bootstrapMyTenant server function to return worker role
-    await page.route("**/_serverFn/**", async (route) => {
-      if (route.request().method() === "POST") {
-        await route.fulfill({
-          status: 200,
-          headers: { "content-type": "application/json; charset=utf-8" },
-          body: JSON.stringify({
-            result: {
-              tenantId: MOCK_TENANT_ID,
-              tenantSlug: "pelecanon",
-              tenantName: "PeleCanon",
-              role: "worker",
-              memberships: [
-                {
-                  tenantId: MOCK_TENANT_ID,
-                  tenantSlug: "pelecanon",
-                  tenantName: "PeleCanon",
-                  role: "worker",
-                },
-              ],
-              created: false,
-            },
-          }),
-        });
-      } else {
-        await route.continue();
-      }
     });
 
     await page.route("**/rest/v1/tenants**", async (route) => {
@@ -173,9 +164,9 @@ test.describe("Full Authenticated Admin & Worker Journey", () => {
         status: 200,
         headers: { "content-type": "application/json; charset=utf-8" },
         body: JSON.stringify({
-          id: MOCK_USER_ID,
-          username: "worker1",
-          display_name: "Worker User",
+          id: WORKER_USER_ID,
+          username: "worker",
+          display_name: "ورشة التصنيع والقص",
           status: "active",
           tenant_id: MOCK_TENANT_ID,
         }),
@@ -185,9 +176,9 @@ test.describe("Full Authenticated Admin & Worker Journey", () => {
     await page.addInitScript(
       ({ session, sessionKey }) => {
         window.localStorage.setItem(sessionKey, JSON.stringify(session));
-        window.localStorage.setItem("pelecanon:username", "worker1");
+        window.localStorage.setItem("pelecanon:username", "worker");
       },
-      { session: MOCK_SESSION, sessionKey: "pelecanon-auth-token" },
+      { session: WORKER_SESSION, sessionKey: "pelecanon-auth-token" },
     );
 
     // Visiting /admin as worker must redirect directly to /admin/tasks

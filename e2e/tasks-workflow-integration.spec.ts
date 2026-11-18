@@ -189,7 +189,7 @@ test.describe("PeleCanon Operational Task Workflow Integration", () => {
     const ackBtn = page.getByRole("button", { name: /تأكيد واعتماد الإنجاز|Acknowledge Completion/i });
     if (await ackBtn.isVisible({ timeout: 5000 })) {
       await ackBtn.click();
-      await expect(page.getByText(/تم اعتماد الاكتمال من الإدارة|Completion Acknowledged/i)).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText(/تم اعتماد الاكتمال من الإدارة|Completion Acknowledged/i).first()).toBeVisible({ timeout: 5000 });
     }
   });
 });

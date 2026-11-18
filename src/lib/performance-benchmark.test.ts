@@ -80,66 +80,102 @@ describe("PeleCanon Performance Benchmark & Quotation Standardization Suite", ()
       })
       .onConflictDoNothing();
 
-    // 4. Seed cross-module linked quote
-    await db
-      .insert(quotes)
-      .values({
-        id: dcdQuoteId,
-        tenantId: testTenantId,
-        customerId: customerId,
-        quoteNumber: "PLC-DCD02",
-        status: "accepted",
-        subtotal: "80000",
-        total: "80000",
-        validUntil: "2026-12-31",
-      })
-      .onConflictDoNothing();
+    // 4. Seed cross-module linked quote if not already present
+    const [existingDcdQuote] = await db
+      .select({ id: quotes.id })
+      .from(quotes)
+      .where(eq(quotes.quoteNumber, "PLC-DCD02"))
+      .limit(1);
 
-    // 5. Seed cross-module linked order
-    await db
-      .insert(orders)
-      .values({
-        id: dcdOrderId,
-        tenantId: testTenantId,
-        customerId: customerId,
-        quoteId: dcdQuoteId,
-        orderNumber: "PLC-DCD02",
-        currentStage: "assembly",
-        total: "80000",
-        contractDate: "2026-11-01",
-      })
-      .onConflictDoNothing();
+    const targetQuoteId = existingDcdQuote ? existingDcdQuote.id : dcdQuoteId;
 
-    // 6. Seed cross-module linked invoice
-    await db
-      .insert(invoices)
-      .values({
-        id: dcdInvoiceId,
-        tenantId: testTenantId,
-        customerId: customerId,
-        quoteId: dcdQuoteId,
-        invoiceNumber: "PLC-DCD02",
-        total: "80000",
-        paidAmount: "0",
-      })
-      .onConflictDoNothing();
+    if (!existingDcdQuote) {
+      await db
+        .insert(quotes)
+        .values({
+          id: dcdQuoteId,
+          tenantId: testTenantId,
+          customerId: customerId,
+          quoteNumber: "PLC-DCD02",
+          status: "accepted",
+          subtotal: "80000",
+          total: "80000",
+          validUntil: "2026-12-31",
+        })
+        .onConflictDoNothing();
+    }
 
-    // 7. Seed cross-module linked project
-    await db
-      .insert(projects)
-      .values({
-        id: dcdProjectId,
-        tenantId: testTenantId,
-        customerId: customerId,
-        quoteId: dcdQuoteId,
-        orderId: dcdOrderId,
-        projectNumber: "PRJ-DCD02",
-        title: "مشروع دسكفري المتكامل",
-        status: "active",
-        currentStage: "assembly",
-        totalValue: "80000",
-      })
-      .onConflictDoNothing();
+    // 5. Seed cross-module linked order if not already present
+    const [existingDcdOrder] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.orderNumber, "PLC-DCD02"))
+      .limit(1);
+
+    const targetOrderId = existingDcdOrder ? existingDcdOrder.id : dcdOrderId;
+
+    if (!existingDcdOrder) {
+      await db
+        .insert(orders)
+        .values({
+          id: dcdOrderId,
+          tenantId: testTenantId,
+          customerId: customerId,
+          quoteId: targetQuoteId,
+          orderNumber: "PLC-DCD02",
+          currentStage: "assembly",
+          total: "80000",
+          contractDate: "2026-11-01",
+        })
+        .onConflictDoNothing();
+    }
+
+    // 6. Seed cross-module linked invoice if not already present
+    const [existingDcdInvoice] = await db
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(eq(invoices.invoiceNumber, "PLC-DCD02"))
+      .limit(1);
+
+    if (!existingDcdInvoice) {
+      await db
+        .insert(invoices)
+        .values({
+          id: dcdInvoiceId,
+          tenantId: testTenantId,
+          customerId: customerId,
+          quoteId: targetQuoteId,
+          invoiceNumber: "PLC-DCD02",
+          total: "80000",
+          paidAmount: "0",
+        })
+        .onConflictDoNothing();
+    }
+
+    // 7. Seed cross-module linked project if not already present
+    const [existingDcdProject] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.projectNumber, "PRJ-DCD02"))
+      .limit(1);
+
+    if (!existingDcdProject) {
+      await db
+        .insert(projects)
+        .values({
+          id: dcdProjectId,
+          tenantId: testTenantId,
+          customerId: customerId,
+          quoteId: targetQuoteId,
+          orderId: targetOrderId,
+          projectNumber: "PRJ-DCD02",
+          title: "مشروع دسكفري المتكامل",
+          status: "active",
+          currentStage: "assembly",
+          totalValue: "80000",
+        })
+        .onConflictDoNothing();
+    }
   });
 
   afterAll(async () => {

@@ -24,7 +24,7 @@ test.describe("After sales interaction audit", () => {
 
     await signIn(page);
     await page.goto("/admin/crm/after-sales");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("domcontentloaded");
 
     // Click tabs
     const complaintsTab = page.getByRole("tab", { name: /شكاوى|complaint/i }).first();

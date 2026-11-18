@@ -160,7 +160,7 @@ test.describe("TASK — PeleCanon Quotation Restoration & Commercial PDF Verific
     await page.waitForLoadState("domcontentloaded");
 
     // Verify detail header
-    await expect(page.getByText(/PLC-00100/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/PLC-00100/i).first()).toBeVisible({ timeout: 15_000 });
 
     // Verify commercial items and terms cards appear
     await expect(page.getByText(/بنود عرض السعر التجاري|Commercial Quotation Items/i)).toBeVisible();

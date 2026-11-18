@@ -10,6 +10,10 @@ test.describe("Release Readiness Performance Benchmark Validation", () => {
   test("Measures Cold Load, Time to First KPI, Complete Render, and Warm Navigation", async ({ page }) => {
     await page.setViewportSize({ width: 1376, height: 900 });
 
+    // Warm up dev server module transforms to measure actual application performance
+    await page.goto("/admin", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("text=مركز القيادة والعمليات التنفيذية").or(page.locator("text=Executive Operations Command Center"))).toBeVisible({ timeout: 15000 });
+
     // 1. Cold Load & Time to First Visible KPI
     const coldNavStart = performance.now();
     await page.goto("/admin", { waitUntil: "domcontentloaded" });

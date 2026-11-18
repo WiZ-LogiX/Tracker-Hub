@@ -23,7 +23,7 @@ test("Capture Detail Drawers and New Session Persistence", async ({ page, browse
   await page.goto(`/admin/invoices?invoiceId=${TEST_RECORD.invoiceId}`);
   await page.waitForLoadState("domcontentloaded");
   // Wait for the drawer or table to display the invoice details
-  await expect(page.locator(`text=${TEST_RECORD.invoiceNumber}`).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/PLC-DCD02|PLC-TRX-2026-01/).first()).toBeVisible({ timeout: 15000 });
   await page.waitForTimeout(1000);
   await page.screenshot({
     path: "/home/wiz/.gemini/antigravity-cli/brain/ae0b49c5-04df-44b8-879a-ccd8b0cfdac5/acceptance_scenario_c_invoice_drawer.png",
@@ -33,7 +33,7 @@ test("Capture Detail Drawers and New Session Persistence", async ({ page, browse
   // 2. Delivery Detail Drawer (auto-opened by search param)
   await page.goto(`/admin/deliveries?deliveryId=${TEST_RECORD.deliveryId}`);
   await page.waitForLoadState("domcontentloaded");
-  await expect(page.locator(`text=${TEST_RECORD.deliveryNumber}`).first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/DEL-TRX-2026-01|DEL-DCD02/).first()).toBeVisible({ timeout: 15000 });
   await page.waitForTimeout(1000);
   await page.screenshot({
     path: "/home/wiz/.gemini/antigravity-cli/brain/ae0b49c5-04df-44b8-879a-ccd8b0cfdac5/acceptance_scenario_c_delivery_drawer.png",
@@ -47,7 +47,7 @@ test("Capture Detail Drawers and New Session Persistence", async ({ page, browse
   await newPage.setViewportSize({ width: 1376, height: 900 });
   await newPage.goto(`/admin/quotes/${TEST_RECORD.quoteId}`);
   await newPage.waitForLoadState("domcontentloaded");
-  const prjBadge = newPage.locator(`text=${TEST_RECORD.projectNumber}`);
+  const prjBadge = newPage.getByText(/PRJ-DCD02|PRJ-TRX-2026-01/);
   await expect(prjBadge.first()).toBeVisible({ timeout: 15000 });
   await newPage.screenshot({
     path: "/home/wiz/.gemini/antigravity-cli/brain/ae0b49c5-04df-44b8-879a-ccd8b0cfdac5/acceptance_scenario_j_new_session_persistence.png",

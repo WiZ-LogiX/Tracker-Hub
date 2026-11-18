@@ -25,6 +25,79 @@ test.describe("PELECANON CUSTOMER-CENTRIC QUOTATION LIFECYCLE & TRACKING E2E", (
   });
 
   test("2. Token capability access to quotation renders Quote View, Decision Buttons & Stepper", async ({ page }) => {
+    // Intercept getPublicTrackingByRef server function
+    await page.route("**/_serverFn/**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({
+          result: {
+            type: "quote",
+            quote: {
+              id: REAL_QUOTE_ID,
+              quote_number: "PLC-5NIEJ",
+              tracking_token: REAL_QUOTE_ID,
+              status: "sent",
+              progressive_status: "awaiting_customer_decision",
+              status_label_ar: "بانتظار قرار العميل",
+              total: 28428.75,
+              deposit_pct: 50,
+              valid_until: "2026-07-06",
+              created_at: new Date().toISOString(),
+              customer_name: "Nuha",
+              customer_phone: "010****1877",
+              lifecycle: {
+                approved_at: new Date().toISOString(),
+                confirmation_requested_at: new Date().toISOString(),
+                consented_at: new Date().toISOString(),
+                pdf_sent_at: new Date().toISOString(),
+              },
+              version: 1,
+              can_decide: true,
+              journey_timeline: [
+                {
+                  stageKey: "draft",
+                  title: "إعداد وتجهيز المقايسة",
+                  completed: true,
+                  timestamp: new Date().toISOString(),
+                },
+                {
+                  stageKey: "approved",
+                  title: "الاعتماد الداخلي",
+                  completed: true,
+                  timestamp: new Date().toISOString(),
+                },
+                {
+                  stageKey: "confirmation_requested",
+                  title: "طلب تأكيد العميل عبر واتساب",
+                  completed: true,
+                  timestamp: new Date().toISOString(),
+                },
+                {
+                  stageKey: "consented",
+                  title: "موافقة العميل على استلام العرض",
+                  completed: true,
+                  timestamp: new Date().toISOString(),
+                },
+                {
+                  stageKey: "pdf_sent",
+                  title: "إرسال مستند العرض (PDF)",
+                  completed: true,
+                  timestamp: new Date().toISOString(),
+                },
+                {
+                  stageKey: "decision",
+                  title: "قرار العميل",
+                  completed: false,
+                  timestamp: null,
+                },
+              ],
+            },
+          },
+        }),
+      });
+    });
+
     await page.goto(`/track?ref=${REAL_QUOTE_ID}`);
     await page.waitForLoadState("domcontentloaded");
 
@@ -56,6 +129,39 @@ test.describe("PELECANON CUSTOMER-CENTRIC QUOTATION LIFECYCLE & TRACKING E2E", (
   });
 
   test("3. Order View on /track displays 6-Stage Customer Model with Internal Sub-Stage badge", async ({ page }) => {
+    // Intercept getPublicTrackingByRef server function
+    await page.route("**/_serverFn/**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({
+          result: {
+            type: "order",
+            order: {
+              id: REAL_ORDER_ID,
+              order_number: "PLC-KR721",
+              tracking_token: REAL_ORDER_ID,
+              current_stage: "cutting",
+              customer_stage: "in_production",
+              customer_stage_label_ar: "قيد التصنيع",
+              internal_sub_stage_label_ar: "العمل الحالي: قص الخامات",
+              total: 28428.75,
+              deposit: 14000,
+              contract_date: "2026-06-01",
+              expected_delivery: "2026-07-01",
+              delivered_at: null,
+              customer_name: "Nuha",
+              customer_phone: "010****1877",
+              linked_quote: null,
+            },
+            logs: [],
+            photos: [],
+            attachments: [],
+          },
+        }),
+      });
+    });
+
     await page.goto(`/track?ref=${REAL_ORDER_ID}`);
     await page.waitForLoadState("domcontentloaded");
 

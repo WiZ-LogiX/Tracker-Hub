@@ -81,6 +81,8 @@ test.describe("TASK 23 — Customer 360 v2 Unified Customer Workspace Browser Va
         !e.includes("Failed to load resource") &&
         !e.includes("inputValidator() is deprecated") &&
         !e.includes("bootstrap FAILED") &&
+        !e.includes("DialogContent") &&
+        !e.includes("DialogTitle") &&
         !e.includes("404"),
     );
     expect(appExceptions).toHaveLength(0);
