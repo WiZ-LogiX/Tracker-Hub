@@ -14,6 +14,7 @@ import {
   index,
   unique,
   check,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -515,12 +516,20 @@ export const invoices = pgTable(
     paidAt: timestamp("paid_at", { withTimezone: true }),
     snapshot: jsonb("snapshot").notNull().default({}),
     tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id").references((): AnyPgColumn => projects.id, { onDelete: "set null" }),
+    milestoneIndex: integer("milestone_index").notNull().default(1),
+    milestoneTotalCount: integer("milestone_total_count").notNull().default(1),
+    milestoneLabel: text("milestone_label"),
+    milestonePct: numeric("milestone_pct", { precision: 5, scale: 2 }),
+    billingStatus: text("billing_status").notNull().default("issued"),
+    dueStage: text("due_stage"),
   },
   (t) => [
     index("invoices_tenant_id_idx").on(t.tenantId),
     index("invoices_tenant_id_created_at_idx").on(t.tenantId, t.issuedAt),
     index("invoices_tenant_quote_idx").on(t.tenantId, t.quoteId),
     index("invoices_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("invoices_tenant_project_idx").on(t.tenantId, t.projectId),
   ],
 );
 

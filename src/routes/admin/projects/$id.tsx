@@ -278,6 +278,7 @@ function ProjectWorkspacePage() {
           <ProjectFinancialsTab
             financials={data.financials}
             onOpenRecordPayment={(invId) => handleOpenRecordPayment(invId)}
+            onRefresh={() => loadData()}
             currentUserRole={data.currentUserRole}
           />
         </TabsContent>

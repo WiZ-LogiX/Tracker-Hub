@@ -12,9 +12,10 @@ import {
   auditLog,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { requirePermission, type TenantContext } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
 import {
   InvoiceStatusSchema,
+  BillingStatusSchema,
   PaymentMethodSchema,
   computeInvoiceStatus,
   type InvoiceItem,
@@ -28,12 +29,19 @@ const ListInvoicesInput = z
     status: InvoiceStatusSchema.optional(),
     orderId: z.string().uuid().optional(),
     customerId: z.string().uuid().optional(),
+    projectId: z.string().uuid().optional(),
+    billingStatus: BillingStatusSchema.optional(),
+    includeScheduled: z.boolean().optional().default(false),
     search: z.string().optional(),
   })
   .optional()
   .default({});
 
 const GetInvoiceInput = z.object({
+  invoiceId: z.string().uuid(),
+});
+
+const IssueMilestoneInvoiceInput = z.object({
   invoiceId: z.string().uuid(),
 });
 
@@ -81,6 +89,17 @@ export const listInvoices = createServerFn({ method: "GET" })
 
     const conditions = [eq(invoices.tenantId, tenantId)];
 
+    if (data.billingStatus) {
+      conditions.push(eq(invoices.billingStatus, data.billingStatus));
+    } else if (!data.includeScheduled) {
+      // Default ledger view excludes scheduled future milestones
+      conditions.push(eq(invoices.billingStatus, "issued"));
+    }
+
+    if (data.projectId) {
+      conditions.push(eq(invoices.projectId, data.projectId));
+    }
+
     if (data.customerId) {
       conditions.push(eq(invoices.customerId, data.customerId));
     }
@@ -98,10 +117,17 @@ export const listInvoices = createServerFn({ method: "GET" })
         tenantId: invoices.tenantId,
         invoiceNumber: invoices.invoiceNumber,
         quoteId: invoices.quoteId,
+        projectId: invoices.projectId,
         customerId: invoices.customerId,
         total: invoices.total,
         depositAmount: invoices.depositAmount,
         paidAmount: invoices.paidAmount,
+        milestoneIndex: invoices.milestoneIndex,
+        milestoneTotalCount: invoices.milestoneTotalCount,
+        milestoneLabel: invoices.milestoneLabel,
+        milestonePct: invoices.milestonePct,
+        billingStatus: invoices.billingStatus,
+        dueStage: invoices.dueStage,
         issuedAt: invoices.issuedAt,
         paidAt: invoices.paidAt,
         customerName: customers.name,
@@ -155,13 +181,14 @@ export const listInvoices = createServerFn({ method: "GET" })
       // Paid amount is maximum of stored paid_amount or sum of payments
       const paidNum = Math.max(Number(r.paidAmount || 0), stats.sumAmount);
       const balanceDue = Math.max(0, totalNum - paidNum);
-      const status = computeInvoiceStatus(totalNum, paidNum, r.issuedAt);
+      const status = computeInvoiceStatus(totalNum, paidNum, r.issuedAt, r.billingStatus);
 
       return {
         id: r.id,
         tenantId: r.tenantId,
         invoiceNumber: r.invoiceNumber,
         quoteId: r.quoteId,
+        projectId: r.projectId || null,
         orderId: r.orderId || null,
         customerId: r.customerId,
         customerName: r.customerName || null,
@@ -173,6 +200,12 @@ export const listInvoices = createServerFn({ method: "GET" })
         paidAmount: paidNum,
         balanceDue,
         status,
+        billingStatus: (r.billingStatus as any) || "issued",
+        milestoneIndex: r.milestoneIndex ?? 1,
+        milestoneTotalCount: r.milestoneTotalCount ?? 1,
+        milestoneLabel: r.milestoneLabel || null,
+        milestonePct: r.milestonePct ? Number(r.milestonePct) : null,
+        dueStage: r.dueStage || null,
         issuedAt: r.issuedAt,
         paidAt: r.paidAt,
         paymentCount: stats.count,
@@ -207,10 +240,17 @@ export const getInvoiceById = createServerFn({ method: "GET" })
         tenantId: invoices.tenantId,
         invoiceNumber: invoices.invoiceNumber,
         quoteId: invoices.quoteId,
+        projectId: invoices.projectId,
         customerId: invoices.customerId,
         total: invoices.total,
         depositAmount: invoices.depositAmount,
         paidAmount: invoices.paidAmount,
+        milestoneIndex: invoices.milestoneIndex,
+        milestoneTotalCount: invoices.milestoneTotalCount,
+        milestoneLabel: invoices.milestoneLabel,
+        milestonePct: invoices.milestonePct,
+        billingStatus: invoices.billingStatus,
+        dueStage: invoices.dueStage,
         issuedAt: invoices.issuedAt,
         paidAt: invoices.paidAt,
         snapshot: invoices.snapshot,
@@ -258,7 +298,7 @@ export const getInvoiceById = createServerFn({ method: "GET" })
     const sumPayments = paymentRows.reduce((s, p) => s + Number(p.amount || 0), 0);
     const paidNum = Math.max(Number(invoiceRow.paidAmount || 0), sumPayments);
     const balanceDue = Math.max(0, totalNum - paidNum);
-    const status = computeInvoiceStatus(totalNum, paidNum, invoiceRow.issuedAt);
+    const status = computeInvoiceStatus(totalNum, paidNum, invoiceRow.issuedAt, invoiceRow.billingStatus);
 
     const formattedPayments: InvoicePaymentItem[] = paymentRows.map((p) => ({
       id: p.id,
@@ -278,6 +318,7 @@ export const getInvoiceById = createServerFn({ method: "GET" })
       tenantId: invoiceRow.tenantId,
       invoiceNumber: invoiceRow.invoiceNumber,
       quoteId: invoiceRow.quoteId,
+      projectId: invoiceRow.projectId || null,
       orderId: invoiceRow.orderId || null,
       customerId: invoiceRow.customerId,
       customerName: invoiceRow.customerName || null,
@@ -289,10 +330,84 @@ export const getInvoiceById = createServerFn({ method: "GET" })
       paidAmount: paidNum,
       balanceDue,
       status,
+      billingStatus: (invoiceRow.billingStatus as any) || "issued",
+      milestoneIndex: invoiceRow.milestoneIndex ?? 1,
+      milestoneTotalCount: invoiceRow.milestoneTotalCount ?? 1,
+      milestoneLabel: invoiceRow.milestoneLabel || null,
+      milestonePct: invoiceRow.milestonePct ? Number(invoiceRow.milestonePct) : null,
+      dueStage: invoiceRow.dueStage || null,
       issuedAt: invoiceRow.issuedAt,
       paidAt: invoiceRow.paidAt,
       paymentCount: formattedPayments.length,
       payments: formattedPayments,
+    };
+  });
+
+/**
+ * Issue a scheduled milestone invoice (transitioning from 'scheduled' to 'issued').
+ */
+export const issueMilestoneInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .validator((input: unknown) => IssueMilestoneInvoiceInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    requireAnyPermission(ctx, ["invoices.create", "quotes.convert", "invoices.manage"]);
+    const { tenantId, userId } = ctx;
+
+    const [inv] = await db
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.id, data.invoiceId), eq(invoices.tenantId, tenantId)))
+      .limit(1);
+
+    if (!inv) {
+      throw new Error("Invoice not found or access denied");
+    }
+
+    if (inv.billingStatus === "issued") {
+      return {
+        success: true,
+        alreadyIssued: true,
+        invoiceId: inv.id,
+        invoiceNumber: inv.invoiceNumber,
+      };
+    }
+
+    if (inv.billingStatus !== "scheduled") {
+      throw new Error(`Cannot issue milestone invoice with status '${inv.billingStatus}'`);
+    }
+
+    const issuedAt = new Date();
+
+    const [updated] = await db
+      .update(invoices)
+      .set({
+        billingStatus: "issued",
+        issuedAt,
+      })
+      .where(and(eq(invoices.id, inv.id), eq(invoices.tenantId, tenantId)))
+      .returning();
+
+    await db.insert(auditLog).values({
+      tenantId,
+      actorId: userId,
+      entityType: "invoice",
+      entityId: inv.id,
+      action: "milestone_invoice_issued",
+      details: {
+        invoiceNumber: inv.invoiceNumber,
+        milestoneIndex: inv.milestoneIndex,
+        total: inv.total,
+        issuedAt,
+      },
+    });
+
+    return {
+      success: true,
+      invoiceId: updated.id,
+      invoiceNumber: updated.invoiceNumber,
+      billingStatus: "issued" as const,
+      issuedAt: updated.issuedAt,
     };
   });
 

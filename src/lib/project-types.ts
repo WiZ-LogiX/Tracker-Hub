@@ -64,6 +64,10 @@ export interface ProjectHeaderData {
   invoicedAmount: number;
   paidAmount: number;
   outstandingBalance: number;
+  totalScheduled?: number;
+  estimatedCost?: number;
+  estimatedMargin?: number;
+  marginPct?: number;
   mainQuote?: {
     id: string;
     quoteNumber: string;
@@ -130,6 +134,13 @@ export interface ProjectInvoiceRecord {
   status: "draft" | "issued" | "partially_paid" | "paid" | "void";
   issueDate: string;
   dueDate?: string | null;
+  projectId?: string | null;
+  milestoneIndex?: number;
+  milestoneTotalCount?: number;
+  milestoneLabel?: string | null;
+  milestonePct?: number | null;
+  billingStatus?: "scheduled" | "issued" | "void";
+  dueStage?: string | null;
 }
 
 export interface ProjectFinancials {
@@ -137,6 +148,10 @@ export interface ProjectFinancials {
   totalInvoiced: number;
   totalCollected: number;
   outstandingBalance: number;
+  totalScheduled?: number;
+  estimatedCost?: number;
+  estimatedMargin?: number;
+  marginPct?: number;
   invoices: ProjectInvoiceRecord[];
   payments: CustomerPaymentRecord[];
 }

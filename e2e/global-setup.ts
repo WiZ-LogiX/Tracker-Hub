@@ -208,6 +208,38 @@ export default async function globalSetup() {
           subtotal: "92000",
           total: "92000",
           validUntil: "2026-12-31",
+          snapshot: {
+            quotationMode: "commercial",
+            customerName: "م. شريف المنشاوي",
+            customerPhone: "01099887766",
+            quoteNumber: "PLC-00100",
+            lines: [
+              {
+                id: "line-restoration-1",
+                name: "مطبخ أرو مودرن",
+                category: "kitchen",
+                categoryNameAr: "مطابخ",
+                pricingUnitAr: "متر طولي",
+                dimensions: { width: 450, height: 220, depth: 60, unit: "سم" },
+                quantity: 1,
+                unitPrice: 92000,
+                lineTotal: 92000,
+                technicalSpecs: "مطبخ خشب أرو طبيعي مع إكسسوارات بلوم",
+              },
+            ],
+            subtotal: 92000,
+            total: 92000,
+            terms: {
+              deliveryDays: 45,
+              warrantyYears: 10,
+              paymentSchedule: [
+                { percent: 60, timing: "Advance", timingAr: "مقدم عند التعاقد" },
+                { percent: 30, timing: "Middle", timingAr: "بعد التعاقد بـ 15 يوم" },
+                { percent: 10, timing: "Final", timingAr: "عند الاستلام والتركيب" },
+              ],
+              notes: ["شامل المقابض والمفصلات بلوم النمساوية", "ضمان 10 سنوات"],
+            },
+          },
         },
       ])
       .onConflictDoNothing();
@@ -224,6 +256,24 @@ export default async function globalSetup() {
           qty: 1,
           unitPrice: "185000",
           lineTotal: "185000",
+        },
+        {
+          id: "88888888-8888-4888-8888-888888888881",
+          tenantId: testTenantId,
+          quoteId: quoteRestorationId,
+          productName: "مطبخ أرو مودرن",
+          qty: 1,
+          unitPrice: "92000",
+          lineTotal: "92000",
+          materialName: "مطابخ",
+          finishName: "متر طولي",
+          dimensionValue: "450",
+          breakdown: {
+            category: "kitchen",
+            categoryNameAr: "مطابخ",
+            technicalSpecs: "مطبخ خشب أرو طبيعي مع إكسسوارات بلوم",
+            dimensions: { width: 450, height: 220, depth: 60, unit: "سم" },
+          },
         },
       ])
       .onConflictDoNothing();

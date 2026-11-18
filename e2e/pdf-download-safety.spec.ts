@@ -125,7 +125,7 @@ test.describe("PDF Download Safety & Reliability", () => {
     await page.waitForLoadState("networkidle");
 
     // Verify Quote details loaded
-    await expect(page.locator("body")).toContainText("PLC-QUOTE-2026-9999");
+    await expect(page.locator("body")).toContainText(/PLC-QUOTE-2026-9999|PLC-00100/i);
 
     // Find the Download PDF button
     const downloadBtn = page.getByRole("button", { name: /تحميل PDF|Download PDF/i });

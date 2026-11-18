@@ -46,6 +46,19 @@ import {
 import { InternalNotes } from "@/components/admin/InternalNotes";
 import { convertQuoteToOrder } from "@/lib/transactional.functions";
 import { Customer360Drawer } from "@/components/customers/Customer360Drawer";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  type MilestonePreset,
+  MILESTONE_CONFIGS,
+  computeMilestoneBreakdown,
+} from "@/lib/invoice-types";
 
 const TreeConfigurator = lazy(() =>
   import("@/components/quote/TreeConfigurator").then((m) => ({ default: m.TreeConfigurator })),
@@ -99,6 +112,7 @@ function QuoteDetail() {
         setQuote(q);
         setCustomer(comm.customer);
         setItems(comm.lines || []);
+        setIsV2(false);
       }
     } catch (e) {
       console.warn("getCommercialQuote primary load failed, attempting supabase fallback:", e);
@@ -154,6 +168,8 @@ function QuoteDetail() {
 
   const [revisionNotes, setRevisionNotes] = useState("");
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [selectedMilestonePreset, setSelectedMilestonePreset] = useState<MilestonePreset>("60_30_10");
 
   const progStatus: QuotationLifecycleStage = quote ? getQuotationProgressiveStatus(quote) : "draft";
 
@@ -251,7 +267,7 @@ function QuoteDetail() {
     }
   }
 
-  async function convertToInvoice() {
+  async function convertToInvoice(milestones: MilestonePreset = selectedMilestonePreset) {
     if (!quote) return;
     if (quote.status !== "accepted") {
       toast.error(isRtl ? "لا يمكن التحويل لأمر إنتاج إلا بعد اعتماد وقبول العميل لعرض السعر أولاً" : "Only accepted quotations can be converted to an order");
@@ -261,8 +277,10 @@ function QuoteDetail() {
 
     try {
       const { orderId, orderNumber } = await convertFn({
-        data: { quoteId: quote.id },
+        data: { quoteId: quote.id, milestones },
       });
+
+      setShowConvertModal(false);
 
       if (orderId) {
         try {
@@ -564,11 +582,11 @@ function QuoteDetail() {
             ) : quote?.status === "accepted" || quote?.status === "approved" || quote?.status === "converted" ? (
               <Button
                 size="sm"
-                onClick={convertToInvoice}
+                onClick={() => setShowConvertModal(true)}
                 disabled={working}
                 className="w-full h-7 text-xs gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
               >
-                <span>{isRtl ? "تحويل إلى أمر إنتاج الآن" : "Convert to Order Now"}</span>
+                <span>{isRtl ? "تحويل إلى أمر إنتاج وجدولة الدفعات" : "Convert & Schedule Milestones"}</span>
               </Button>
             ) : (
               <div className="text-[11px] text-muted-foreground/80 italic py-1">
@@ -1024,7 +1042,7 @@ function QuoteDetail() {
             {progStatus === "accepted" && (
               <Button
                 variant="default"
-                onClick={convertToInvoice}
+                onClick={() => setShowConvertModal(true)}
                 disabled={working}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold px-4 cursor-pointer"
               >
@@ -1104,6 +1122,122 @@ function QuoteDetail() {
         open={!!customer360Id}
         onOpenChange={(open) => !open && setCustomer360Id(null)}
       />
+
+      {/* Convert Quote & Milestone Billing Dialog */}
+      <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Receipt className="w-5 h-5 text-primary" />
+              <span>{isRtl ? "تحويل عرض السعر وجدولة دفعات التنفيذ" : "Convert Quote & Milestone Billing Schedule"}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {isRtl
+                ? "اختر جدول الدفعات المناسب لربط فواتير المشروع بمراحل الإنتاج والتسليم. سيتم إصدار فاتورة الدفعة الأولى فوراً وجدولة المراحل التالية تلقائياً."
+                : "Select a payment schedule to link project invoices with production milestones. The first milestone invoice will be issued immediately, and future milestones will be scheduled."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
+              <span className="text-xs font-medium text-muted-foreground">{isRtl ? "إجمالي عرض السعر" : "Quote Total"}</span>
+              <span className="text-base font-bold font-mono text-foreground">{formatEGP(Number(quote?.total || 0))}</span>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-foreground">
+                {isRtl ? "خطة جدول الدفعات (Payment Milestone Preset)" : "Payment Milestone Schedule Preset"}
+              </label>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  {
+                    id: "60_30_10" as const,
+                    title: isRtl ? "60% / 30% / 10% — النمط الموصى به للأعمال الفاخرة" : "60% / 30% / 10% — Recommended for Custom Millwork",
+                    desc: isRtl ? "60% عربون تعاقد وخامات • 30% بدء تجميع وتركيب • 10% تسليم نهائي" : "60% Deposit • 30% Delivery & Assembly • 10% Handover",
+                  },
+                  {
+                    id: "50_50" as const,
+                    title: isRtl ? "50% / 50% — دفعتان متساويتان" : "50% / 50% — Equal Halves",
+                    desc: isRtl ? "50% دفعة مقدمة واعتماد تشغيل • 50% عند التوريد والاستلام" : "50% Advance • 50% Handover",
+                  },
+                  {
+                    id: "50_30_20" as const,
+                    title: isRtl ? "50% / 30% / 20% — ثلاث مراحل متوازنة" : "50% / 30% / 20% — Balanced Three Stages",
+                    desc: isRtl ? "50% دفعة مقدمة • 30% إتمام التصنيع والتوريد • 20% استلام نهائي" : "50% Advance • 30% Manufacturing • 20% Handover",
+                  },
+                  {
+                    id: "100" as const,
+                    title: isRtl ? "100% — دفعة واحدة كاملة" : "100% — Full Upfront Payment",
+                    desc: isRtl ? "سداد كامل القيمة فور التعاقد" : "Full payment upon signing",
+                  },
+                ].map((preset) => {
+                  const isSelected = selectedMilestonePreset === preset.id;
+                  return (
+                    <div
+                      key={preset.id}
+                      onClick={() => setSelectedMilestonePreset(preset.id)}
+                      className={`p-3 rounded-lg border text-start cursor-pointer transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-border hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground">{preset.title}</span>
+                        {isSelected && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">{preset.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Live Breakdown Preview */}
+            <div className="space-y-1.5 pt-1">
+              <label className="text-xs font-semibold text-muted-foreground">
+                {isRtl ? "معاينة الفواتير الناتجة:" : "Resulting Milestone Invoices:"}
+              </label>
+              <div className="border rounded-lg divide-y bg-background text-xs">
+                {computeMilestoneBreakdown(Number(quote?.total || 0), selectedMilestonePreset).map((m) => (
+                  <div key={m.index} className="p-2.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={m.billingStatus === "issued" ? "default" : "outline"} className="text-[10px] px-1.5 py-0">
+                        {m.billingStatus === "issued" ? (isRtl ? "تصدر فوراً" : "Issued Now") : (isRtl ? "مجدولة" : "Scheduled")}
+                      </Badge>
+                      <span className="font-medium text-foreground">
+                        {isRtl ? m.labelAr : m.label} ({m.pct}%)
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-foreground">
+                      {formatEGP(m.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              disabled={working}
+              onClick={() => setShowConvertModal(false)}
+            >
+              <span>{isRtl ? "إلغاء" : "Cancel"}</span>
+            </Button>
+            <Button
+              variant="default"
+              disabled={working}
+              onClick={() => convertToInvoice(selectedMilestonePreset)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5"
+            >
+              {working && <Clock className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isRtl ? "تأكيد وتحويل لأمر إنتاج" : "Confirm & Convert to Order"}</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

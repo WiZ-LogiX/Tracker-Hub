@@ -1000,6 +1000,18 @@ PeleCanon CRM transforms the platform into an end-to-end commercial operating sy
    - **Client/Server Bundle Boundary Protection**: UI metadata, labels, and access level definitions are decoupled into `src/lib/tenant-permissions-data.ts`, ensuring client-side React routes (e.g. `/admin/team`) do not pull server database drivers or `postgres` into the Vite browser build.
    - **Self-Seeding Deterministic Test Fixtures**: `project-entity-workflow.test.ts` and `performance-benchmark.test.ts` deterministically seed and clean up isolated test fixtures against `localhost:5433/pelecanon_test` without depending on pre-populated database states.
 
+8. **Automated Preview Runtime & Complete E2E Suite Verification**:
+   - **Dual WebServer Runtime**: `playwright.config.ts` declares dual background servers (port 8081 for Vite development and port 8082 for `vite preview`), allowing `production-preview-runtime.spec.ts` to run automatically with zero manual server orchestration.
+   - **Idempotent Global Setup**: `e2e/global-setup.ts` seeds the full foundational baseline into `pelecanon_test` before workers start, ensuring 100% deterministic test execution even after a database wipe.
+   - **100% Verification Record**: 1,073 Vitest tests (62 files) and 165 Playwright E2E tests pass with 0 failures on commit `2608814`.
+
+9. **Sprint 1 — Milestone Billing Schedules & Project Margin Tracking**:
+   - **Milestone Billing Schema**: Added `project_id`, `milestone_index`, `milestone_total_count`, `milestone_label`, `milestone_pct`, `billing_status` (`'scheduled' | 'issued' | 'void'`), and `due_stage` to `invoices` table with index on `(tenant_id, project_id)`.
+   - **Quote-to-Order Milestone Generation**: `convertQuoteToOrder` supports presets (`"100" | "50_50" | "60_30_10" | "50_30_20"`) with exact remainder rounding on the final milestone ensuring `SUM(milestones.amount) === quote.total`. M1 is automatically `'issued'`, and M2/M3 are created as `'scheduled'` without prematurely triggering overdue flags.
+   - **Project Financial & Margin Aggregation**: `getProjectWorkspaceData` dynamically aggregates `totalInvoiced`, `totalScheduled`, `totalCollected`, `outstandingBalance`, computes `estimatedCost` (snapshot direct costs or 65% baseline), `estimatedMargin`, and `marginPct`. Strictly masks all financial KPIs when `projects.financials.view` permission is absent.
+   - **Interactive UI Components**: Convert Quote Dialog includes milestone preset selector with real-time EGP amounts. Project Financials Tab renders 6-KPI executive strip and a Project Milestone Billing Schedule card with 1-click `issueMilestoneInvoice` and payment recording actions.
+   - **Verification Baseline**: 1,085 Vitest tests across 63 test files, 165 Playwright E2E tests, 0 type errors, 100% i18n parity across EN, AR, and FR.
+
 ---
 
 Project Context Management

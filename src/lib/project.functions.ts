@@ -270,6 +270,7 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
         total: quotes.total,
         subtotal: quotes.subtotal,
         status: quotes.status,
+        snapshot: quotes.snapshot,
         createdAt: quotes.createdAt,
       })
       .from(quotes)
@@ -331,6 +332,12 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
 
     const orderInvoiceIds = orderRows.map((o) => o.invoiceId).filter(Boolean) as string[];
     const invoiceOrList = [];
+    if (realProject?.id) {
+      invoiceOrList.push(eq(invoices.projectId, realProject.id));
+    }
+    if (opp?.id && (!realProject || opp.id !== realProject.id)) {
+      invoiceOrList.push(eq(invoices.projectId, opp.id));
+    }
     if (quoteIdList.length > 0) {
       invoiceOrList.push(inArray(invoices.quoteId, quoteIdList));
     }
@@ -344,14 +351,22 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
           id: invoices.id,
           invoiceNumber: invoices.invoiceNumber,
           quoteId: invoices.quoteId,
+          projectId: invoices.projectId,
           total: invoices.total,
           depositAmount: invoices.depositAmount,
           paidAmount: invoices.paidAmount,
+          milestoneIndex: invoices.milestoneIndex,
+          milestoneTotalCount: invoices.milestoneTotalCount,
+          milestoneLabel: invoices.milestoneLabel,
+          milestonePct: invoices.milestonePct,
+          billingStatus: invoices.billingStatus,
+          dueStage: invoices.dueStage,
           issuedAt: invoices.issuedAt,
           paidAt: invoices.paidAt,
         })
         .from(invoices)
         .where(and(eq(invoices.tenantId, tenantId), or(...invoiceOrList)!))
+        .orderBy(asc(invoices.milestoneIndex), desc(invoices.issuedAt))
         .limit(100);
 
       const invoiceIdList = invoiceRows.map((i) => i.id);
@@ -754,22 +769,19 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
     }));
 
     // 12. Build Financials
-    const totalInvoiced = projectOrders.reduce((sum, o) => sum + o.total, 0);
-    const totalCollected = projectOrders.reduce((sum, o) => sum + o.paidAmount, 0);
-    const projectTotalVal =
-      Number(opp.value || 0) ||
-      projectQuotes[0]?.total ||
-      totalInvoiced ||
-      0;
-    const outstandingBalance = Math.max(0, totalInvoiced - totalCollected);
-
     const invoiceRecords: ProjectInvoiceRecord[] = invoiceRows.map((inv) => {
       const parentOrder = orderRows.find((o) => o.invoiceId === inv.id || (o.quoteId && o.quoteId === inv.quoteId));
       const paid = Math.max(Number(inv.paidAmount || 0), invoicePaymentMap.get(inv.id) || 0);
       const total = Number(inv.total || 0);
       const balanceDue = Math.max(0, total - paid);
       const status: "draft" | "issued" | "partially_paid" | "paid" | "void" =
-        paid >= total ? "paid" : paid > 0 ? "partially_paid" : "issued";
+        inv.billingStatus === "scheduled"
+          ? "draft"
+          : paid >= total
+            ? "paid"
+            : paid > 0
+              ? "partially_paid"
+              : "issued";
 
       return {
         id: inv.id,
@@ -780,10 +792,52 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
         paidAmount: paid,
         balanceDue,
         status,
+        projectId: inv.projectId || null,
+        milestoneIndex: inv.milestoneIndex ?? 1,
+        milestoneTotalCount: inv.milestoneTotalCount ?? 1,
+        milestoneLabel: inv.milestoneLabel || null,
+        milestonePct: inv.milestonePct ? Number(inv.milestonePct) : null,
+        billingStatus: (inv.billingStatus as any) || "issued",
+        dueStage: inv.dueStage || null,
         issueDate: inv.issuedAt.toISOString().slice(0, 10),
         dueDate: null,
       };
     });
+
+    const issuedInvoices = invoiceRecords.filter((i) => i.billingStatus !== "scheduled" && i.billingStatus !== "void");
+    const scheduledInvoices = invoiceRecords.filter((i) => i.billingStatus === "scheduled");
+
+    const invoiceIssuedTotal = issuedInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    const totalScheduled = scheduledInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    const invoiceCollectedTotal = invoiceRecords.reduce((sum, inv) => sum + inv.paidAmount, 0);
+
+    const totalInvoiced = invoiceIssuedTotal > 0 ? invoiceIssuedTotal : projectOrders.reduce((sum, o) => sum + o.total, 0);
+    const totalCollected = invoiceCollectedTotal > 0 ? invoiceCollectedTotal : projectOrders.reduce((sum, o) => sum + o.paidAmount, 0);
+
+    const projectTotalVal =
+      Number(opp.value || 0) ||
+      projectQuotes[0]?.total ||
+      (totalInvoiced + totalScheduled) ||
+      0;
+    const outstandingBalance = Math.max(0, totalInvoiced - totalCollected);
+
+    // Cost & Margin estimation
+    let estimatedCost = 0;
+    const snap = (quoteRows[0]?.snapshot as any) || {};
+    if (typeof snap.estimatedCost === "number" && snap.estimatedCost > 0) {
+      estimatedCost = snap.estimatedCost;
+    } else if (typeof snap.totalCost === "number" && snap.totalCost > 0) {
+      estimatedCost = snap.totalCost;
+    } else if (typeof snap.breakdown?.totalCost === "number" && snap.breakdown.totalCost > 0) {
+      estimatedCost = snap.breakdown.totalCost;
+    } else if (typeof snap.costAnalysis?.totalCost === "number" && snap.costAnalysis.totalCost > 0) {
+      estimatedCost = snap.costAnalysis.totalCost;
+    } else if (projectTotalVal > 0) {
+      estimatedCost = Math.round(projectTotalVal * 0.65 * 100) / 100;
+    }
+
+    const estimatedMargin = Math.max(0, Math.round((projectTotalVal - estimatedCost) * 100) / 100);
+    const marginPct = projectTotalVal > 0 ? Math.round((estimatedMargin / projectTotalVal) * 1000) / 10 : 0;
 
     const paymentRecords: CustomerPaymentRecord[] = paymentRows.map((p) => {
       const parentInv = invoiceRecords.find((i) => i.id === p.invoiceId);
@@ -803,8 +857,12 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
     const projectFinancials: ProjectFinancials = {
       totalProjectValue: !canSeeFinancials ? 0 : projectTotalVal,
       totalInvoiced: !canSeeFinancials ? 0 : totalInvoiced,
+      totalScheduled: !canSeeFinancials ? 0 : totalScheduled,
       totalCollected: !canSeeFinancials ? 0 : totalCollected,
       outstandingBalance: !canSeeFinancials ? 0 : outstandingBalance,
+      estimatedCost: !canSeeFinancials ? 0 : estimatedCost,
+      estimatedMargin: !canSeeFinancials ? 0 : estimatedMargin,
+      marginPct: !canSeeFinancials ? 0 : marginPct,
       invoices: !canSeeFinancials ? [] : invoiceRecords,
       payments: !canSeeFinancials ? [] : paymentRecords,
     };
@@ -982,6 +1040,10 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
       invoicedAmount: !canSeeFinancials ? 0 : totalInvoiced,
       paidAmount: !canSeeFinancials ? 0 : totalCollected,
       outstandingBalance: !canSeeFinancials ? 0 : outstandingBalance,
+      totalScheduled: !canSeeFinancials ? 0 : totalScheduled,
+      estimatedCost: !canSeeFinancials ? 0 : estimatedCost,
+      estimatedMargin: !canSeeFinancials ? 0 : estimatedMargin,
+      marginPct: !canSeeFinancials ? 0 : marginPct,
       mainQuote: mainQuote
         ? {
             id: mainQuote.id,
