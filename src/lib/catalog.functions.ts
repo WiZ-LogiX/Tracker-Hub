@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { setTenantGuc } from "@/lib/tenant";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, canWrite, canDelete, type TenantContext } from "@/lib/tenant-context";
 
 /**
  * Catalog CRUD — tenant-scoped via requireTenant middleware + RLS-enforcing
@@ -389,6 +389,7 @@ export const listDiscounts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth, requireTenant])
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "discounts.view");
     await setTenantGuc(ctx.tenantId);
     const { data, error } = await (context as any).supabase
       .from("discounts")
@@ -406,6 +407,7 @@ export const upsertDiscount = createServerFn({ method: "POST" })
   .inputValidator((d) => DiscountRow.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, data.id ? "discounts.edit" : "discounts.create");
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
       const { error } = await (context as any).supabase
@@ -430,6 +432,7 @@ export const deleteDiscount = createServerFn({ method: "POST" })
   .inputValidator((d) => IdInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "discounts.delete");
     await setTenantGuc(ctx.tenantId);
     const { error } = await (context as any).supabase
       .from("discounts")
@@ -446,6 +449,7 @@ export const listWorkers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth, requireTenant])
   .handler(async ({ context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "workers.view");
     await setTenantGuc(ctx.tenantId);
     const { data, error } = await (context as any).supabase
       .from("workers")
@@ -461,6 +465,7 @@ export const upsertWorker = createServerFn({ method: "POST" })
   .inputValidator((d) => WorkerRow.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, data.id ? "workers.edit" : "workers.create");
     await setTenantGuc(ctx.tenantId);
     if (data.id) {
       const { error } = await (context as any).supabase
@@ -485,6 +490,7 @@ export const deleteWorker = createServerFn({ method: "POST" })
   .inputValidator((d) => IdInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "workers.delete");
     await setTenantGuc(ctx.tenantId);
     const { error } = await (context as any).supabase
       .from("workers")
@@ -622,18 +628,17 @@ export const deletePricingRule = createServerFn({ method: "POST" })
 // These functions operate on the NEW catalog_* / tenant_* tables (T2.x),
 // NOT on the legacy tables above.
 
-import { canWrite } from "@/lib/tenant-context";
 import { recordPriceChangeIfDifferent } from "./priceHistory";
 
 function requireWriteRole(ctx: TenantContext) {
-  if (!canWrite(ctx.role)) {
-    throw new Error("Forbidden: insufficient role for catalog write");
+  if (!canWrite(ctx, "products")) {
+    throw new Error("Forbidden: insufficient permissions for catalog write");
   }
 }
 
 function requireAdminRole(ctx: TenantContext) {
-  if (ctx.role !== "owner" && ctx.role !== "admin") {
-    throw new Error("Forbidden: only owner or admin may archive/delete catalog rows");
+  if (!canDelete(ctx, "products")) {
+    throw new Error("Forbidden: insufficient permissions to archive/delete catalog rows");
   }
 }
 

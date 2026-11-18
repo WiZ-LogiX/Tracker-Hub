@@ -289,12 +289,22 @@ function QuotesPage() {
                               ORD
                             </Badge>
                           )}
-                          {(q.opportunityId || q.orderId) && (
+                          {q.projectId && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 font-bold">
                               PRJ
                             </Badge>
                           )}
+                          {q.opportunityId && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 font-bold">
+                              OPP
+                            </Badge>
+                          )}
                         </Link>
+                        {q.legacyQuoteNumber && (
+                          <div className="text-[10px] text-muted-foreground font-mono" title={isRtl ? "الرقم السابق قبل التوحيد" : "Legacy identifier"}>
+                            {isRtl ? `السابق: ${q.legacyQuoteNumber}` : `Legacy: ${q.legacyQuoteNumber}`}
+                          </div>
+                        )}
                         {q.opportunityId && (
                           <Link
                             to="/admin/crm"

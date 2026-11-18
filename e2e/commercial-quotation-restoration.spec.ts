@@ -3,7 +3,7 @@ import { test, expect, signIn, MOCK_CUSTOMER_ID, MOCK_TENANT_ID } from "./fixtur
 const MOCK_OPP_ID = "77777777-7777-7777-7777-777777777771";
 const MOCK_QUOTE_ID = "88888888-8888-8888-8888-888888888881";
 
-test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verification", () => {
+test.describe("TASK — PeleCanon Quotation Restoration & Commercial PDF Verification", () => {
   test("Scenario A & B: Commercial Quote Builder Workflow & Edit Mode", async ({ page }) => {
     test.setTimeout(60_000);
     const consoleErrors: string[] = [];
@@ -19,9 +19,9 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
       const customerRecord = {
         id: MOCK_CUSTOMER_ID,
         tenant_id: MOCK_TENANT_ID,
-        name: "مستر شاهين",
+        name: "العميل المحترم",
         phone: "+20 11 16322271",
-        email: "shaheen@example.com",
+        email: "client@example.com",
         address: "القاهرة - التجمع الخامس",
       };
       await route.fulfill({
@@ -38,7 +38,7 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
         tenant_id: MOCK_TENANT_ID,
         opportunity_number: "OPP-1002",
         customer_id: MOCK_CUSTOMER_ID,
-        title: "تشطيب فيلا مستر شاهين",
+        title: "تشطيب فيلا العميل المحترم",
         project_type: "residential",
         value: "100000.00",
         sales_owner: "11111111-1111-1111-1111-111111111111",
@@ -84,7 +84,7 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
         total: 92000,
         deposit_pct: 60,
         valid_until: "2026-11-28",
-        notes: "عرض سعر خاص بالسيد مستر شاهين",
+        notes: "عرض سعر خاص بالعميل المحترم",
         snapshot: {
           quotationMode: "commercial",
           lines: [
@@ -143,9 +143,9 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
     await page.goto("/admin/quotes/new");
     await page.waitForLoadState("domcontentloaded");
 
-    // Verify Builder header and Shaheen badge
+    // Verify Builder header and format badge
     await expect(page.getByText(/منشئ عروض الأسعار التجارية|Commercial Quotation Builder/i)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/مظهر مستر شاهين|Shaheen Presentation/i)).toBeVisible();
+    await expect(page.getByText(/العرض التجاري القياسي|Standard Commercial Format/i)).toBeVisible();
 
     // Verify presence of commercial contract terms card (60% / 30% / 10%)
     await expect(page.getByText(/شروط التعاقد والضمان والتسليم|Contract Terms/i)).toBeVisible();
@@ -202,9 +202,9 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
       const customerRecord = {
         id: MOCK_CUSTOMER_ID,
         tenant_id: MOCK_TENANT_ID,
-        name: "مستر شاهين",
+        name: "العميل المحترم",
         phone: "+20 11 16322271",
-        email: "shaheen@example.com",
+        email: "client@example.com",
         address: "القاهرة - التجمع الخامس",
       };
       await route.fulfill({
@@ -221,7 +221,7 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
         tenant_id: MOCK_TENANT_ID,
         opportunity_number: "OPP-1002",
         customer_id: MOCK_CUSTOMER_ID,
-        title: "تشطيب فيلا مستر شاهين",
+        title: "تشطيب فيلا العميل المحترم",
         project_type: "residential",
         value: "78800.00",
         sales_owner: "11111111-1111-1111-1111-111111111111",
@@ -360,9 +360,9 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
       const customerRecord = {
         id: MOCK_CUSTOMER_ID,
         tenant_id: MOCK_TENANT_ID,
-        name: "مستر شاهين",
+        name: "العميل المحترم",
         phone: "+20 11 16322271",
-        email: "shaheen@example.com",
+        email: "client@example.com",
         address: "القاهرة - التجمع الخامس",
       };
       await route.fulfill({
@@ -399,9 +399,9 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
     await page.goto("/admin/quotes/new");
     await page.waitForLoadState("domcontentloaded");
 
-    // Verify Builder title and Shaheen branding in either language
+    // Verify Builder title and format branding in either language
     await expect(page.getByText(/منشئ عروض الأسعار التجارية|Commercial Quotation Builder/i)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/Shaheen Presentation|مظهر مستر شاهين/i)).toBeVisible();
+    await expect(page.getByText(/Standard Commercial Format|العرض التجاري القياسي/i)).toBeVisible();
   });
 
   test("Scenario F: Cross-Module Consistency — Orders, Invoices & Customer 360", async ({ page }) => {
@@ -412,9 +412,9 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
       const customerRecord = {
         id: MOCK_CUSTOMER_ID,
         tenant_id: MOCK_TENANT_ID,
-        name: "مستر شاهين",
+        name: "العميل المحترم",
         phone: "+20 11 16322271",
-        email: "shaheen@example.com",
+        email: "client@example.com",
       };
       await route.fulfill({
         status: 200,
@@ -486,9 +486,9 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
       const customerRecord = {
         id: MOCK_CUSTOMER_ID,
         tenant_id: MOCK_TENANT_ID,
-        name: "مستر شاهين",
+        name: "العميل المحترم",
         phone: "+20 11 16322271",
-        email: "shaheen@example.com",
+        email: "client@example.com",
         address: "التجمع الخامس، القاهرة",
       };
       await route.fulfill({
@@ -544,7 +544,7 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
     const previewBtn = page.getByRole("button", { name: /معاينة عرض السعر|Preview/i }).first();
     await previewBtn.click();
 
-    // 9. Verify Preview Modal renders Shaheen branding, table headers, and customer info
+    // 9. Verify Preview Modal renders standard commercial branding, table headers, and customer info
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 10_000 });
     await expect(dialog.getByText("PELECANON", { exact: true })).toBeVisible();
@@ -604,9 +604,9 @@ test.describe("TASK — PeleCanon Quotation Restoration & Shaheen PDF Verificati
       const customerRecord = {
         id: MOCK_CUSTOMER_ID,
         tenant_id: MOCK_TENANT_ID,
-        name: "مستر شاهين",
+        name: "العميل المحترم",
         phone: "+20 11 16322271",
-        email: "shaheen@example.com",
+        email: "client@example.com",
         address: "التجمع الخامس، القاهرة",
       };
       await route.fulfill({

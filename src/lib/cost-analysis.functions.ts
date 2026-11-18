@@ -23,7 +23,7 @@ import {
   tenantWastageRules,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import type { TenantContext } from "@/lib/tenant-context";
+import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import {
   computeProfitAndMargin,
   type QuotationCostAnalysis,
@@ -549,12 +549,8 @@ export const getQuotationCostAnalysis = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetQuoteCostInput.parse(input))
   .handler(async ({ data, context }): Promise<QuotationCostAnalysis> => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "cost-analysis.view");
     const { tenantId, role } = ctx;
-
-    // Server-side security check: workers cannot view sensitive cost/margins
-    if (role === "worker") {
-      throw new Error("Forbidden: insufficient permissions to view margin and cost data");
-    }
 
     // 1. Fetch quote row
     const [quoteRow] = await db
@@ -738,6 +734,7 @@ export const getOrderCostAnalysis = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetOrderCostInput.parse(input))
   .handler(async ({ data, context }): Promise<QuotationCostAnalysis> => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "cost-analysis.view");
     const { tenantId } = ctx;
 
     const [orderRow] = await db
@@ -765,11 +762,8 @@ export const getGlobalCostAnalysis = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetGlobalCostInput.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<GlobalCostAnalysisSummary> => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "cost-analysis.view");
     const { tenantId, role } = ctx;
-
-    if (role === "worker") {
-      throw new Error("Forbidden: insufficient permissions to view cost analysis");
-    }
 
     const daysNum = Number(data.days || 90);
     const conditions = [eq(quotes.tenantId, tenantId)];
@@ -810,35 +804,43 @@ export const getGlobalCostAnalysis = createServerFn({ method: "GET" })
 
     const quoteSummaries = [];
 
-    // Analyze individual quotes
-    for (const q of quoteRows) {
-      try {
-        const analysis = await getQuotationCostAnalysis({ data: { quoteId: q.id } });
-        totalSellingPrice += analysis.sellingPriceBeforeVat;
-        totalManufacturingCost += analysis.totalManufacturingCost;
+    // Concurrently analyze individual quotes in parallel
+    const analyses = await Promise.all(
+      quoteRows.map(async (q) => {
+        try {
+          const analysis = await getQuotationCostAnalysis({ data: { quoteId: q.id } });
+          return { q, analysis };
+        } catch {
+          return null;
+        }
+      }),
+    );
 
-        categories.materials += analysis.categories.materials;
-        categories.hardware += analysis.categories.hardware;
-        categories.accessories += analysis.categories.accessories;
-        categories.finishes += analysis.categories.finishes;
-        categories.manufacturing += analysis.categories.manufacturing;
-        categories.wastage += analysis.categories.wastage;
-        categories.other += analysis.categories.other;
+    for (const res of analyses) {
+      if (!res) continue;
+      const { q, analysis } = res;
+      totalSellingPrice += analysis.sellingPriceBeforeVat;
+      totalManufacturingCost += analysis.totalManufacturingCost;
 
-        quoteSummaries.push({
-          id: q.id,
-          quoteNumber: q.quoteNumber,
-          customerName: q.customerName || null,
-          createdAt: q.createdAt,
-          sellingPrice: analysis.sellingPriceBeforeVat,
-          manufacturingCost: analysis.totalManufacturingCost,
-          grossProfit: analysis.grossProfit,
-          grossMarginPct: analysis.grossMarginPct,
-          status: q.status,
-        });
-      } catch {
-        // Skip unpriceable draft quotes gracefully
-      }
+      categories.materials += analysis.categories.materials;
+      categories.hardware += analysis.categories.hardware;
+      categories.accessories += analysis.categories.accessories;
+      categories.finishes += analysis.categories.finishes;
+      categories.manufacturing += analysis.categories.manufacturing;
+      categories.wastage += analysis.categories.wastage;
+      categories.other += analysis.categories.other;
+
+      quoteSummaries.push({
+        id: q.id,
+        quoteNumber: q.quoteNumber,
+        customerName: q.customerName || null,
+        createdAt: q.createdAt,
+        sellingPrice: analysis.sellingPriceBeforeVat,
+        manufacturingCost: analysis.totalManufacturingCost,
+        grossProfit: analysis.grossProfit,
+        grossMarginPct: analysis.grossMarginPct,
+        status: q.status,
+      });
     }
 
     const { grossProfit: totalGrossProfit, grossMarginPct: averageGrossMarginPct } =

@@ -4,6 +4,7 @@ import { createFileRoute, useNavigate, useSearch, Link } from "@tanstack/react-r
 import { useEffect, useState, useMemo } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { saveCommercialQuote, getCommercialQuote } from "@/lib/quote.functions";
 import { listCommercialCategories } from "@/lib/commercial-category.functions";
@@ -52,7 +53,7 @@ import {
 import { formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
 import { z } from "zod";
-import { getNextPLCNumber } from "@/lib/numbering";
+import { getNextPLCNumber, generatePLCId } from "@/lib/numbering";
 import {
   DEFAULT_COMMERCIAL_CATEGORIES,
   COMMERCIAL_PRICING_UNITS,
@@ -124,6 +125,7 @@ function CommercialQuoteBuilder() {
   const isRtl = i18n.language === "ar";
   const nav = useNavigate();
   const search = Route.useSearch();
+  const queryClient = useQueryClient();
 
   const saveCommercialQuoteFn = useServerFn(saveCommercialQuote);
   const getCommercialQuoteFn = useServerFn(getCommercialQuote);
@@ -229,7 +231,7 @@ function CommercialQuoteBuilder() {
             const nextNo = await getNextPLCNumber("quote");
             setQuoteNumber(nextNo);
           } catch {
-            setQuoteNumber("PLC-00001");
+            setQuoteNumber(generatePLCId());
           }
         }
 
@@ -538,7 +540,16 @@ function CommercialQuoteBuilder() {
           : "Commercial quotation sent to customer",
       );
 
-      nav({ to: "/admin/quotes/$id", params: { id: res.quoteId } });
+      // Targeted cache invalidation
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+
+      if (res?.quoteId) {
+        nav({ to: "/admin/quotes/$id", params: { id: res.quoteId } });
+      } else {
+        nav({ to: "/admin/quotes" });
+      }
     } catch (e: any) {
       toast.error(e?.message ?? (isRtl ? "فشل حفظ عرض السعر" : "Failed to save quotation"));
     } finally {
@@ -597,7 +608,7 @@ function CommercialQuoteBuilder() {
                 : "Commercial Quotation Builder"}
             </h1>
             <Badge variant="outline" className="border-emerald-600 text-emerald-700 bg-emerald-50 text-xs">
-              {isRtl ? "مظهر مستر شاهين" : "Shaheen Presentation"}
+              {isRtl ? "العرض التجاري القياسي" : "Standard Commercial Format"}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -1481,7 +1492,7 @@ function CommercialQuoteBuilder() {
         </CardContent>
       </Card>
 
-      {/* ── In-Builder Quotation Preview Dialog (Shaheen 4-column Presentation) ── */}
+      {/* ── In-Builder Quotation Preview Dialog (Commercial 4-column Presentation) ── */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1495,8 +1506,8 @@ function CommercialQuoteBuilder() {
                 </DialogTitle>
                 <DialogDescription className="text-xs">
                   {isRtl
-                    ? "معاينة حية للمقايسة كما ستظهر في المستند والـ PDF الموجه للعميل (مظهر مستر شاهين)."
-                    : "Live preview of the quotation document matching the Shaheen visual presentation."}
+                    ? "معاينة حية للمقايسة كما ستظهر في المستند والـ PDF الموجه للعميل."
+                    : "Live preview of the quotation document matching the standard commercial presentation."}
                 </DialogDescription>
               </div>
             </div>
@@ -1544,7 +1555,7 @@ function CommercialQuoteBuilder() {
               </div>
             </div>
 
-            {/* Shaheen 4-Column Table */}
+            {/* Commercial 4-Column Table */}
             <div className="border rounded-lg overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
@@ -1643,7 +1654,7 @@ function CommercialQuoteBuilder() {
               </div>
             </div>
 
-            {/* Contract Conditions / Shaheen Terms */}
+            {/* Contract Conditions / Commercial Terms */}
             <div className="border rounded-lg p-3 bg-muted/10 space-y-2 text-xs">
               <div className="font-bold text-foreground flex items-center gap-1.5">
                 <ShieldCheck className="h-4 w-4 text-primary" />

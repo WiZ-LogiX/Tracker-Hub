@@ -866,7 +866,7 @@ function Header({
 }
 
 // ---------------------------------------------------------------------------
-// Shaheen Commercial Quotation PDF (Reference: "Mr. Shaheen Q.pdf")
+// Standard Commercial Quotation PDF
 // ---------------------------------------------------------------------------
 const SHAHEEN_GREEN = "#008269";
 const SHAHEEN_GREEN_DARK = "#006d58";
@@ -1169,7 +1169,7 @@ function formatCategorySinglePrice(cat: string | null | undefined, name: string)
   return `سعر ال${label} الواحد`;
 }
 
-export function ShaheenQuotationPdf({
+export function CommercialQuotationPdf({
   data,
   tenant,
   logoDataUri,
@@ -1199,7 +1199,7 @@ export function ShaheenQuotationPdf({
   };
 
   const quoteLogo = logoDataUri || PELECANON_LOGO_DATA_URI;
-  const customerName = data.customers?.name || "مستر شاهين";
+  const customerName = data.customers?.name || (data.snapshot as any)?.customerName || "";
 
   return (
     <Document language="ar">
@@ -1227,7 +1227,7 @@ export function ShaheenQuotationPdf({
         {/* Customer greeting row */}
         <View style={shaheenStyles.customerRow}>
           <Text style={shaheenStyles.customerName}>
-            إلى السيد : {customerName}
+            {customerName ? `إلى السيد : ${customerName}` : "إلى العميل المحترم"}
           </Text>
           <View style={shaheenStyles.quoteMetaContainer}>
             <Text style={shaheenStyles.quoteMeta}>رقم العرض:</Text>
@@ -1400,6 +1400,8 @@ export function ShaheenQuotationPdf({
     </Document>
   );
 }
+
+export const ShaheenQuotationPdf = CommercialQuotationPdf;
 
 export function QuotePdf({
   data,

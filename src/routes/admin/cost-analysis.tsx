@@ -80,7 +80,7 @@ function CostAnalysisPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2.5 text-foreground">
             <BarChart3 className="h-7 w-7 text-primary" />
-            <span>{isRtl ? "تحليل التكاليف وهامش الربحية (V2)" : "V2 Cost Analysis & Profitability"}</span>
+            <span>{isRtl ? "تحليل التكاليف وهامش الربحية" : "Cost Analysis & Profitability"}</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isRtl

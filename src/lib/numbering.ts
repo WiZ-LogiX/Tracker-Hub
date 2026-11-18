@@ -1,26 +1,49 @@
 /**
- * Generate a unified PLC ID in format PLC-XXXXX (5 random uppercase alphanumeric chars).
- * This ID is created once and reused across the quote → invoice → order chain.
+ * Canonical Quotation & Entity Numbering for PeleCanon
+ *
+ * Strict format: PLC-XXXXX (fixed 'PLC-' prefix + exactly 5 uppercase alphanumeric chars [0-9A-Z])
+ * Examples: PLC-YQ3Z5, PLC-5PV1Z
+ */
+
+export const CANONICAL_QUOTE_NUMBER_REGEX = /^PLC-[0-9A-Z]{5}$/;
+
+export function isCanonicalQuoteNumber(num: string | null | undefined): boolean {
+  if (!num) return false;
+  return CANONICAL_QUOTE_NUMBER_REGEX.test(num.trim());
+}
+
+const ALPHANUMERIC_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/**
+ * Generate a cryptographically secure unified PLC ID in canonical format PLC-XXXXX.
+ * 5 uppercase alphanumeric characters [0-9A-Z].
  */
 export function generatePLCId(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 5; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  let result = "";
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(5);
+    crypto.getRandomValues(bytes);
+    for (let i = 0; i < 5; i++) {
+      result += ALPHANUMERIC_CHARS[bytes[i] % ALPHANUMERIC_CHARS.length];
+    }
+  } else {
+    for (let i = 0; i < 5; i++) {
+      result += ALPHANUMERIC_CHARS.charAt(Math.floor(Math.random() * ALPHANUMERIC_CHARS.length));
+    }
   }
   return `PLC-${result}`;
 }
 
 /**
- * Generate the next sequential PLC number for a given entity type
- * (quote / invoice / order). Format: PLC-TYPE-YYYYMMDD-NNNN (random suffix
- * for collision safety). Exists as a standalone helper so the legacy
- * /admin/quotes/new flow can keep working without a server round-trip
- * for the placeholder number.
+ * Generate the next PLC number.
+ * For quotes, returns canonical PLC-XXXXX format.
  */
 export async function getNextPLCNumber(
   type: "quote" | "invoice" | "order",
 ): Promise<string> {
+  if (type === "quote") {
+    return generatePLCId();
+  }
   const now = new Date();
   const suffix = now
     .toISOString()

@@ -13,6 +13,7 @@ export type QuoteStatusFilter =
 export interface QuotationListItem {
   id: string;
   quoteNumber: string;
+  legacyQuoteNumber?: string | null;
   customerId: string;
   customerName: string | null;
   customerPhone: string | null;
@@ -26,6 +27,8 @@ export interface QuotationListItem {
   createdAt: string | Date;
   orderId?: string | null;
   orderNumber?: string | null;
+  projectId?: string | null;
+  projectNumber?: string | null;
   opportunityId?: string | null;
   opportunityNumber?: string | null;
   opportunityTitle?: string | null;

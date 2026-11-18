@@ -12,10 +12,12 @@ import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { db } from "@/db/client.server";
 import { quotes, quoteItems, customers, orders, opportunities, tasks, taskAssignees, auditLog, appUsers, tenantCounters, invoices, invoicePayments, deliveryHandovers } from "@/db/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
-import { type TenantContext, forbidWorker } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
 import { deliverToN8n, type NotifyPayload } from "@/lib/whatsapp-share.functions";
 import { generatePdf } from "@/lib/pdf.functions";
 import { log } from "@/lib/log";
+import { findProjectByQuoteOrOrder, findProjectsByQuoteOrOrderBatch } from "@/lib/project-store.server";
+import { generatePLCId, isCanonicalQuoteNumber } from "@/lib/numbering";
 import {
   priceQuote,
   type QuoteInput,
@@ -117,33 +119,57 @@ export const createQuote = createServerFn({ method: "POST" })
   .inputValidator((d) => CreateQuoteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Commercial Quotes");
+    requirePermission(ctx, "quotes.create");
     const client = (context as any).supabase;
 
-    // Insert quote with tenant_id
-    const quotePayload: Record<string, any> = {
-      customer_id: data.customer_id,
-      request_id: data.request_id ?? null,
-      status: data.status,
-      quote_number: data.quote_number,
-      subtotal: data.subtotal,
-      discount_amount: data.discount_amount,
-      discount_code: data.discount_code ?? null,
-      vat_pct: data.vat_pct,
-      vat_amount: data.vat_amount,
-      total: data.total,
-      notes: data.notes ?? null,
-      snapshot: data.snapshot,
-      tenant_id: ctx.tenantId,
-    };
-    if (data.opportunity_id) {
-      quotePayload.opportunity_id = data.opportunity_id;
-    }
+    // Ensure canonical PLC-XXXXX format with collision retry logic
+    let quoteRes: any;
+    let attempts = 0;
+    const MAX_RETRIES = 5;
+    while (attempts < MAX_RETRIES) {
+      attempts++;
+      const canonicalQuoteNumber = (attempts === 1 && isCanonicalQuoteNumber(data.quote_number))
+        ? data.quote_number
+        : generatePLCId();
 
-    let quoteRes = await client.from("quotes").insert(quotePayload).select("id").single();
-    if (quoteRes.error && data.opportunity_id && quoteRes.error.message?.includes("opportunity_id")) {
-      delete quotePayload.opportunity_id;
+      const quotePayload: Record<string, any> = {
+        customer_id: data.customer_id,
+        request_id: data.request_id ?? null,
+        status: data.status,
+        quote_number: canonicalQuoteNumber,
+        legacy_quote_number: !isCanonicalQuoteNumber(data.quote_number) ? data.quote_number : null,
+        subtotal: data.subtotal,
+        discount_amount: data.discount_amount,
+        discount_code: data.discount_code ?? null,
+        vat_pct: data.vat_pct,
+        vat_amount: data.vat_amount,
+        total: data.total,
+        notes: data.notes ?? null,
+        snapshot: data.snapshot,
+        tenant_id: ctx.tenantId,
+      };
+      if (data.opportunity_id) {
+        quotePayload.opportunity_id = data.opportunity_id;
+      }
+
       quoteRes = await client.from("quotes").insert(quotePayload).select("id").single();
+      if (quoteRes.error && data.opportunity_id && quoteRes.error.message?.includes("opportunity_id")) {
+        delete quotePayload.opportunity_id;
+        quoteRes = await client.from("quotes").insert(quotePayload).select("id").single();
+      }
+
+      if (quoteRes.error) {
+        const isUniqueViolation =
+          quoteRes.error.code === "23505" ||
+          quoteRes.error.message?.includes("quote_number") ||
+          quoteRes.error.details?.includes("quote_number");
+        if (isUniqueViolation && attempts < MAX_RETRIES) {
+          log.warn(`createQuote: collision on ${canonicalQuoteNumber}, retrying (${attempts}/${MAX_RETRIES})...`);
+          continue;
+        }
+        throw new Error(quoteRes.error.message ?? "فشل إنشاء عرض السعر");
+      }
+      break;
     }
     const { data: quote, error: quoteError } = quoteRes;
 
@@ -400,7 +426,7 @@ export const saveV2Quote = createServerFn({ method: "POST" })
   .inputValidator((d) => SaveV2QuoteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Commercial Quotes");
+    requirePermission(ctx, "quotes.edit");
     const tid = ctx.tenantId, client = (context as any).supabase;
 
     // 1. Insert quote
@@ -589,6 +615,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
   .inputValidator((d) => UpdateQuoteStatusInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "quotes.edit");
     const tid = ctx.tenantId;
     const client = (context as any).supabase;
 
@@ -923,7 +950,7 @@ export const approveQuoteAndRequestConfirmation = createServerFn({ method: "POST
   .inputValidator((d) => ApproveQuoteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Quotation Approval");
+    requirePermission(ctx, "quotes.approve");
     const tid = ctx.tenantId;
     const client = (context as any).supabase;
 
@@ -1948,7 +1975,7 @@ export const listQuotations = createServerFn({ method: "GET" })
   .validator((input: unknown) => ListQuotesInput.parse(input ?? {}))
   .handler(async ({ data, context }): Promise<PaginatedQuotationsResult> => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Commercial Quotes");
+    requirePermission(ctx, "quotes.view");
     const { tenantId } = ctx;
 
     const conditions = [eq(quotes.tenantId, tenantId)];
@@ -1960,7 +1987,7 @@ export const listQuotations = createServerFn({ method: "GET" })
     if (data.search && data.search.trim().length > 0) {
       const q = `%${data.search.trim()}%`;
       conditions.push(
-        sql`(${quotes.quoteNumber} ILIKE ${q} OR ${customers.name} ILIKE ${q} OR ${customers.phone} ILIKE ${q})`,
+        sql`(${quotes.quoteNumber} ILIKE ${q} OR ${quotes.legacyQuoteNumber} ILIKE ${q} OR ${customers.name} ILIKE ${q} OR ${customers.phone} ILIKE ${q})`,
       );
     }
 
@@ -2002,6 +2029,7 @@ export const listQuotations = createServerFn({ method: "GET" })
       .select({
         id: quotes.id,
         quoteNumber: quotes.quoteNumber,
+        legacyQuoteNumber: quotes.legacyQuoteNumber,
         customerId: quotes.customerId,
         customerName: customers.name,
         customerPhone: customers.phone,
@@ -2023,12 +2051,19 @@ export const listQuotations = createServerFn({ method: "GET" })
       .limit(pageSize)
       .offset(offset);
 
+    // 3. Batch lookup projects (eliminating N+1 query loop)
+    const quoteIds = quoteRows.map((q) => q.id);
+    const orderIds = quoteRows.map((q) => q.orderId).filter(Boolean) as string[];
+    const { byQuoteId, byOrderId } = await findProjectsByQuoteOrOrderBatch(tenantId, quoteIds, orderIds);
+
     const rows: QuotationListItem[] = quoteRows.map((q) => {
       const snap = ((q.snapshot as any) || {}) as Record<string, any>;
       const progStatus = getQuotationProgressiveStatus(q);
+      const linkedProject = (q.orderId && byOrderId.get(q.orderId)) || byQuoteId.get(q.id) || null;
       return {
         id: q.id,
         quoteNumber: q.quoteNumber,
+        legacyQuoteNumber: q.legacyQuoteNumber || null,
         customerId: q.customerId,
         customerName: q.customerName || null,
         customerPhone: q.customerPhone || null,
@@ -2042,6 +2077,8 @@ export const listQuotations = createServerFn({ method: "GET" })
         createdAt: q.createdAt instanceof Date ? q.createdAt.toISOString() : String(q.createdAt),
         orderId: q.orderId || null,
         orderNumber: q.orderNumber || null,
+        projectId: linkedProject?.id || null,
+        projectNumber: linkedProject?.projectNumber || null,
         opportunityId: (snap.opportunityId as string) || (snap.opportunity_id as string) || null,
         opportunityNumber: (snap.opportunityNumber as string) || null,
         opportunityTitle: (snap.opportunityTitle as string) || null,
@@ -2072,6 +2109,7 @@ export const getQuoteCommercialContext = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetQuoteCommercialContextInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
+    requirePermission(ctx, "quotes.view");
     const { tenantId } = ctx;
 
     const [q] = await db
@@ -2206,7 +2244,11 @@ export const getQuoteCommercialContext = createServerFn({ method: "GET" })
       // Non-blocking
     }
 
-    const projectId = oppId || linkedOrder?.id || null;
+    // Resolve real Project record (only if created on quote acceptance / conversion)
+    const realProject = await findProjectByQuoteOrOrder(tenantId, q.id, linkedOrder?.id);
+    const projectId = realProject?.id ?? null;
+    const projectNumber = realProject?.projectNumber ?? null;
+    const projectTitle = realProject?.title ?? null;
 
     return {
       quoteId: q.id,
@@ -2227,8 +2269,8 @@ export const getQuoteCommercialContext = createServerFn({ method: "GET" })
       salesOwnerName: oppRow?.salesOwnerName ?? (snap.salesOwnerName as string) ?? null,
       // Project
       projectId,
-      projectNumber: oppRow?.opportunityNumber || (linkedOrder ? `PRJ-${linkedOrder.orderNumber}` : (oppId ? "PRJ" : null)),
-      projectTitle: oppRow?.opportunityTitle || (linkedOrder ? `مشروع أمر ${linkedOrder.orderNumber}` : (oppId ? "Project" : null)),
+      projectNumber,
+      projectTitle,
       // Production Order
       orderId: linkedOrder?.id ?? null,
       orderNumber: linkedOrder?.orderNumber ?? null,
@@ -2261,7 +2303,7 @@ export const getCommercialQuote = createServerFn({ method: "GET" })
   .validator((input: unknown) => GetCommercialQuoteInput.parse(input))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Commercial Quotes");
+    requirePermission(ctx, "quotes.view");
     const { tenantId } = ctx;
 
     const [quote] = await db
@@ -2344,7 +2386,7 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
   .validator((d) => SaveCommercialQuoteInput.parse(d))
   .handler(async ({ data, context }) => {
     const ctx = context.tenantContext as TenantContext;
-    forbidWorker(ctx, "Commercial Quotes");
+    requirePermission(ctx, data.quoteId ? "quotes.edit" : "quotes.create");
     const { tenantId, userId } = ctx;
     const client = (context as any).supabase;
 
@@ -2451,30 +2493,55 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
       commercialSnapshot.version_history = [];
       commercialSnapshot.lifecycle = { stage: data.status };
 
-      const quotePayload: Record<string, any> = {
-        tenantId,
-        quoteNumber: data.quote_number,
-        customerId: data.customer_id,
-        status: data.status,
-        subtotal: String(totals.subtotal),
-        discountAmount: String(totals.discountAmount),
-        discountCode: data.discount_code ?? null,
-        vatPct: String(totals.vatPct),
-        vatAmount: String(totals.vatAmount),
-        total: String(totals.total),
-        depositPct: String(totals.depositPct),
-        validUntil: data.valid_until || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-        notes: noteText || null,
-        snapshot: commercialSnapshot as any,
-        createdBy: userId ?? null,
-        createdAt: new Date(),
-      };
+      let insertSuccess = false;
+      let attempts = 0;
+      const MAX_RETRIES = 5;
+      while (!insertSuccess && attempts < MAX_RETRIES) {
+        attempts++;
+        const canonicalQuoteNumber = (attempts === 1 && isCanonicalQuoteNumber(data.quote_number))
+          ? data.quote_number
+          : generatePLCId();
+        commercialSnapshot.quoteNumber = canonicalQuoteNumber;
 
-      const [newQuote] = await db.insert(quotes).values(quotePayload as any).returning({ id: quotes.id });
-      if (!newQuote) {
-        throw new Error("Failed to create commercial quotation record");
+        const quotePayload: Record<string, any> = {
+          tenantId,
+          quoteNumber: canonicalQuoteNumber,
+          legacyQuoteNumber: !isCanonicalQuoteNumber(data.quote_number) ? data.quote_number : null,
+          customerId: data.customer_id,
+          status: data.status,
+          subtotal: String(totals.subtotal),
+          discountAmount: String(totals.discountAmount),
+          discountCode: data.discount_code ?? null,
+          vatPct: String(totals.vatPct),
+          vatAmount: String(totals.vatAmount),
+          total: String(totals.total),
+          depositPct: String(totals.depositPct),
+          validUntil: data.valid_until || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          notes: noteText || null,
+          snapshot: commercialSnapshot as any,
+          createdBy: userId ?? null,
+          createdAt: new Date(),
+        };
+
+        try {
+          const [newQuote] = await db.insert(quotes).values(quotePayload as any).returning({ id: quotes.id });
+          if (!newQuote) {
+            throw new Error("Failed to create commercial quotation record");
+          }
+          quoteId = newQuote.id;
+          insertSuccess = true;
+        } catch (insertErr: any) {
+          const isUniqueViolation =
+            insertErr?.code === "23505" ||
+            String(insertErr?.message || "").includes("quotes_quote_number_unique") ||
+            String(insertErr?.detail || "").includes("quote_number");
+          if (isUniqueViolation && attempts < MAX_RETRIES) {
+            log.warn(`saveCommercialQuote: collision on quote_number ${canonicalQuoteNumber}, retrying (${attempts}/${MAX_RETRIES})...`);
+            continue;
+          }
+          throw insertErr;
+        }
       }
-      quoteId = newQuote.id;
     }
 
     // 4. Insert quote_items with commercial specs
@@ -2519,7 +2586,7 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
         await writeSnapshot(
           {
             tenantId,
-            quotationId: quoteId,
+            quotationId: quoteId!,
             state: "sent",
             tree: { products: data.lines },
             breakdown: commercialSnapshot,
@@ -2538,7 +2605,7 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
         actorId: userId ?? "system",
         action: data.quoteId ? "quote_updated" : "quote_created",
         entityType: "quote",
-        entityId: quoteId,
+        entityId: quoteId!,
         details: {
           mode: "commercial",
           quoteNumber: data.quote_number,
@@ -2552,8 +2619,8 @@ export const saveCommercialQuote = createServerFn({ method: "POST" })
     }
 
     return {
-      quoteId,
-      quoteNumber: data.quote_number,
+      quoteId: quoteId!,
+      quoteNumber: commercialSnapshot.quoteNumber || data.quote_number,
       total: totals.total,
       subtotal: totals.subtotal,
       discountAmount: totals.discountAmount,

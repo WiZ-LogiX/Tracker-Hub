@@ -2,10 +2,12 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   updateQuoteStatus,
   getQuoteCommercialContext,
+  getCommercialQuote,
   approveQuoteAndRequestConfirmation,
   recordCustomerQuoteConsent,
   recordCustomerQuoteDecision,
@@ -60,6 +62,7 @@ function QuoteDetail() {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const nav = useNavigate();
+  const queryClient = useQueryClient();
   const [quote, setQuote] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [customer, setCustomer] = useState<any>(null);
@@ -69,42 +72,74 @@ function QuoteDetail() {
   const [commercialContext, setCommercialContext] = useState<any>(null);
 
   const getCommercialContextFn = useServerFn(getQuoteCommercialContext);
+  const getCommercialQuoteFn = useServerFn(getCommercialQuote);
 
   useEffect(() => {
     load();
   }, [id]);
 
   async function load() {
-    const { data: q } = await supabase.from("quotes").select("*").eq("id", id).single();
-    setQuote(q);
-    if (q) {
-      const { data: c } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("id", q.customer_id)
-        .single();
-      setCustomer(c);
-
-      // Check if this is a V2 quote (has hierarchy data)
-      const { data: products } = await supabase
-        .from("quotation_products")
-        .select("id")
-        .eq("quotation_id", id)
-        .limit(1);
-      const v2 = (products?.length ?? 0) > 0;
-      setIsV2(v2);
-
-      if (!v2) {
-        const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", id);
-        setItems(its ?? []);
+    let q: any = null;
+    try {
+      const comm = await getCommercialQuoteFn({ data: { quoteId: id } });
+      if (comm?.quote) {
+        q = {
+          ...comm.quote,
+          id: comm.quote.id,
+          quote_number: comm.quote.quoteNumber,
+          legacy_quote_number: comm.quote.legacyQuoteNumber,
+          customer_id: comm.quote.customerId,
+          status: comm.quote.status,
+          subtotal: comm.quote.subtotal,
+          vat_amount: comm.quote.vatAmount,
+          total: comm.quote.total,
+          valid_until: comm.quote.validUntil,
+          snapshot: comm.snapshot,
+        };
+        setQuote(q);
+        setCustomer(comm.customer);
+        setItems(comm.lines || []);
       }
+    } catch (e) {
+      console.warn("getCommercialQuote primary load failed, attempting supabase fallback:", e);
+    }
 
+    if (!q) {
+      try {
+        const res = await supabase.from("quotes").select("*").eq("id", id).maybeSingle();
+        q = res.data;
+        if (q) {
+          setQuote(q);
+          const { data: c } = await supabase
+            .from("customers")
+            .select("*")
+            .eq("id", q.customer_id)
+            .maybeSingle();
+          setCustomer(c);
+
+          const { data: products } = await supabase
+            .from("quotation_products")
+            .select("id")
+            .eq("quotation_id", id)
+            .limit(1);
+          const v2 = (products?.length ?? 0) > 0;
+          setIsV2(v2);
+
+          if (!v2) {
+            const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", id);
+            setItems(its ?? []);
+          }
+        }
+      } catch {}
+    }
+
+    if (q) {
       // Fetch linked Opportunity commercial context
       try {
         const cc = await getCommercialContextFn({ data: { quoteId: id } });
         setCommercialContext(cc);
-      } catch {
-        // Non-blocking
+      } catch (err) {
+        console.warn("[quotes] Failed to load commercial context:", err);
       }
     }
   }
@@ -126,6 +161,9 @@ function QuoteDetail() {
     setWorking(true);
     try {
       await approveAndRequestFn({ data: { quote_id: id } });
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
       toast.success(isRtl ? "تم اعتماد عرض السعر وإرسال طلب التأكيد للعميل عبر واتساب" : "Quote approved & WhatsApp confirmation requested");
       load();
     } catch (e: any) {
@@ -139,6 +177,9 @@ function QuoteDetail() {
     setWorking(true);
     try {
       await recordConsentFn({ data: { quoteId: id, consent } });
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
       if (consent) {
         toast.success(isRtl ? "تم تسجيل موافقة العميل وإرسال رابط ملف العرض عبر واتساب" : "Customer consent recorded & PDF link sent");
       } else {
@@ -156,6 +197,9 @@ function QuoteDetail() {
     setWorking(true);
     try {
       const res = await recordDecisionFn({ data: { quoteId: id, decision, notes } });
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
       toast.success(res.message);
       setShowRevisionDialog(false);
       setRevisionNotes("");
@@ -188,6 +232,9 @@ function QuoteDetail() {
     setWorking(true);
     try {
       await updateStatusFn({ data: { quote_id: id, status: status as any } });
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
       if (status === "sent") {
         try {
           await notify({ data: { event: "quote_sent", entityType: "quote", entityId: id } });
@@ -226,6 +273,14 @@ function QuoteDetail() {
         toast.success(t("quotes.convertedToInvoiceAndOrder", { number: orderNumber }));
       }
 
+      // Targeted cache invalidation across all connected modules
+      queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["crm-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+
       nav({ to: "/admin/orders" });
     } catch (e: any) {
       toast.error(e?.message ?? t("quotes.convertFailed"));
@@ -246,11 +301,18 @@ function QuoteDetail() {
       </Link>
       <div className="flex justify-between items-start flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            {quote.quote_number?.startsWith("PLC-")
-              ? quote.quote_number
-              : `${quote.quote_number || t("quotes.draft")}`}
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              {quote.quote_number?.startsWith("PLC-")
+                ? quote.quote_number
+                : `${quote.quote_number || t("quotes.draft")}`}
+            </h1>
+            {(quote.legacy_quote_number || quote.snapshot?.legacyQuoteNumber) && (
+              <Badge variant="outline" className="text-xs font-mono text-muted-foreground" title={isRtl ? "الرقم التعريفي السابق للمقايسة قبل التوحيد القياسي" : "Previous quotation identifier"}>
+                {isRtl ? `الرقم السابق: ${quote.legacy_quote_number || quote.snapshot?.legacyQuoteNumber}` : `Legacy: ${quote.legacy_quote_number || quote.snapshot?.legacyQuoteNumber}`}
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-1">
             {customer ? (
               <button
@@ -274,7 +336,7 @@ function QuoteDetail() {
           </Badge>
           {quote.snapshot?.version > 1 && (
             <Badge variant="outline" className="text-xs font-mono">
-              إصدار V{quote.snapshot.version}
+              {isRtl ? `الإصدار ${quote.snapshot.version}` : `Version ${quote.snapshot.version}`}
             </Badge>
           )}
         </div>
@@ -494,7 +556,7 @@ function QuoteDetail() {
             </div>
             {commercialContext?.orderId ? (
               <Button asChild size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5">
-                <Link to="/admin/orders">
+                <Link to="/admin/orders" search={{ orderId: commercialContext.orderId }}>
                   <ClipboardList className="h-3 w-3" />
                   <span>{isRtl ? "تتبع الإنتاج" : "Track Production"}</span>
                 </Link>
@@ -544,7 +606,7 @@ function QuoteDetail() {
             </div>
             {commercialContext?.deliveryId ? (
               <Button asChild size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5">
-                <Link to="/admin/deliveries">
+                <Link to="/admin/deliveries" search={{ deliveryId: commercialContext.deliveryId }}>
                   <Truck className="h-3 w-3" />
                   <span>{isRtl ? "سجل التسليم" : "View Delivery"}</span>
                 </Link>
@@ -581,7 +643,7 @@ function QuoteDetail() {
             </div>
             {commercialContext?.invoiceId ? (
               <Button asChild size="sm" variant="outline" className="w-full h-7 text-xs gap-1.5">
-                <Link to="/admin/invoices">
+                <Link to="/admin/invoices" search={{ invoiceId: commercialContext.invoiceId }}>
                   <Receipt className="h-3 w-3" />
                   <span>{isRtl ? "إدارة الفواتير" : "View Invoices"}</span>
                 </Link>
@@ -627,7 +689,7 @@ function QuoteDetail() {
         </>
       ) : (
         <>
-          {/* Check if Commercial Mode (Shaheen model) */}
+          {/* Check if Commercial Mode */}
           {(() => {
             const snap = (quote.snapshot as any) || {};
             const isCommercial =
@@ -667,11 +729,11 @@ function QuoteDetail() {
                       <div>
                         <CardTitle className="text-lg flex items-center gap-2">
                           <Sparkles className="h-4 w-4 text-primary" />
-                          <span>{isRtl ? "بنود عرض السعر التجاري (مواصفات مستر شاهين)" : "Commercial Quotation Items"}</span>
+                          <span>{isRtl ? "بنود عرض السعر التجاري" : "Commercial Quotation Items"}</span>
                         </CardTitle>
                       </div>
                       <Badge variant="outline" className="text-xs border-emerald-600 text-emerald-700 bg-emerald-50">
-                        {isRtl ? "مواصفات راقية" : "Shaheen Style"}
+                        {isRtl ? "مواصفات قياسية" : "Commercial Format"}
                       </Badge>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -1006,7 +1068,7 @@ function QuoteDetail() {
               <textarea
                 value={revisionNotes}
                 onChange={(e) => setRevisionNotes(e.target.value)}
-                placeholder="اكتب التعديلات المطلوبة (سيتم حفظ الإصدار الحالي والبدء في إصدار V2+)..."
+                placeholder={isRtl ? "اكتب التعديلات المطلوبة (سيتم حفظ الإصدار الحالي والبدء في إصدار جديد)..." : "Enter requested modifications (the current version will be archived and a new version created)..."}
                 className="w-full text-xs p-2 rounded border bg-background"
                 rows={3}
               />

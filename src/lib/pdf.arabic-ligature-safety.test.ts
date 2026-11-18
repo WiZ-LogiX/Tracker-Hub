@@ -26,7 +26,7 @@ describe("PDF Arabic Ligature & Bidi Layout Safety", () => {
     valid_until: "2026-12-31",
     notes: "ملاحظات معتمدة خاصة بالمعاينة والتسليم",
     customers: {
-      name: "أحمد شاهين",
+      name: "أحمد محمود",
       email: "ahmed@example.com",
       phone: "01012345678",
     },

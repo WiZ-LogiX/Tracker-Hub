@@ -73,7 +73,7 @@ describe("Commercial Quotation System & PDF Replication", () => {
     expect(buffet?.nameAr).toBe("بوفيه");
   });
 
-  it("renders a multi-item Shaheen reference PDF buffer matching reference visual structure", async () => {
+  it("renders a multi-item commercial reference PDF buffer matching reference visual structure", async () => {
     const doorImgB64 = `data:image/png;base64,${readFileSync("/home/wiz/.gemini/antigravity-cli/brain/ae0b49c5-04df-44b8-879a-ccd8b0cfdac5/scratch/shaheen_pdf/extracted_img/img-004.png").toString("base64")}`;
     const libImgB64 = `data:image/png;base64,${readFileSync("/home/wiz/.gemini/antigravity-cli/brain/ae0b49c5-04df-44b8-879a-ccd8b0cfdac5/scratch/shaheen_pdf/extracted_img/img-006.png").toString("base64")}`;
     const buffetImgB64 = `data:image/png;base64,${readFileSync("/home/wiz/.gemini/antigravity-cli/brain/ae0b49c5-04df-44b8-879a-ccd8b0cfdac5/scratch/shaheen_pdf/extracted_img/img-011.png").toString("base64")}`;
@@ -100,11 +100,11 @@ describe("Commercial Quotation System & PDF Replication", () => {
       total: 92000,
       deposit_pct: 60,
       valid_until: "2026-11-28",
-      notes: "عرض سعر خاص بالسيد مستر شاهين",
+      notes: "عرض سعر خاص بالعميل المحترم",
       customers: {
-        name: "مستر شاهين",
+        name: "العميل المحترم",
         phone: "+20 10 00000000",
-        email: "shaheen@example.com",
+        email: "client@example.com",
       },
       quotationMode: "commercial",
       commercialTerms: {
@@ -177,7 +177,7 @@ describe("Commercial Quotation System & PDF Replication", () => {
     expect(buf.subarray(0, 5).toString("utf-8")).toBe("%PDF-");
 
     // Write to scratch directory for visual verification
-    const outPdfPath = "/home/wiz/.gemini/antigravity-cli/brain/ae0b49c5-04df-44b8-879a-ccd8b0cfdac5/scratch/generated_shaheen.pdf";
+    const outPdfPath = "/home/wiz/.gemini/antigravity-cli/brain/ae0b49c5-04df-44b8-879a-ccd8b0cfdac5/scratch/generated_commercial.pdf";
     writeFileSync(outPdfPath, buf);
     expect(existsSync(outPdfPath)).toBe(true);
   });

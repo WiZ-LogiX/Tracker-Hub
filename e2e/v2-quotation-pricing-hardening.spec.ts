@@ -7,9 +7,9 @@ test.describe("Commercial Quotation Pricing Hardening & Legacy Retirement", () =
       const customerRecord = {
         id: MOCK_CUSTOMER_ID,
         tenant_id: MOCK_TENANT_ID,
-        name: "مستر شاهين",
+        name: "م. شريف المنشاوي",
         phone: "+20 11 16322271",
-        email: "shaheen@example.com",
+        email: "customer@example.com",
         address: "القاهرة - التجمع الخامس",
       };
       await route.fulfill({
