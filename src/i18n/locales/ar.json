@@ -1023,7 +1023,13 @@
     "allMaterials": "كافة الخامات",
     "allHardware": "كافة الإكسسوارات",
     "adjustStock": "تعديل الرصيد",
-    "viewDetails": "عرض التفاصيل"
+    "viewDetails": "عرض التفاصيل",
+    "movementHistory": "سجل الحركات",
+    "stockIn": "توريد",
+    "stockOut": "صرف",
+    "restock": "طلب توريد",
+    "quickAdd": "إضافة سريعة",
+    "movementsLedger": "دفتر حركات المخزون"
   },
   "fastIntake": {
     "quickInquiry": "استفسار سريع",

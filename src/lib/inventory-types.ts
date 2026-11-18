@@ -168,3 +168,29 @@ export function getCategoryLabel(
   if (lang === "fr") return found.labelFr;
   return found.labelEn;
 }
+
+export interface StockMovementItem {
+  id: string;
+  stockItemId: string;
+  sku: string;
+  name: string;
+  itemType: StockItemType;
+  unit: string;
+  quantityDelta: number;
+  direction: "in" | "out";
+  previousQuantity: number;
+  newQuantity: number;
+  reason: string;
+  notes?: string | null;
+  createdBy?: string | null;
+  operatorName?: string | null;
+  createdAt: string;
+}
+
+export interface PaginatedStockMovementsResult {
+  items: StockMovementItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}

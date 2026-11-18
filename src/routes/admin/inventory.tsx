@@ -18,6 +18,7 @@ import {
 import { StockAdjustmentModal } from "@/components/inventory/StockAdjustmentModal";
 import { InventoryItemModal } from "@/components/inventory/InventoryItemModal";
 import { StockItemDetailModal } from "@/components/inventory/StockItemDetailModal";
+import { StockMovementsDrawer } from "@/components/inventory/StockMovementsDrawer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,9 @@ import {
   Wrench,
   X,
   ShieldAlert,
+  ArrowDownLeft,
+  ArrowUpRight,
+  History,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -198,7 +202,9 @@ function InventoryPage() {
 
   // Modals state
   const [adjustItem, setAdjustItem] = useState<StockItem | null>(null);
+  const [adjustDirection, setAdjustDirection] = useState<"in" | "out">("in");
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [isMovementsDrawerOpen, setIsMovementsDrawerOpen] = useState(false);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [itemModalMode, setItemModalMode] = useState<"create" | "edit">("create");
@@ -279,8 +285,9 @@ function InventoryPage() {
     hardwareReservedUnits: 0,
   };
 
-  const handleOpenAdjust = (item: StockItem) => {
+  const handleOpenAdjust = (item: StockItem, direction: "in" | "out" = "in") => {
     setAdjustItem(item);
+    setAdjustDirection(direction);
     setIsAdjustModalOpen(true);
   };
 
@@ -380,9 +387,18 @@ function InventoryPage() {
           </p>
         </div>
 
-        {/* Action Button: Add Item */}
-        {canAdjust && (
-          <div className="flex items-center gap-2">
+        {/* Action Buttons: Movement History & Add Item */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsMovementsDrawerOpen(true)}
+            className="gap-2 shadow-xs h-9 text-xs font-medium border-border/80"
+          >
+            <History className="h-4 w-4 text-primary" />
+            <span>{t("inventory.movementHistory", "Movement History")}</span>
+          </Button>
+
+          {canAdjust && (
             <Button
               onClick={handleOpenCreate}
               className="gap-2 bg-primary text-primary-foreground shadow-xs h-9 text-xs font-medium"
@@ -390,8 +406,8 @@ function InventoryPage() {
               <Plus className="h-4 w-4" />
               <span>{t("inventory.addItem", "Add Inventory Item")}</span>
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── Primary Section Tabs Switcher (Persistent URL state) ─────────────── */}
@@ -518,17 +534,28 @@ function InventoryPage() {
           </div>
         </Card>
 
-        {/* Card 4: Low Stock Alert */}
+        {/* Card 4: Low Stock Alert (Clickable Filter Shortcut) */}
         <Card
-          className={`border rounded-2xl p-4 shadow-xs ${
-            (isMaterialsTab ? (kpis.materialsLowStockCount ?? 0) : (kpis.hardwareLowStockCount ?? 0)) > 0
-              ? "bg-amber-50/50 dark:bg-amber-950/20 border-amber-300/70 dark:border-amber-900/50"
-              : "bg-card"
+          onClick={handleLowStockToggle}
+          className={`border rounded-2xl p-4 shadow-xs cursor-pointer transition-all hover:shadow-md ${
+            currentLowStock
+              ? "ring-2 ring-amber-500 bg-amber-100/70 dark:bg-amber-950/40 border-amber-400"
+              : (isMaterialsTab ? (kpis.materialsLowStockCount ?? 0) : (kpis.hardwareLowStockCount ?? 0)) > 0
+                ? "bg-amber-50/50 dark:bg-amber-950/20 border-amber-300/70 dark:border-amber-900/50 hover:border-amber-400"
+                : "bg-card hover:bg-muted/40"
           }`}
+          title={isRtl ? "انقر لتصفية الأصناف منخفضة الرصيد فقط" : "Click to toggle low stock filter"}
         >
-          <div className="text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
-            <span>{t("inventory.lowStockAlert", "Low Stock Alert")}</span>
+          <div className="text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+              <span>{t("inventory.lowStockAlert", "Low Stock Alert")}</span>
+            </div>
+            {currentLowStock && (
+              <Badge variant="outline" className="text-[10px] bg-amber-600 text-white font-bold px-1.5 py-0 border-none">
+                {isRtl ? "نشط" : "Active"}
+              </Badge>
+            )}
           </div>
           <div className="text-2xl sm:text-3xl font-bold font-mono mt-1 text-amber-800 dark:text-amber-300">
             {isMaterialsTab
@@ -722,12 +749,25 @@ function InventoryPage() {
                               {isRtl ? "نفد الرصيد" : "Out of stock"}
                             </Badge>
                           ) : isLow ? (
-                            <Badge
-                              variant="outline"
-                              className="text-xs px-2 py-0.5 font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-amber-300"
-                            >
-                              {isRtl ? "منخفض" : "Low"}
-                            </Badge>
+                            <div className="flex items-center gap-1.5">
+                              <Badge
+                                variant="outline"
+                                className="text-xs px-2 py-0.5 font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200 border-amber-300"
+                              >
+                                {isRtl ? "منخفض" : "Low"}
+                              </Badge>
+                              {canAdjust && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAdjust(item, "in")}
+                                  className="text-[10px] text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-100 font-semibold underline underline-offset-2 flex items-center gap-0.5"
+                                  title={t("inventory.restock", "Restock item")}
+                                >
+                                  <Plus className="h-2.5 w-2.5" />
+                                  <span>{t("inventory.restock", "Restock")}</span>
+                                </button>
+                              )}
+                            </div>
                           ) : null}
                         </div>
                       </TableCell>
@@ -779,6 +819,34 @@ function InventoryPage() {
                       {/* Actions */}
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          {/* Stock In (+) */}
+                          {canAdjust && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenAdjust(item, "in")}
+                              className="h-8 text-xs px-2 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 gap-1 font-semibold"
+                              title={t("inventory.stockIn", "Stock In (+)")}
+                            >
+                              <ArrowDownLeft className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">{t("inventory.stockIn", "In")}</span>
+                            </Button>
+                          )}
+
+                          {/* Stock Out (-) */}
+                          {canAdjust && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenAdjust(item, "out")}
+                              className="h-8 text-xs px-2 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-300 dark:border-rose-800 gap-1 font-semibold"
+                              title={t("inventory.stockOut", "Stock Out (-)")}
+                            >
+                              <ArrowUpRight className="h-3.5 w-3.5" />
+                              <span className="hidden sm:inline">{t("inventory.stockOut", "Out")}</span>
+                            </Button>
+                          )}
+
                           {/* View Details */}
                           <Button
                             size="icon"
@@ -789,22 +857,6 @@ function InventoryPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-
-                          {/* Adjust Stock */}
-                          {canAdjust && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenAdjust(item)}
-                              className="h-8 text-xs px-2.5 text-primary font-semibold gap-1.5"
-                              title={t("inventory.adjustStock", "Adjust Stock")}
-                            >
-                              <Edit3 className="h-3.5 w-3.5" />
-                              <span className="hidden sm:inline">
-                                {isRtl ? "رصيد" : "Stock"}
-                              </span>
-                            </Button>
-                          )}
 
                           {/* Edit Item */}
                           {canAdjust && (
@@ -935,6 +987,7 @@ function InventoryPage() {
         open={isAdjustModalOpen}
         onOpenChange={setIsAdjustModalOpen}
         item={adjustItem}
+        initialDirection={adjustDirection}
         onAdjusted={() => {
           refetch();
         }}
@@ -948,8 +1001,14 @@ function InventoryPage() {
         onAdjustClick={(item) => {
           setSelectedItemForDetail(null);
           setDetailModalOpen(false);
-          handleOpenAdjust(item);
+          handleOpenAdjust(item, "in");
         }}
+      />
+
+      {/* ── Global Stock Movements Audit Drawer ──────────────────────────────── */}
+      <StockMovementsDrawer
+        open={isMovementsDrawerOpen}
+        onOpenChange={setIsMovementsDrawerOpen}
       />
 
       {/* ── Archive / Delete Confirmation Modal ─────────────────────────────── */}

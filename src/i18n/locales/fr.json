@@ -1023,7 +1023,13 @@
     "allMaterials": "Tous les matériaux",
     "allHardware": "Toute la quincaillerie",
     "adjustStock": "Ajuster le stock",
-    "viewDetails": "Voir les détails"
+    "viewDetails": "Voir les détails",
+    "movementHistory": "Historique des mouvements",
+    "stockIn": "Entrée stock",
+    "stockOut": "Sortie stock",
+    "restock": "Réapprovisionner",
+    "quickAdd": "Ajout rapide",
+    "movementsLedger": "Registre des mouvements"
   },
   "fastIntake": {
     "quickInquiry": "Demande rapide",

@@ -13,21 +13,28 @@ import {
   quotes,
   quoteSnapshots,
   auditLog,
+  appUsers,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
-import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
+import { requirePermission, requireAnyPermission, forbidWorker, type TenantContext } from "@/lib/tenant-context";
 import {
   inferItemCategory,
   type StockItem,
   type StockItemType,
   type StockReservationItem,
   type StockAdjustmentRecord,
+  type StockMovementItem,
+  type PaginatedStockMovementsResult,
   type OrderMaterialRequirementItem,
   type OrderMaterialReadinessSummary,
   type MaterialReadiness,
   type PaginatedStockResult,
   type StockKpis,
 } from "@/lib/inventory-types";
+import {
+  executeStockAdjustment,
+  executeListStockMovements,
+} from "@/lib/inventory-stock.server";
 
 // ── Validation Schemas ──────────────────────────────────────────────────────
 
@@ -452,77 +459,30 @@ export const adjustStock = createServerFn({ method: "POST" })
   .validator((input: unknown) => AdjustStockInput.parse(input))
   .handler(async ({ data, context }): Promise<{ ok: boolean; newQuantity: number }> => {
     const ctx = context.tenantContext as TenantContext;
-    requirePermission(ctx, "inventory.adjust");
-    const { tenantId, userId, role } = ctx;
+    return await executeStockAdjustment(db, ctx, data);
+  });
 
-    const result = await db.transaction(async (tx) => {
-      // Row lock the stock item
-      const [item] = await tx
-        .select()
-        .from(stockItems)
-        .where(and(eq(stockItems.id, data.stockItemId), eq(stockItems.tenantId, tenantId)))
-        .for("update")
-        .limit(1);
+const ListStockMovementsInput = z
+  .object({
+    search: z.string().optional(),
+    itemType: z.enum(["all", "material", "hardware"]).optional().default("all"),
+    direction: z.enum(["all", "in", "out"]).optional().default("all"),
+    reason: z.string().optional(),
+    page: z.number().int().min(1).optional().default(1),
+    pageSize: z.number().int().min(1).max(100).optional().default(25),
+  })
+  .optional()
+  .default({});
 
-      if (!item) {
-        throw new Error("Stock item not found or access denied");
-      }
-
-      const prevQty = Number(item.physicalQuantity || 0);
-      const reservedQty = Number(item.reservedQuantity || 0);
-      const newQty = prevQty + data.quantityDelta;
-
-      if (newQty < 0) {
-        throw new Error(`Invalid stock adjustment: physical stock cannot be negative (would be ${newQty})`);
-      }
-
-      if (newQty < reservedQty) {
-        throw new Error(
-          `Invalid stock adjustment: physical stock (${newQty}) cannot be lower than active reserved quantity (${reservedQty})`,
-        );
-      }
-
-      await tx
-        .update(stockItems)
-        .set({
-          physicalQuantity: String(newQty),
-          updatedAt: new Date(),
-        })
-        .where(and(eq(stockItems.id, item.id), eq(stockItems.tenantId, tenantId)));
-
-      await tx.insert(stockAdjustments).values({
-        tenantId,
-        stockItemId: item.id,
-        quantityDelta: String(data.quantityDelta),
-        previousQuantity: String(prevQty),
-        newQuantity: String(newQty),
-        reason: data.reason,
-        notes: data.notes || null,
-        createdBy: userId ? (userId as any) : null,
-      });
-
-      await tx.insert(auditLog).values({
-        tenantId,
-        actorId: userId ? (userId as any) : null,
-        entityType: "inventory",
-        entityId: item.id,
-        action: "stock_adjusted",
-        details: {
-          stock_item_id: item.id,
-          sku: item.sku,
-          name: item.name,
-          quantity_delta: data.quantityDelta,
-          previous_quantity: prevQty,
-          new_quantity: newQty,
-          reason: data.reason,
-          notes: data.notes || null,
-        },
-      });
-
-      return { ok: true, newQuantity: newQty };
-    });
-
-    return result;
+/**
+ * List global stock movements across all inventory items (audit ledger).
+ */
+export const listStockMovements = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .validator((input: unknown) => ListStockMovementsInput.parse(input ?? {}))
+  .handler(async ({ data, context }): Promise<PaginatedStockMovementsResult> => {
+    const ctx = context.tenantContext as TenantContext;
+    return await executeListStockMovements(db, ctx, data);
   });
 
 // ── CRUD Operations for Inventory Items ─────────────────────────────────────

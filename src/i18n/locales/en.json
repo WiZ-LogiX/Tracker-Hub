@@ -1023,7 +1023,13 @@
     "allMaterials": "All Materials",
     "allHardware": "All Hardware",
     "adjustStock": "Adjust Stock",
-    "viewDetails": "View Details"
+    "viewDetails": "View Details",
+    "movementHistory": "Movement History",
+    "stockIn": "Stock In",
+    "stockOut": "Stock Out",
+    "restock": "Restock",
+    "quickAdd": "Quick Add",
+    "movementsLedger": "Movement Ledger"
   },
   "fastIntake": {
     "quickInquiry": "Quick Inquiry",
