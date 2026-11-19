@@ -107,6 +107,12 @@ function Landing() {
             >
               {t("landing.nav.craftsmanship")}
             </a>
+            <Link
+              to="/compare"
+              className="hover:text-pelecanon-teal transition-colors py-1 relative after:absolute after:bottom-0 after:left-0 after:w-0 hover:after:w-full after:h-[1px] after:bg-pelecanon-teal after:transition-all"
+            >
+              {t("landing.nav.compare")}
+            </Link>
           </nav>
 
           {/* Action CTAs */}
@@ -184,6 +190,13 @@ function Landing() {
               >
                 {t("landing.nav.craftsmanship")}
               </a>
+              <Link
+                to="/compare"
+                onClick={() => setMobileMenuOpen(false)}
+                className="hover:text-pelecanon-teal py-1"
+              >
+                {t("landing.nav.compare")}
+              </Link>
             </nav>
             <div className="pt-4 border-t border-pelecanon-teal/20 flex flex-col gap-2.5">
               <Link to="/track" onClick={() => setMobileMenuOpen(false)}>
@@ -1007,6 +1020,11 @@ function Landing() {
                   <a href="#craftsmanship" className="hover:text-pelecanon-teal transition-colors">
                     {t("landing.nav.craftsmanship")}
                   </a>
+                </li>
+                <li>
+                  <Link to="/compare" className="hover:text-pelecanon-teal transition-colors">
+                    {t("landing.nav.compare")}
+                  </Link>
                 </li>
               </ul>
             </div>

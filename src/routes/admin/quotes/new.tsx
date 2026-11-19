@@ -49,6 +49,12 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
+  UtensilsCrossed,
+  Shirt,
+  DoorOpen,
+  BookOpen,
+  Archive,
+  Tv,
 } from "lucide-react";
 import { formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
@@ -79,6 +85,18 @@ export const Route = createFileRoute("/admin/quotes/new")({
   component: CommercialQuoteBuilder,
   validateSearch: searchSchema,
 });
+
+function getCategoryIcon(code: string) {
+  const c = (code || "").toLowerCase();
+  if (c.includes("kitchen")) return UtensilsCrossed;
+  if (c.includes("dressing") || c.includes("wardrobe")) return Shirt;
+  if (c.includes("door")) return DoorOpen;
+  if (c.includes("library") || c.includes("shelf")) return BookOpen;
+  if (c.includes("buffet") || c.includes("console")) return Archive;
+  if (c.includes("cladding") || c.includes("wall")) return Layers;
+  if (c.includes("tv")) return Tv;
+  return Sparkles;
+}
 
 /**
  * Creates a clean quotation line item.
@@ -829,7 +847,54 @@ function CommercialQuoteBuilder() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
+                  {/* Tactile Quick-Pick Category Tiles */}
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5 text-primary" />
+                        <span>{t("quotes.quickPickTitle")}</span>
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {t("quotes.quickPickHint")}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                      {activeCategories.map((c) => {
+                        const Icon = getCategoryIcon(c.code);
+                        const pUnitObj = COMMERCIAL_PRICING_UNITS.find((u) => u.code === c.defaultPricingUnit);
+                        const dUnitObj = COMMERCIAL_DIMENSION_UNITS.find((u) => u.code === c.defaultDimensionUnit);
+                        return (
+                          <button
+                            key={c.id || c.code}
+                            type="button"
+                            onClick={() => handleCategoryChange(idx, c.code)}
+                            className="group relative flex flex-col items-center justify-between p-2.5 rounded-lg border border-border/80 bg-background hover:bg-primary/5 hover:border-primary/60 transition-all text-center cursor-pointer shadow-2xs hover:shadow-xs"
+                            title={`${c.nameAr} (${c.nameEn})`}
+                          >
+                            <div className="w-8 h-8 rounded-md bg-muted/60 group-hover:bg-primary/10 flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors mb-1">
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors leading-tight line-clamp-1">
+                              {isRtl ? c.nameAr : c.nameEn}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground group-hover:text-foreground/80 line-clamp-1 mt-0.5">
+                              {isRtl ? c.nameEn : c.nameAr}
+                            </div>
+                            <div className="flex items-center gap-1 mt-2 text-[9px]">
+                              <span className="px-1 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                                {isRtl ? (dUnitObj?.labelAr || c.defaultDimensionUnit) : c.defaultDimensionUnit}
+                              </span>
+                              <span className="px-1 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                                {isRtl ? (pUnitObj?.labelAr || c.defaultPricingUnit) : (pUnitObj?.labelEn || c.defaultPricingUnit)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl pt-2 border-t border-border/40">
                     {/* Option A: Select from Catalog Database */}
                     <div className="space-y-1">
                       <Label className="text-xs font-semibold text-primary flex items-center gap-1">
