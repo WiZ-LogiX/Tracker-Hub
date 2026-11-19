@@ -183,18 +183,35 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
    - Fixed low stock threshold to `(physical - reserved) <= minReorderLevel`, ensuring 100% parity with `/admin/inventory`.
    - Added concurrent morning priority queues inside the single `Promise.all` (QC Gate Blockers, Milestones Ready to Bill, Overdue CRM Follow-Ups) running in < 35ms.
    - Upgraded `/admin` UI with direct **"Quick Inquiry"** (`FastCrmIntakeDrawer`), category filter pills in the Needs Attention Center, 1-click inline **"Issue Invoice"** action for scheduled milestones, and clean restricted states for non-financial users.
+8. **Sprint 7A — Workshop-Grade Cut-List CSV Importer & Relational Remakes**:
+   - Relational migration `20261119_work_order_cut_list_items.sql` creating dedicated `work_order_cut_list_items` table.
+   - Resilient RFC-4180 CSV parser supporting Arabic/English header variations (`Part Name`, `Length`, `Width`, `Quantity`, `Thickness`, `Material`, `Edge Banding`, `Grain`).
+   - Pure client-safe workshop math (`computeCutListSummary`) calculating estimated 2440x1220mm sheets and linear edge-banding meters without mutating stock inventory.
+   - `WorkOrderDetailDrawer` Cut List tab with live summary badges and `ImportCutListModal` upload & preview.
+   - Direct relational linkage between remake tickets and cut list items (`remakes.cutListItemId`).
+9. **Sprint 7B — Public `/compare` ERP Positioning Page & Quote Builder Quick-Pick Polish**:
+   - Public `/compare` landing page with Atelier Prestige emerald tokens `#008269`, 10-point workshop matrix, CAD handoff section, and 3-tier SaaS pricing cards.
+   - Trilingual header, mobile drawer, and footer navigation links ("Compare" / "المقارنة" / "Comparer").
+   - Quote Builder category quick-pick tiles (`/admin/quotes/new`) with unselected state preservation and catalog selector parity.
+   - Full trilingual parity across `en.json`, `ar.json`, and `fr.json` (1,096 keys each).
+10. **Sprint 6C — Unified Acceptance Suite & Release Documentation Lock**:
+   - Added deterministic Playwright E2E acceptance spec `e2e/sprints-1-to-7-acceptance.spec.ts` validating all 5 core sprint journeys in 27.1s.
+   - Full repository verification gate: 1,151 Vitest unit/integration tests (70 files) and 174 Playwright E2E tests (48 specs) passing with 0 errors.
+   - Synchronized master project handoff, architecture baseline, and ordered migration manifest.
 
 ---
 
 ## 📝 TL;DR
 
 - **Catalog + quoting + production tracking**: ✅ feature-complete.
-- **Multi-tenant DB**: ✅ 34 tables verified, strict tenant isolation.
+- **Multi-tenant DB**: ✅ 35 tables verified, strict tenant isolation.
 - **Unified RBAC**: ✅ 3-state permission resolver, adjustable predefined profiles, custom roles, client-safe bundling, and fail-close security.
 - **Cloudflare R2**: ✅ complete server SDK + presigned flows + 10-minute bounded customer capability URLs.
 - **Commercial Quotation & Projects**: ✅ canonical `PLC-XXXXX` numbering and unified commercial builder.
 - **Inventory & Shop Floor**: ✅ directional adjustments, global audit ledger, and QC gating.
+- **Cut List Importer & Remakes**: ✅ workshop-grade CSV parser, sheet/edge-banding math, and relational remake tracking.
 - **SaaS Onboarding & Quotas**: ✅ self-serve registration, seat limits, and monthly quotation quota enforcement.
 - **Delivery & After-Sales**: ✅ company delivery & installation stage, milestone invoice prompts, warranty remake loop & corrective tasks.
-- **Executive Command Center**: ✅ morning focus queues (QC gate blockers, milestone billing, CRM follow-ups), quick intake drawer, and sub-35ms batched aggregations.
-- **Full Verification**: ✅ 1,137 Vitest tests across 69 suites (100% pass), 165 Playwright E2E tests, 0 type errors, clean production build.
+- **Executive Command Center**: ✅ morning focus queues (QC gate blockers, milestone billing, CRM follow-ups), quick intake drawer, and sub-25ms batched aggregations.
+- **Public ERP Positioning**: ✅ luxury `/compare` comparison matrix, CAD handoff section, and tier pricing.
+- **Full Verification**: ✅ 1,151 Vitest tests across 70 suites (100% pass), 174 Playwright E2E tests across 48 specs (100% pass), 1,096 i18n keys (100% parity), 0 type errors, clean production build.

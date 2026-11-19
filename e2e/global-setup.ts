@@ -11,6 +11,7 @@ import {
   orders,
   invoices,
   projects,
+  productionWorkOrders,
   deliveryHandovers,
   leads,
   opportunities,
@@ -318,34 +319,7 @@ export default async function globalSetup() {
       ])
       .onConflictDoNothing();
 
-    // 9. Invoices
-    await db
-      .insert(invoices)
-      .values([
-        {
-          id: invoiceDcdId,
-          tenantId: testTenantId,
-          customerId: customerSherifId,
-          quoteId: quoteDcdId,
-          invoiceNumber: "PLC-DCD02",
-          total: "185000",
-          depositAmount: "92500",
-          paidAmount: "92500",
-        },
-        {
-          id: invoiceRestorationId,
-          tenantId: testTenantId,
-          customerId: customerSherifId,
-          quoteId: quoteRestorationId,
-          invoiceNumber: "PLC-00100",
-          total: "92000",
-          depositAmount: "55200",
-          paidAmount: "55200",
-        },
-      ])
-      .onConflictDoNothing();
-
-    // 10. Projects
+    // 9. Projects
     await db
       .insert(projects)
       .values([
@@ -360,6 +334,73 @@ export default async function globalSetup() {
           status: "active",
           currentStage: "assembly",
           totalValue: "185000",
+        },
+      ])
+      .onConflictDoNothing();
+
+    // 10. Invoices
+    await db
+      .insert(invoices)
+      .values([
+        {
+          id: invoiceDcdId,
+          tenantId: testTenantId,
+          customerId: customerSherifId,
+          quoteId: quoteDcdId,
+          projectId: projectDcdId,
+          invoiceNumber: "PLC-DCD02",
+          total: "185000",
+          depositAmount: "92500",
+          paidAmount: "92500",
+          milestoneIndex: 1,
+          milestoneTotalCount: 2,
+          milestoneLabel: "دفعة التعاقد والتوريد (50%)",
+          milestonePct: "50.00",
+          billingStatus: "issued",
+          dueStage: "deposit_received",
+        },
+        {
+          id: "33333333-3333-4333-8333-333333333331",
+          tenantId: testTenantId,
+          customerId: customerSherifId,
+          quoteId: quoteDcdId,
+          projectId: projectDcdId,
+          invoiceNumber: "INV-DCD02-M2",
+          total: "92500",
+          depositAmount: "0",
+          paidAmount: "0",
+          milestoneIndex: 2,
+          milestoneTotalCount: 2,
+          milestoneLabel: "دفعة التجميع والتسليم (50%)",
+          milestonePct: "50.00",
+          billingStatus: "scheduled",
+          dueStage: "assembly",
+        },
+        {
+          id: invoiceRestorationId,
+          tenantId: testTenantId,
+          customerId: customerSherifId,
+          quoteId: quoteRestorationId,
+          invoiceNumber: "PLC-00100",
+          total: "92000",
+          depositAmount: "55200",
+          paidAmount: "55200",
+        },
+      ])
+      .onConflictDoNothing();
+
+    // 10.5 Production Work Orders
+    await db
+      .insert(productionWorkOrders)
+      .values([
+        {
+          id: "66666666-6666-4666-8666-666666666661",
+          tenantId: testTenantId,
+          orderId: orderDcdId,
+          workOrderNumber: "WO-2026-0001",
+          status: "ready",
+          priority: "high",
+          title: "تصنيع شاسيه ودلف صالون المنشاوي",
         },
       ])
       .onConflictDoNothing();

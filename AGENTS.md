@@ -1010,7 +1010,56 @@ PeleCanon CRM transforms the platform into an end-to-end commercial operating sy
    - **Quote-to-Order Milestone Generation**: `convertQuoteToOrder` supports presets (`"100" | "50_50" | "60_30_10" | "50_30_20"`) with exact remainder rounding on the final milestone ensuring `SUM(milestones.amount) === quote.total`. M1 is automatically `'issued'`, and M2/M3 are created as `'scheduled'` without prematurely triggering overdue flags.
    - **Project Financial & Margin Aggregation**: `getProjectWorkspaceData` dynamically aggregates `totalInvoiced`, `totalScheduled`, `totalCollected`, `outstandingBalance`, computes `estimatedCost` (snapshot direct costs or 65% baseline), `estimatedMargin`, and `marginPct`. Strictly masks all financial KPIs when `projects.financials.view` permission is absent.
    - **Interactive UI Components**: Convert Quote Dialog includes milestone preset selector with real-time EGP amounts. Project Financials Tab renders 6-KPI executive strip and a Project Milestone Billing Schedule card with 1-click `issueMilestoneInvoice` and payment recording actions.
-   - **Verification Baseline**: 1,085 Vitest tests across 63 test files, 165 Playwright E2E tests, 0 type errors, 100% i18n parity across EN, AR, and FR.
+
+10. **Sprint 2 — Fast CRM Intake & Relational Opportunity Sync**:
+   - `FastCrmIntakeDrawer` for sub-minute lead & opportunity registration directly from CRM and Quotes index.
+   - Relational opportunity syncing updating pipeline value and advancing stage (`proposal_presented` / `closed_won`) on quote confirmation.
+
+11. **Sprint 3 — Guided Production Stage, QC Gate & Remake Loop**:
+   - `executeOrderStageTransition` and `executeQcInspection` in `production-workflow.server.ts`.
+   - Strict QC gate blocking `completed` stage progression until formal inspection passes; automated remake task creation for defective items.
+
+12. **Sprint 4 — Standalone Inventory Polish & Movement Audit Ledger**:
+   - Directional Stock In (+) and Stock Out (-) modal with quick-add chips (`+1`, `+5`, `+10`, `+25`, `+50`), directional reasons, and reserved stock floor protection.
+   - `StockMovementsDrawer` providing a paginated chronological audit ledger of all inventory transactions.
+   - Restock row shortcut and interactive Low Stock KPI filter on `/admin/inventory`.
+
+13. **Sprint 5 — SaaS Tenant Onboarding & Subscription Plan Enforcement**:
+   - `executeWorkshopOnboarding` provisioning new workshops with Free plan, unique slug, owner role, and starter categories (`kitchen`, `dressing`, `door`).
+   - Hard quota enforcement on active seats (`assertActiveSeatAvailable`) and monthly quotes (`assertMonthlyQuoteQuota`) based on tier (`Free`: 3 seats / 25 quotes/mo, `Pro`: 15 seats / unlimited quotes, `Enterprise`: unlimited).
+   - Read-only Subscription Plan & Usage card in `/admin/settings` (system tab) and seat count badge in `/admin/team`.
+
+14. **Sprint 6A — Company Delivery & Installation Stage & After-Sales Warranty Loop**:
+   - Transitioned order stages from `ready_for_pickup` to `ready_for_delivery` ("Ready for Delivery & Installation" / "جاهز للتسليم والتركيب") with backward-compatible aliases.
+   - Delivery & Installation handover defaulting to `installationRequired = true`, public tracking links, and inline milestone invoice issuance prompts upon delivery.
+   - Project and order status auto-synchronization advancing order to `delivered`/`completed` and project to `delivery`/`handover` upon installation completion.
+   - After-sales warranty diagnostic drawer with 1-click warranty remake generation (`createRemakeForCase`), severity/technician selection, and automatic creation of high-priority corrective tasks (`TSK-XXXX`, category `quality`).
+
+15. **Sprint 6B — Actionable Morning Command Center & Dashboard Hardening**:
+   - Hardened `getExecutiveDashboard` server engine with `forbidWorker(ctx, "Executive Dashboard")` and `canViewFinancials` masking based on `projects.financials.view`.
+   - Filtered invoice totals to active issued invoices (`billingStatus = 'issued'`), preventing scheduled future milestones from inflating active receivables.
+   - Fixed low stock threshold to `(physical - reserved) <= minReorderLevel`, ensuring 100% parity with `/admin/inventory`.
+   - Added concurrent morning priority queues inside the single `Promise.all` (QC Gate Blockers, Milestones Ready to Bill, Overdue CRM Follow-Ups) running in < 25ms.
+   - Upgraded `/admin` UI with direct **"Quick Inquiry"** (`FastCrmIntakeDrawer`), category filter pills in the Needs Attention Center, and 1-click inline **"Issue Invoice"** action for scheduled milestones.
+
+16. **Sprint 7A — Workshop-Grade Cut-List CSV Importer & Relational Remakes**:
+   - Relational migration `20261119_work_order_cut_list_items.sql` creating dedicated `work_order_cut_list_items` table.
+   - Resilient RFC-4180 CSV parser supporting Arabic/English header variations (`Part Name`, `Length`, `Width`, `Quantity`, `Thickness`, `Material`, `Edge Banding`, `Grain`).
+   - Pure client-safe workshop math (`computeCutListSummary`) calculating estimated 2440x1220mm sheets and linear edge-banding meters without mutating stock inventory.
+   - `WorkOrderDetailDrawer` Cut List tab with live summary badges and `ImportCutListModal` upload & preview.
+   - Direct relational linkage between remake tickets and cut list items (`remakes.cutListItemId`).
+
+17. **Sprint 7B — Public `/compare` ERP Positioning Page & Quote Builder Quick-Pick Polish**:
+   - Public `/compare` landing page with Atelier Prestige emerald tokens `#008269`, 10-point workshop matrix, CAD handoff section, and 3-tier SaaS pricing cards.
+   - Trilingual header, mobile drawer, and footer navigation links ("Compare" / "المقارنة" / "Comparer").
+   - Quote Builder category quick-pick tiles (`/admin/quotes/new`) with unselected state preservation and catalog selector parity.
+   - Full trilingual parity across `en.json`, `ar.json`, and `fr.json` (1,096 keys each).
+
+18. **Sprint 6C — Unified Acceptance Suite & Release Documentation Lock**:
+   - Added deterministic Playwright E2E acceptance spec `e2e/sprints-1-to-7-acceptance.spec.ts` validating all 5 core sprint journeys in 27.1s.
+   - Full repository verification gate: 1,151 Vitest unit/integration tests (70 files) and 174 Playwright E2E tests (48 specs) passing with 0 errors.
+   - Complete ordered SQL migration checklist locked for post-merge production deployment (`20261112_projects_entity.sql`, `20261118_milestone_billing_and_margin.sql`, `20261119_work_order_cut_list_items.sql`).
+   - **Verification Baseline**: **1,151 Vitest tests across 70 test files** (100% pass), **174 Playwright E2E tests across 48 spec files** (100% pass), **1,096 i18n keys across AR/EN/FR** (100% parity), 0 type errors, clean production build.
 
 ---
 

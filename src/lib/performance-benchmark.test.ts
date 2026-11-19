@@ -10,7 +10,7 @@ import {
   deliveryHandovers,
   invoicePayments,
 } from "@/db/schema";
-import { eq, sql, inArray, and, or } from "drizzle-orm";
+import { eq, sql, inArray, and, or, asc } from "drizzle-orm";
 import { fetchExecutiveDashboardData } from "./dashboard.server";
 import {
   CANONICAL_QUOTE_NUMBER_REGEX,
@@ -475,6 +475,7 @@ describe("PeleCanon Performance Benchmark & Quotation Standardization Suite", ()
         })
         .from(invoices)
         .where(eq(invoices.quoteId, quoteRow.id))
+        .orderBy(asc(invoices.milestoneIndex), asc(invoices.issuedAt))
         .limit(1);
 
       expect(invoiceRow).toBeDefined();

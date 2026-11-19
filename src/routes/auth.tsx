@@ -203,32 +203,39 @@ function AuthPage() {
           <img src="/images/brand-logo-dark.png" alt="PeleCanon" className="h-11 w-auto object-contain hidden dark:block" />
         </Link>
         <Card className="border border-border/80 shadow-lg">
-          <CardHeader className="pb-3 text-center">
-            <CardTitle className="text-xl font-bold">{t("auth.title")}</CardTitle>
-            <CardDescription className="text-sm mt-1">{t("auth.subtitle")}</CardDescription>
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as "signin" | "register")}
+            className="w-full"
+          >
+            <CardHeader className="pb-3 text-center">
+              <CardTitle className="text-xl font-bold">{t("auth.title")}</CardTitle>
+              <CardDescription className="text-sm mt-1">{t("auth.subtitle")}</CardDescription>
 
-            {/* Mode Switcher Tabs */}
-            <Tabs
-              value={activeTab}
-              onValueChange={(v) => setActiveTab(v as "signin" | "register")}
-              className="w-full mt-4"
-            >
-              <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="signin" className="gap-2 text-xs">
+              {/* Mode Switcher Tabs */}
+              <TabsList className="grid grid-cols-2 w-full mt-4">
+                <TabsTrigger
+                  value="signin"
+                  onClick={() => setActiveTab("signin")}
+                  className="gap-2 text-xs"
+                >
                   <UserCircle2 className="h-3.5 w-3.5" />
                   <span>{t("auth.signInTab", "تسجيل الدخول")}</span>
                 </TabsTrigger>
-                <TabsTrigger value="register" className="gap-2 text-xs">
+                <TabsTrigger
+                  value="register"
+                  onClick={() => setActiveTab("register")}
+                  className="gap-2 text-xs"
+                >
                   <Building2 className="h-3.5 w-3.5 text-primary" />
                   <span>{t("auth.createWorkshopTab", "إنشاء ورشة عمل جديدة")}</span>
                 </TabsTrigger>
               </TabsList>
-            </Tabs>
-          </CardHeader>
+            </CardHeader>
 
-          <CardContent className="pt-2">
-            {activeTab === "signin" ? (
-              <form onSubmit={handleSignIn} className="space-y-4">
+            <CardContent className="pt-2">
+              <TabsContent value="signin" className="mt-0">
+                <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
                   <Label>{t("auth.username")}</Label>
                   <Input
@@ -256,7 +263,9 @@ function AuthPage() {
                   {loading ? "..." : t("auth.signIn")} <ArrowRight className="h-4 w-4 rtl-flip" />
                 </Button>
               </form>
-            ) : (
+            </TabsContent>
+
+            <TabsContent value="register" className="mt-0">
               <form onSubmit={handleRegisterWorkshop} className="space-y-4">
                 <div className="p-3 rounded-lg border bg-primary/5 text-xs text-primary space-y-1">
                   <div className="font-semibold flex items-center gap-1.5">
@@ -384,9 +393,10 @@ function AuthPage() {
                   <span>{loading ? "..." : t("auth.registerAndLaunch", "إنشاء وتفعيل ورشة العمل")}</span>
                 </Button>
               </form>
-            )}
+            </TabsContent>
           </CardContent>
-        </Card>
+        </Tabs>
+      </Card>
       </div>
     </div>
   );
