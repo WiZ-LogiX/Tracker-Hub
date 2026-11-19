@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { TaskForm } from "@/components/tasks/TaskForm";
+import { ImportCutListModal } from "@/components/work-orders/ImportCutListModal";
+import { CreateRemakeModal } from "@/components/remakes/CreateRemakeModal";
+import { computeCutListSummary } from "@/lib/cut-list-import.pure";
 import {
   getWorkOrderById,
   updateWorkOrderStatus,
@@ -28,6 +31,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Hammer,
   Scissors,
   CheckCircle2,
@@ -44,6 +60,9 @@ import {
   Play,
   Plus,
   ExternalLink,
+  Upload,
+  Lock,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -72,6 +91,10 @@ export function WorkOrderDetailDrawer({
   const [updating, setUpdating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [remakeModalOpen, setRemakeModalOpen] = useState(false);
+  const [selectedPartForRemake, setSelectedPartForRemake] = useState<any>(null);
+  const [wastePct, setWastePct] = useState<number>(15);
 
   const { data: detail, isLoading, refetch } = useQuery({
     queryKey: ["work-order-detail", workOrderId],
@@ -84,6 +107,16 @@ export function WorkOrderDetailDrawer({
   });
 
   const wo = detail?.workOrder;
+  const canImportCutList = wo?.status === "draft" || wo?.status === "ready";
+
+  const workshopSummary = useMemo(() => {
+    if (!detail?.cutList || detail.cutList.length === 0) return null;
+    return computeCutListSummary(detail.cutList, {
+      sheetLengthMm: 2440,
+      sheetWidthMm: 1220,
+      wastePct,
+    });
+  }, [detail?.cutList, wastePct]);
 
   const handleStatusChange = async (newStatus: WorkOrderStatus) => {
     if (!workOrderId) return;
@@ -238,23 +271,140 @@ export function WorkOrderDetailDrawer({
 
                 {/* Tab 1: Cut List */}
                 <TabsContent value="cutlist" className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-muted-foreground">
-                      {isRtl
-                        ? `إجمالي القطع والألواح للتقطيع: ${detail.cutList.length}`
-                        : `Total cutlist items: ${detail.cutList.length}`}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-foreground">
+                        {isRtl
+                          ? `إجمالي القطع والألواح للتقطيع: ${detail.cutList.length}`
+                          : `Total cutlist items: ${detail.cutList.length}`}
+                      </span>
+                      {detail.cutListSource && (
+                        <Badge
+                          variant={detail.cutListSource === "csv_import" ? "default" : "outline"}
+                          className="text-[10px]"
+                        >
+                          {detail.cutListSource === "csv_import"
+                            ? isRtl
+                              ? "مستورد من كشف الورشة (CSV)"
+                              : "Imported Workshop CSV"
+                            : isRtl
+                              ? "مقايسة (BOM Snapshot)"
+                              : "BOM Snapshot"}
+                        </Badge>
+                      )}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleExportCsv}
-                      disabled={exporting || detail.cutList.length === 0}
-                      className="h-8 text-xs font-semibold gap-1.5 text-primary"
-                    >
-                      {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                      <span>{isRtl ? "تصدير كشف التقطيع (CSV)" : "Export Cut List (CSV)"}</span>
-                    </Button>
+
+                    <div className="flex items-center gap-2">
+                      {canImportCutList ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setImportModalOpen(true)}
+                          className="h-8 text-xs font-semibold gap-1.5 border-dashed hover:border-primary text-foreground"
+                        >
+                          <Upload className="h-3.5 w-3.5 text-primary" />
+                          <span>{isRtl ? "استيراد كشف التقطيع (CSV)" : "Import Cut List (CSV)"}</span>
+                        </Button>
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span tabIndex={0}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled
+                                  className="h-8 text-xs font-semibold gap-1.5 opacity-60 cursor-not-allowed"
+                                >
+                                  <Lock className="h-3.5 w-3.5" />
+                                  <span>{isRtl ? "استيراد كشف التقطيع (CSV)" : "Import Cut List (CSV)"}</span>
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">
+                                {isRtl
+                                  ? "كشف التقطيع مقفل (الاستيراد متاح فقط في حالتي المسودة أو الجاهز للتشغيل)"
+                                  : "Cut list is locked in current status (draft/ready only)"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleExportCsv}
+                        disabled={exporting || detail.cutList.length === 0}
+                        className="h-8 text-xs font-semibold gap-1.5 text-primary"
+                      >
+                        {exporting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5" />
+                        )}
+                        <span>{isRtl ? "تصدير كشف التقطيع (CSV)" : "Export Cut List (CSV)"}</span>
+                      </Button>
+                    </div>
                   </div>
+
+                  {/* Workshop Sheet & Edge-Banding Summary Strip */}
+                  {workshopSummary && detail.cutList.length > 0 && (
+                    <div className="p-3 rounded-xl border bg-muted/30 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-foreground flex items-center gap-1.5">
+                          <Layers className="h-3.5 w-3.5 text-primary" />
+                          <span>{isRtl ? "حصر ألواح الورشة والقشاط (تقديري)" : "Workshop Sheet & Edge Banding Estimate"}</span>
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] text-muted-foreground">{isRtl ? "نسبة الهدر:" : "Waste %:"}</span>
+                          <Select
+                            value={String(wastePct)}
+                            onValueChange={(val) => setWastePct(Number(val))}
+                          >
+                            <SelectTrigger className="h-6 w-16 text-[10px] bg-background">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="10">10%</SelectItem>
+                              <SelectItem value="15">15%</SelectItem>
+                              <SelectItem value="20">20%</SelectItem>
+                              <SelectItem value="25">25%</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                        <div className="p-2 rounded-lg bg-background border">
+                          <div className="text-[10px] text-muted-foreground">{isRtl ? "إجمالي القطع" : "Total Parts"}</div>
+                          <div className="text-sm font-bold font-mono">{workshopSummary.totalParts} {isRtl ? "قطعة" : "pcs"}</div>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-background border">
+                          <div className="text-[10px] text-muted-foreground">{isRtl ? "المساحة الصافية" : "Net Area"}</div>
+                          <div className="text-sm font-bold font-mono text-primary">{workshopSummary.netAreaM2} m²</div>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-background border">
+                          <div className="text-[10px] text-muted-foreground">{isRtl ? "الألواح المطلوبة (1220×2440)" : "Est. Sheets (1220×2440)"}</div>
+                          <div className="text-sm font-bold font-mono text-foreground flex items-center gap-1">
+                            <span>~{workshopSummary.estimatedSheetsTotal}</span>
+                            <span className="text-[10px] font-normal text-muted-foreground">{isRtl ? "لوح" : "sheets"}</span>
+                          </div>
+                        </div>
+
+                        <div className="p-2 rounded-lg bg-background border">
+                          <div className="text-[10px] text-muted-foreground">{isRtl ? "شريط الحواف (قشاط)" : "Total Edge Banding"}</div>
+                          <div className="text-sm font-bold font-mono text-amber-600 flex items-center gap-1">
+                            <span>{workshopSummary.edgeBandingLinearMeters}</span>
+                            <span className="text-[10px] font-normal text-muted-foreground">m</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="border rounded-xl overflow-hidden">
                     <Table>
@@ -264,12 +414,14 @@ export function WorkOrderDetailDrawer({
                           <TableHead className="text-[11px]">{isRtl ? "الخامة" : "Material"}</TableHead>
                           <TableHead className="text-[11px]">{isRtl ? "الأبعاد (ط × ع × س) مم" : "Dimensions (L×W×T) mm"}</TableHead>
                           <TableHead className="text-[11px]">{isRtl ? "الكمية" : "Qty"}</TableHead>
+                          <TableHead className="text-[11px]">{isRtl ? "الشريط" : "Edges"}</TableHead>
+                          <TableHead className="text-[11px] text-end">{isRtl ? "إجراء" : "Action"}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {detail.cutList.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={4} className="text-center py-8 text-xs text-muted-foreground">
+                            <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">
                               {isRtl ? "لا توجد قطع خشبية تتطلب تقطيع في المقايسة" : "No cutlist parts found in BOM"}
                             </TableCell>
                           </TableRow>
@@ -291,6 +443,33 @@ export function WorkOrderDetailDrawer({
                               </TableCell>
                               <TableCell className="font-mono font-bold text-foreground">
                                 {c.quantity} {c.unitOfMeasure}
+                              </TableCell>
+                              <TableCell>
+                                {(c.edgeTop || c.edgeBottom || c.edgeLeft || c.edgeRight) ? (
+                                  <div className="flex gap-1">
+                                    {c.edgeTop && <Badge variant="outline" className="text-[9px] px-1 py-0 bg-primary/10" title={`Top: ${c.edgeTop}`}>T</Badge>}
+                                    {c.edgeBottom && <Badge variant="outline" className="text-[9px] px-1 py-0 bg-primary/10" title={`Bottom: ${c.edgeBottom}`}>B</Badge>}
+                                    {c.edgeLeft && <Badge variant="outline" className="text-[9px] px-1 py-0 bg-primary/10" title={`Left: ${c.edgeLeft}`}>L</Badge>}
+                                    {c.edgeRight && <Badge variant="outline" className="text-[9px] px-1 py-0 bg-primary/10" title={`Right: ${c.edgeRight}`}>R</Badge>}
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setSelectedPartForRemake(c);
+                                    setRemakeModalOpen(true);
+                                  }}
+                                  className="h-7 px-2 text-[11px] text-destructive hover:bg-destructive/10 font-semibold gap-1"
+                                  title={isRtl ? "إعادة تصنيع القطعة المعيبة" : "Remake defective part"}
+                                >
+                                  <ShieldAlert className="h-3.5 w-3.5" />
+                                  <span className="hidden sm:inline">{isRtl ? "إعادة تصنيع" : "Remake"}</span>
+                                </Button>
                               </TableCell>
                             </TableRow>
                           ))
@@ -496,6 +675,52 @@ export function WorkOrderDetailDrawer({
                   )}
                 </div>
               </div>
+            )}
+
+            {wo && (
+              <ImportCutListModal
+                open={importModalOpen}
+                onOpenChange={setImportModalOpen}
+                workOrderId={wo.id}
+                workOrderNumber={wo.workOrderNumber}
+                orderNumber={wo.orderNumber}
+                onSuccess={() => refetch()}
+              />
+            )}
+
+            {wo && (
+              <CreateRemakeModal
+                open={remakeModalOpen}
+                onOpenChange={(v) => {
+                  setRemakeModalOpen(v);
+                  if (!v) setSelectedPartForRemake(null);
+                }}
+                orderId={wo.orderId}
+                customerId={wo.customerId}
+                cutListItemId={
+                  selectedPartForRemake?.source === "csv_import"
+                    ? selectedPartForRemake.id
+                    : undefined
+                }
+                initialReason={
+                  selectedPartForRemake
+                    ? `${selectedPartForRemake.componentName} — ${selectedPartForRemake.lengthMm}×${selectedPartForRemake.widthMm}×${selectedPartForRemake.thicknessMm}mm (${selectedPartForRemake.materialName})`
+                    : undefined
+                }
+                initialDefectDescription={
+                  selectedPartForRemake
+                    ? `Part remake request on Work Order ${wo.workOrderNumber}: ${selectedPartForRemake.componentName} (${selectedPartForRemake.lengthMm}×${selectedPartForRemake.widthMm}×${selectedPartForRemake.thicknessMm}mm). SKU: ${selectedPartForRemake.materialSku}.`
+                    : undefined
+                }
+                onCreated={() => {
+                  refetch();
+                  toast.success(
+                    isRtl
+                      ? "تم تسجيل طلب إعادة تصنيع القطعة"
+                      : "Part remake case created",
+                  );
+                }}
+              />
             )}
           </>
         )}

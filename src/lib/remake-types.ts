@@ -29,6 +29,7 @@ export interface RemakeListItem {
   customerPhone?: string | null;
   qcInspectionId?: string | null;
   componentId?: string | null;
+  cutListItemId?: string | null;
   type: RemakeType;
   severity: RemakeSeverity;
   status: RemakeStatus;

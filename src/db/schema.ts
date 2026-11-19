@@ -701,6 +701,7 @@ export const remakes = pgTable(
     customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
     qcInspectionId: uuid("qc_inspection_id").references(() => qcInspections.id, { onDelete: "set null" }),
     componentId: uuid("component_id").references(() => components.id, { onDelete: "set null" }),
+    cutListItemId: uuid("cut_list_item_id").references((): AnyPgColumn => workOrderCutListItems.id, { onDelete: "set null" }),
     type: text("type").notNull().default("qc_failure"),
     severity: text("severity").notNull().default("medium"),
     status: text("status").notNull().default("reported"),
@@ -719,6 +720,7 @@ export const remakes = pgTable(
     index("remakes_tenant_status_idx").on(t.tenantId, t.status),
     index("remakes_tenant_order_idx").on(t.tenantId, t.orderId),
     index("remakes_tenant_customer_idx").on(t.tenantId, t.customerId),
+    index("remakes_tenant_cut_list_item_idx").on(t.tenantId, t.cutListItemId),
     uniqueIndex("remakes_tenant_number_idx").on(t.tenantId, t.remakeNumber),
   ],
 );
@@ -1632,7 +1634,7 @@ export const stockReservations = pgTable(
     orderId: uuid("order_id")
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
-    remakeId: uuid("remake_id").references(() => remakes.id, {
+    remakeId: uuid("remake_id").references((): AnyPgColumn => remakes.id, {
       onDelete: "set null",
     }),
     quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull(),
@@ -1699,7 +1701,7 @@ export const productionWorkOrders = pgTable(
     orderId: uuid("order_id")
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
-    remakeId: uuid("remake_id").references(() => remakes.id, {
+    remakeId: uuid("remake_id").references((): AnyPgColumn => remakes.id, {
       onDelete: "set null",
     }),
     status: text("status").notNull().default("ready"), // 'draft' | 'ready' | 'in_progress' | 'qc_pending' | 'completed' | 'cancelled'
@@ -1729,6 +1731,51 @@ export const productionWorkOrders = pgTable(
 
 export type ProductionWorkOrderDb = typeof productionWorkOrders.$inferSelect;
 export type NewProductionWorkOrderDb = typeof productionWorkOrders.$inferInsert;
+
+export const workOrderCutListItems = pgTable(
+  "work_order_cut_list_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "restrict" }),
+    workOrderId: uuid("work_order_id")
+      .notNull()
+      .references((): AnyPgColumn => productionWorkOrders.id, { onDelete: "cascade" }),
+    rowIndex: integer("row_index").notNull().default(0),
+    partName: text("part_name").notNull(),
+    unitName: text("unit_name").notNull().default("Unit"),
+    productName: text("product_name").notNull().default("Custom Product"),
+    sectionName: text("section_name").notNull().default("General"),
+    materialSku: text("material_sku").notNull().default("CUSTOM"),
+    materialName: text("material_name").notNull(),
+    lengthMm: numeric("length_mm", { precision: 10, scale: 2 }).notNull(),
+    widthMm: numeric("width_mm", { precision: 10, scale: 2 }).notNull(),
+    thicknessMm: numeric("thickness_mm", { precision: 10, scale: 2 }).notNull().default("18"),
+    quantity: numeric("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
+    unitOfMeasure: text("unit_of_measure").notNull().default("pcs"),
+    edgeTop: text("edge_top"),
+    edgeBottom: text("edge_bottom"),
+    edgeLeft: text("edge_left"),
+    edgeRight: text("edge_right"),
+    grainDirection: text("grain_direction").notNull().default("along_length"),
+    notes: text("notes"),
+    source: text("source").notNull().default("csv_import"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("work_order_cut_list_tenant_id_idx").on(t.tenantId),
+    index("work_order_cut_list_tenant_wo_idx").on(t.tenantId, t.workOrderId),
+  ],
+);
+
+export type WorkOrderCutListItemDb = typeof workOrderCutListItems.$inferSelect;
+export type NewWorkOrderCutListItemDb = typeof workOrderCutListItems.$inferInsert;
 
 // ── Delivery, Installation & Customer Handover ───────────────────────────
 
@@ -1966,7 +2013,7 @@ export const serviceCases = pgTable(
     orderId: uuid("order_id").references(() => orders.id, {
       onDelete: "set null",
     }),
-    remakeId: uuid("remake_id").references(() => remakes.id, {
+    remakeId: uuid("remake_id").references((): AnyPgColumn => remakes.id, {
       onDelete: "set null",
     }),
     deliveryId: uuid("delivery_id").references(() => deliveryHandovers.id, {

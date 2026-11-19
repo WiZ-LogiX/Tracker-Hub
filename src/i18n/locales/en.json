@@ -1100,6 +1100,15 @@
     "passedBadge": "Passed",
     "failedBadge": "Failed",
     "orderSelector": "Select Order",
-    "noOrdersFound": "No production orders linked to this project yet."
+    "noOrdersFound": "No production orders linked to this project yet.",
+    "importCutListCsv": "Import Cut List (CSV)",
+    "exportCutListCsv": "Export Cut List (CSV)",
+    "workshopEstimate": "Workshop Sheet & Edge Banding Estimate",
+    "remakePart": "Remake Part",
+    "cutListLockedTooltip": "Cut list is locked in current status (draft/ready only)",
+    "estSheets": "Est. Sheets (1220×2440)",
+    "totalEdgeBanding": "Total Edge Banding",
+    "importModeReplace": "Replace (Overwrite existing cut-list)",
+    "importModeAppend": "Append (Add to existing parts)"
   }
 }

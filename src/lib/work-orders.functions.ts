@@ -14,11 +14,12 @@ import {
   qcInspections,
   tasks,
   remakes,
+  workOrderCutListItems,
   tenantCounters,
   auditLog,
 } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { requirePermission, type TenantContext } from "@/lib/tenant-context";
+import { requirePermission, forbidWorker, type TenantContext } from "@/lib/tenant-context";
 import type {
   ProductionWorkOrder,
   WorkOrderStatus,
@@ -31,6 +32,8 @@ import type {
 } from "@/lib/work-order-types";
 import { getOrderMaterialRequirements } from "@/lib/inventory.functions";
 import { computeIsOverdue } from "@/lib/task-types";
+import { computeCutListSummary } from "@/lib/cut-list-import.pure";
+import { executeImportWorkOrderCutList } from "@/lib/cut-list-import.server";
 
 // ── Validation Schemas ──────────────────────────────────────────────────────
 
@@ -359,12 +362,56 @@ export const getWorkOrderById = createServerFn({ method: "GET" })
 
     const tree = snapshotData?.tree?.products || snapshotData?.products || [];
 
-    // 2. Generate Cut List & Operations
-    const cutList = extractCutListFromTree(
-      tree,
-      woRow.workOrderNumber,
-      woRow.orderNumber || "—",
-    );
+    // 2. Fetch or Generate Cut List
+    const cutListDbRows = await db
+      .select()
+      .from(workOrderCutListItems)
+      .where(
+        and(
+          eq(workOrderCutListItems.tenantId, tenantId),
+          eq(workOrderCutListItems.workOrderId, woRow.id),
+        ),
+      )
+      .orderBy(workOrderCutListItems.rowIndex, workOrderCutListItems.createdAt);
+
+    let cutList: CutListItem[];
+    let cutListSource: "snapshot" | "csv_import" = "snapshot";
+
+    if (cutListDbRows.length > 0) {
+      cutListSource = "csv_import";
+      cutList = cutListDbRows.map((r) => ({
+        id: r.id,
+        workOrderNumber: woRow.workOrderNumber,
+        orderNumber: woRow.orderNumber || "—",
+        productName: r.productName,
+        sectionName: r.sectionName,
+        unitName: r.unitName,
+        componentName: r.partName,
+        materialSku: r.materialSku,
+        materialName: r.materialName,
+        lengthMm: Number(r.lengthMm),
+        widthMm: Number(r.widthMm),
+        thicknessMm: Number(r.thicknessMm),
+        quantity: Number(r.quantity),
+        unitOfMeasure: r.unitOfMeasure,
+        grainDirection: r.grainDirection,
+        notes: r.notes || undefined,
+        rowIndex: r.rowIndex,
+        edgeTop: r.edgeTop,
+        edgeBottom: r.edgeBottom,
+        edgeLeft: r.edgeLeft,
+        edgeRight: r.edgeRight,
+        source: "csv_import" as const,
+      }));
+    } else {
+      cutList = extractCutListFromTree(
+        tree,
+        woRow.workOrderNumber,
+        woRow.orderNumber || "—",
+      );
+    }
+
+    const cutListSummary = computeCutListSummary(cutList);
 
     const operations: WorkOrderOperationItem[] = [];
     let opIdx = 1;
@@ -490,6 +537,8 @@ export const getWorkOrderById = createServerFn({ method: "GET" })
       },
       tree,
       cutList,
+      cutListSummary,
+      cutListSource,
       operations,
       reservedMaterials,
       materialReadiness: matReqs.readiness,
@@ -675,13 +724,20 @@ export const exportCutListCsv = createServerFn({ method: "GET" })
       "Thickness (mm)",
       "Quantity",
       "Unit",
+      "Edge Top",
+      "Edge Bottom",
+      "Edge Left",
+      "Edge Right",
       "Grain Direction",
       "Notes",
     ];
 
     const escapeCsv = (val: any) => {
       if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
+      let str = String(val).replace(/"/g, '""');
+      if (/^[=+\-@\t\r]/.test(str) && !/^[+\-]?\d+(\.\d+)?$/.test(str)) {
+        str = `'${str}`;
+      }
       return `"${str}"`;
     };
 
@@ -699,6 +755,10 @@ export const exportCutListCsv = createServerFn({ method: "GET" })
       escapeCsv(item.thicknessMm),
       escapeCsv(item.quantity),
       escapeCsv(item.unitOfMeasure),
+      escapeCsv(item.edgeTop || ""),
+      escapeCsv(item.edgeBottom || ""),
+      escapeCsv(item.edgeLeft || ""),
+      escapeCsv(item.edgeRight || ""),
       escapeCsv(item.grainDirection || "along_length"),
       escapeCsv(item.notes || ""),
     ]);
@@ -720,4 +780,56 @@ export const exportCutListCsv = createServerFn({ method: "GET" })
     });
 
     return { csvContent, fileName };
+  });
+
+// ── Cut List CSV Import Server Function ─────────────────────────────────────
+
+export const ImportCutListInput = z.object({
+  workOrderId: z.string().uuid(),
+  mode: z.enum(["replace", "append"]).default("replace"),
+  items: z.array(
+    z.object({
+      rowIndex: z.number().optional(),
+      partName: z.string().min(1, "Part name is required"),
+      unitName: z.string().optional().default("Unit"),
+      productName: z.string().optional().default("Custom Product"),
+      sectionName: z.string().optional().default("General"),
+      materialSku: z.string().optional().default("CUSTOM"),
+      materialName: z.string().min(1, "Material name is required"),
+      lengthMm: z.number().positive("Length must be > 0"),
+      widthMm: z.number().positive("Width must be > 0"),
+      thicknessMm: z.number().positive("Thickness must be > 0").default(18),
+      quantity: z.number().positive("Quantity must be > 0").default(1),
+      unitOfMeasure: z.string().optional().default("pcs"),
+      edgeTop: z.string().nullable().optional(),
+      edgeBottom: z.string().nullable().optional(),
+      edgeLeft: z.string().nullable().optional(),
+      edgeRight: z.string().nullable().optional(),
+      grainDirection: z
+        .enum(["along_length", "along_width", "none", "can_rotate"])
+        .optional()
+        .default("along_length"),
+      notes: z.string().nullable().optional(),
+    }),
+  ),
+});
+
+export const importWorkOrderCutList = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .validator((input: unknown) => ImportCutListInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    forbidWorker(ctx);
+    requirePermission(ctx, "work-orders.edit");
+    const { tenantId, userId } = ctx;
+
+    const result = await executeImportWorkOrderCutList(db, {
+      tenantId,
+      userId,
+      workOrderId: data.workOrderId,
+      mode: data.mode,
+      items: data.items as any,
+    });
+
+    return result;
   });

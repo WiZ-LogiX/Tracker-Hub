@@ -31,6 +31,9 @@ interface CreateRemakeModalProps {
   customerId?: string | null;
   ordersList?: Array<{ id: string; orderNumber: string }>;
   qcInspectionId?: string | null;
+  cutListItemId?: string | null;
+  initialReason?: string;
+  initialDefectDescription?: string;
   onCreated?: () => void;
 }
 
@@ -41,6 +44,9 @@ export function CreateRemakeModal({
   customerId,
   ordersList,
   qcInspectionId,
+  cutListItemId,
+  initialReason,
+  initialDefectDescription,
   onCreated,
 }: CreateRemakeModalProps) {
   const { i18n } = useTranslation();
@@ -56,14 +62,18 @@ export function CreateRemakeModal({
   const [createLinkedTask, setCreateLinkedTask] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Sync selectedOrderId when opened or props change
+  // Sync selectedOrderId and initial values when opened or props change
   useEffect(() => {
+    if (open) {
+      if (initialReason) setReason(initialReason);
+      if (initialDefectDescription) setDefectDescription(initialDefectDescription);
+    }
     if (orderId) {
       setSelectedOrderId(orderId);
     } else if (ordersList && ordersList.length > 0) {
       setSelectedOrderId((prev) => prev || ordersList[0].id);
     }
-  }, [open, orderId, ordersList]);
+  }, [open, orderId, ordersList, initialReason, initialDefectDescription]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +94,7 @@ export function CreateRemakeModal({
           orderId: effectiveOrderId,
           customerId: customerId || null,
           qcInspectionId: qcInspectionId || null,
+          cutListItemId: cutListItemId || null,
           type,
           severity,
           reason: reason.trim(),

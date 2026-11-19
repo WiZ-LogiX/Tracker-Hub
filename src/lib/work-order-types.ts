@@ -1,6 +1,7 @@
 import type { PaginatedResult } from "@/lib/customer-types";
 import type { MaterialReadiness } from "@/lib/inventory-types";
 import type { TaskItem } from "@/lib/task-types";
+import type { CutListSummary } from "@/lib/cut-list-import.types";
 
 export type WorkOrderStatus =
   | "draft"
@@ -53,6 +54,12 @@ export interface CutListItem {
   unitOfMeasure: string;
   grainDirection?: string;
   notes?: string;
+  rowIndex?: number;
+  edgeTop?: string | null;
+  edgeBottom?: string | null;
+  edgeLeft?: string | null;
+  edgeRight?: string | null;
+  source?: "snapshot" | "csv_import";
 }
 
 export interface WorkOrderOperationItem {
@@ -69,6 +76,8 @@ export interface WorkOrderDetailData {
   workOrder: ProductionWorkOrder;
   tree: any[];
   cutList: CutListItem[];
+  cutListSummary?: CutListSummary;
+  cutListSource?: "snapshot" | "csv_import";
   operations: WorkOrderOperationItem[];
   reservedMaterials: {
     stockItemId: string;

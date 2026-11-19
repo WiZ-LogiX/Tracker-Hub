@@ -1100,6 +1100,15 @@
     "passedBadge": "مطابق",
     "failedBadge": "غير مطابق",
     "orderSelector": "أمر التنفيذ",
-    "noOrdersFound": "لا توجد أوامر تنفيذ مرتبطة بهذا المشروع بعد."
+    "noOrdersFound": "لا توجد أوامر تنفيذ مرتبطة بهذا المشروع بعد.",
+    "importCutListCsv": "استيراد كشف التقطيع (CSV)",
+    "exportCutListCsv": "تصدير كشف التقطيع (CSV)",
+    "workshopEstimate": "حصر ألواح الورشة والقشاط (تقديري)",
+    "remakePart": "إعادة تصنيع القطعة",
+    "cutListLockedTooltip": "كشف التقطيع مقفل (الاستيراد متاح فقط في حالتي المسودة أو الجاهز للتشغيل)",
+    "estSheets": "الألواح المطلوبة (1220×2440)",
+    "totalEdgeBanding": "شريط الحواف (قشاط)",
+    "importModeReplace": "استبدال (حذف الكشف السابق بالكامل)",
+    "importModeAppend": "إضافة (إلحاق القطع الجديدة)"
   }
 }

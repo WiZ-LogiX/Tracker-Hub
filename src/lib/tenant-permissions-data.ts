@@ -161,6 +161,7 @@ export const ALL_PERMISSION_SLUGS = [
   // Work Orders
   "work-orders.view",
   "work-orders.create",
+  "work-orders.edit",
   "work-orders.status.update",
   "work-orders.assign",
   "work-orders.delete",
@@ -247,7 +248,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "customers.view", "customers.create", "customers.edit",
     "products.view", "materials.view", "suppliers.view", "finishes.view", "veneers.view", "accessories.view",
     "inventory.view", "inventory.adjust",
-    "work-orders.view", "work-orders.create", "work-orders.status.update", "work-orders.assign",
+    "work-orders.view", "work-orders.create", "work-orders.edit", "work-orders.status.update", "work-orders.assign",
     "workers.view", "remakes.view", "remakes.create", "remakes.edit",
     "notifications.view", "notifications.send", "settings.view",
   ],
@@ -645,11 +646,13 @@ export const APPLICATION_SECTIONS: SectionMeta[] = [
     workPerms: [
       "work-orders.view",
       "work-orders.create",
+      "work-orders.edit",
       "work-orders.status.update",
     ],
     managePerms: [
       "work-orders.view",
       "work-orders.create",
+      "work-orders.edit",
       "work-orders.status.update",
       "work-orders.assign",
       "work-orders.delete",

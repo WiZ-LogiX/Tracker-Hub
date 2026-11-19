@@ -1100,6 +1100,15 @@
     "passedBadge": "Conforme",
     "failedBadge": "Non conforme",
     "orderSelector": "Sélectionner commande",
-    "noOrdersFound": "Aucune commande de production liée à ce projet pour le moment."
+    "noOrdersFound": "Aucune commande de production liée à ce projet pour le moment.",
+    "importCutListCsv": "Importer la liste de débit (CSV)",
+    "exportCutListCsv": "Exporter la liste de débit (CSV)",
+    "workshopEstimate": "Estimation des panneaux et chants de l'atelier",
+    "remakePart": "Refaire la pièce",
+    "cutListLockedTooltip": "La liste de débit est verrouillée dans l'état actuel (brouillon/prêt uniquement)",
+    "estSheets": "Panneaux estimés (1220×2440)",
+    "totalEdgeBanding": "Total bandes de chant",
+    "importModeReplace": "Remplacer (Écraser la liste existante)",
+    "importModeAppend": "Ajouter (Ajouter aux pièces existantes)"
   }
 }
