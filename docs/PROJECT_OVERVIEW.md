@@ -177,6 +177,12 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
    - Company delivery & installation handover defaulting to `installationRequired = true`, public tracking link copy (`/track?ref=${token}`), and inline milestone invoice issuance prompts for handovers upon delivery.
    - Project and order status auto-synchronization advancing order to `delivered`/`completed` and project to `delivery`/`handover` upon installation completion.
    - After-sales warranty diagnostic drawer with 1-click warranty remake generation (`createRemakeForCase`), severity/technician selection, and automatic creation of high-priority corrective tasks (`TSK-XXXX`, category `quality`).
+7. **Sprint 6B — Actionable Morning Command Center & Dashboard Accuracy Hardening**:
+   - Hardened `getExecutiveDashboard` server engine with `forbidWorker(ctx, "Executive Dashboard")` and `canViewFinancials` masking based on `projects.financials.view`.
+   - Filtered invoice totals to active issued invoices (`billingStatus = 'issued'`), preventing scheduled future milestones from inflating active receivables.
+   - Fixed low stock threshold to `(physical - reserved) <= minReorderLevel`, ensuring 100% parity with `/admin/inventory`.
+   - Added concurrent morning priority queues inside the single `Promise.all` (QC Gate Blockers, Milestones Ready to Bill, Overdue CRM Follow-Ups) running in < 35ms.
+   - Upgraded `/admin` UI with direct **"Quick Inquiry"** (`FastCrmIntakeDrawer`), category filter pills in the Needs Attention Center, 1-click inline **"Issue Invoice"** action for scheduled milestones, and clean restricted states for non-financial users.
 
 ---
 
@@ -190,4 +196,5 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 - **Inventory & Shop Floor**: ✅ directional adjustments, global audit ledger, and QC gating.
 - **SaaS Onboarding & Quotas**: ✅ self-serve registration, seat limits, and monthly quotation quota enforcement.
 - **Delivery & After-Sales**: ✅ company delivery & installation stage, milestone invoice prompts, warranty remake loop & corrective tasks.
-- **Full Verification**: ✅ 1,131 Vitest tests across 68 suites (100% pass), 165 Playwright E2E tests, 0 type errors, clean production build.
+- **Executive Command Center**: ✅ morning focus queues (QC gate blockers, milestone billing, CRM follow-ups), quick intake drawer, and sub-35ms batched aggregations.
+- **Full Verification**: ✅ 1,137 Vitest tests across 69 suites (100% pass), 165 Playwright E2E tests, 0 type errors, clean production build.

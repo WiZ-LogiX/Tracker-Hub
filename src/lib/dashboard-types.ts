@@ -88,14 +88,34 @@ export interface TaskOperationsSummary {
   overdueTasks: number;
 }
 
+export type AttentionItemCategory =
+  | "production"
+  | "billing"
+  | "crm"
+  | "inventory"
+  | "tasks"
+  | "quality"
+  | "delivery"
+  | "finance"
+  | "order"
+  | "task";
+
+export interface AttentionActionPayload {
+  type: "issue_milestone_invoice" | string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  [key: string]: any;
+}
+
 export interface AttentionItem {
   id: string;
-  category: "quality" | "inventory" | "delivery" | "task" | "finance" | "order";
+  category: AttentionItemCategory;
   title: string;
   description: string;
   severity: "critical" | "warning" | "info";
   link: string;
   createdAt?: string;
+  actionPayload?: AttentionActionPayload;
 }
 
 export interface RecentActivityEvent {
@@ -118,4 +138,5 @@ export interface ExecutiveDashboardData {
   customerCount: number;
   attentionItems: AttentionItem[];
   recentActivities: RecentActivityEvent[];
+  financialRestricted?: boolean;
 }

@@ -1,12 +1,16 @@
+import { useState, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { getExecutiveDashboard } from "@/lib/dashboard.functions";
+import { issueMilestoneInvoice } from "@/lib/invoice-payment.functions";
+import { FastCrmIntakeDrawer } from "@/components/crm/FastCrmIntakeDrawer";
 import type { ExecutiveDashboardData } from "@/lib/dashboard-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import {
   Users,
   FileText,
@@ -32,6 +36,7 @@ import {
   Activity,
   ChevronRight,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { formatEGP } from "@/lib/pricing";
 import { getStageLabelAr, ORDER_STAGES } from "@/lib/stages";
@@ -90,6 +95,7 @@ const DEFAULT_DASHBOARD: ExecutiveDashboardData = {
   customerCount: 0,
   attentionItems: [],
   recentActivities: [],
+  financialRestricted: false,
 };
 
 export const Route = createFileRoute("/admin/")({ component: DashboardPage });
@@ -98,8 +104,13 @@ function DashboardPage() {
   const { t, i18n } = useTranslation();
   const isRtl = i18n.language === "ar";
   const getDashboardFn = useServerFn(getExecutiveDashboard);
+  const issueMilestoneInvoiceFn = useServerFn(issueMilestoneInvoice);
 
-  const { data, isLoading } = useQuery<ExecutiveDashboardData>({
+  const [isFastIntakeOpen, setIsFastIntakeOpen] = useState(false);
+  const [attentionFilter, setAttentionFilter] = useState<"all" | "production" | "billing_crm" | "inventory_tasks">("all");
+  const [issuingInvoiceId, setIssuingInvoiceId] = useState<string | null>(null);
+
+  const { data, isLoading, refetch } = useQuery<ExecutiveDashboardData>({
     queryKey: ["executive-dashboard"],
     queryFn: async () => {
       try {
@@ -113,6 +124,84 @@ function DashboardPage() {
     gcTime: 10 * 60 * 1000,
     refetchInterval: 30000,
   });
+
+  const handleIssueMilestone = async (invoiceId: string) => {
+    setIssuingInvoiceId(invoiceId);
+    try {
+      await issueMilestoneInvoiceFn({ data: { invoiceId } });
+      toast.success(isRtl ? "تم إصدار فاتورة الدفعة بنجاح" : "Milestone invoice issued successfully");
+      await refetch();
+    } catch (err: any) {
+      toast.error(err.message || (isRtl ? "فشل إصدار الفاتورة" : "Failed to issue milestone invoice"));
+    } finally {
+      setIssuingInvoiceId(null);
+    }
+  };
+
+  const activeData = data || DEFAULT_DASHBOARD;
+  const {
+    financial,
+    commercial,
+    factory,
+    inventory,
+    quality,
+    deliveries,
+    tasks: taskSummary,
+    customerCount,
+    attentionItems,
+    recentActivities,
+  } = activeData;
+
+  const filteredAttentionItems = useMemo(() => {
+    if (attentionFilter === "production") {
+      return attentionItems.filter(
+        (i) => i.category === "production" || i.category === "quality" || i.category === "order",
+      );
+    }
+    if (attentionFilter === "billing_crm") {
+      return attentionItems.filter(
+        (i) => i.category === "billing" || i.category === "crm" || i.category === "finance",
+      );
+    }
+    if (attentionFilter === "inventory_tasks") {
+      return attentionItems.filter(
+        (i) =>
+          i.category === "inventory" ||
+          i.category === "tasks" ||
+          i.category === "task" ||
+          i.category === "delivery",
+      );
+    }
+    return attentionItems;
+  }, [attentionItems, attentionFilter]);
+
+  const productionCount = useMemo(
+    () =>
+      attentionItems.filter(
+        (i) => i.category === "production" || i.category === "quality" || i.category === "order",
+      ).length,
+    [attentionItems],
+  );
+
+  const billingCrmCount = useMemo(
+    () =>
+      attentionItems.filter(
+        (i) => i.category === "billing" || i.category === "crm" || i.category === "finance",
+      ).length,
+    [attentionItems],
+  );
+
+  const inventoryTasksCount = useMemo(
+    () =>
+      attentionItems.filter(
+        (i) =>
+          i.category === "inventory" ||
+          i.category === "tasks" ||
+          i.category === "task" ||
+          i.category === "delivery",
+      ).length,
+    [attentionItems],
+  );
 
   if (isLoading && !data) {
     return (
@@ -138,20 +227,6 @@ function DashboardPage() {
     );
   }
 
-  const activeData = data || DEFAULT_DASHBOARD;
-  const {
-    financial,
-    commercial,
-    factory,
-    inventory,
-    quality,
-    deliveries,
-    tasks: taskSummary,
-    customerCount,
-    attentionItems,
-    recentActivities,
-  } = activeData;
-
   return (
     <div className="space-y-8 pb-16">
       {/* ── Page Header & Quick Launch Strip ──────────────────────────────── */}
@@ -168,6 +243,14 @@ function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            onClick={() => setIsFastIntakeOpen(true)}
+            variant="outline"
+            className="gap-1.5 h-9 text-xs font-semibold border-primary/40 text-primary hover:bg-primary/10 shadow-2xs"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span>{isRtl ? "تسجيل استفسار سريع" : "Quick Inquiry"}</span>
+          </Button>
           <Link to="/admin/quotes/new">
             <Button className="gap-2 bg-primary text-primary-foreground shadow-xs h-9 text-xs font-semibold">
               <Plus className="h-3.5 w-3.5" />
@@ -200,30 +283,49 @@ function DashboardPage() {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {isRtl ? "التحصيل والمستحقات" : "Financial & Collection"}
                   </p>
-                  <p className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-foreground">
-                    {formatEGP(financial.totalCollected)}
-                  </p>
+                  {activeData.financialRestricted ? (
+                    <div className="flex items-center gap-2 pt-1 text-muted-foreground">
+                      <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      <span className="text-sm font-semibold">
+                        {isRtl ? "بيانات مقيدة" : "Restricted Access"}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-2xl sm:text-3xl font-bold font-mono tracking-tight text-foreground">
+                      {formatEGP(financial.totalCollected)}
+                    </p>
+                  )}
                 </div>
                 <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <Receipt className="h-5 w-5" />
                 </div>
               </div>
-              <div className="mt-4 space-y-1.5">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{isRtl ? "معدل التحصيل:" : "Collection Rate:"}</span>
-                  <span className="font-mono font-bold text-primary">{financial.collectionRate.toFixed(1)}%</span>
+              {activeData.financialRestricted ? (
+                <div className="mt-4 pt-1">
+                  <p className="text-xs text-muted-foreground">
+                    {isRtl
+                      ? "يتطلب الاطلاع على الإيرادات والأرصدة صلاحية مالية خاصة"
+                      : "Viewing revenue and receivables requires elevated financial permissions"}
+                  </p>
                 </div>
-                <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="bg-primary h-1.5 rounded-full transition-all"
-                    style={{ width: `${Math.min(100, financial.collectionRate)}%` }}
-                  />
+              ) : (
+                <div className="mt-4 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{isRtl ? "معدل التحصيل:" : "Collection Rate:"}</span>
+                    <span className="font-mono font-bold text-primary">{financial.collectionRate.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-primary h-1.5 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, financial.collectionRate)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                    <span>{isRtl ? "المتبقي:" : "Due:"} <strong className="text-amber-700 dark:text-amber-400 font-mono">{formatEGP(financial.outstandingBalance)}</strong></span>
+                    <span>{financial.unpaidInvoicesCount} {isRtl ? "فواتير غير مسددة" : "unpaid"}</span>
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
-                  <span>{isRtl ? "المتبقي:" : "Due:"} <strong className="text-amber-700 dark:text-amber-400 font-mono">{formatEGP(financial.outstandingBalance)}</strong></span>
-                  <span>{financial.unpaidInvoicesCount} {isRtl ? "فواتير غير مسددة" : "unpaid"}</span>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </Link>
@@ -326,7 +428,7 @@ function DashboardPage() {
 
       {/* ── Management Attention Center ("Needs Attention") ────────────────── */}
       <Card className="border border-border/80 bg-card rounded-2xl shadow-xs overflow-hidden">
-        <CardHeader className="p-4 bg-muted/30 border-b flex flex-row items-center justify-between">
+        <CardHeader className="p-4 bg-muted/30 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
             <CardTitle className="text-base font-bold text-foreground">
@@ -336,38 +438,106 @@ function DashboardPage() {
               {attentionItems.length}
             </Badge>
           </div>
-          <span className="text-xs text-muted-foreground hidden sm:inline">
-            {isRtl ? "استثناءات تشغيلية تتطلب تدخلاً فورياً" : "Operational exceptions requiring immediate action"}
-          </span>
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setAttentionFilter("all")}
+              className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                attentionFilter === "all"
+                  ? "bg-primary text-primary-foreground font-semibold"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {isRtl ? "الكل" : "All"} ({attentionItems.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttentionFilter("production")}
+              className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                attentionFilter === "production"
+                  ? "bg-primary text-primary-foreground font-semibold"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {isRtl ? "الإنتاج والجودة" : "Production & QC"} ({productionCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttentionFilter("billing_crm")}
+              className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                attentionFilter === "billing_crm"
+                  ? "bg-primary text-primary-foreground font-semibold"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {isRtl ? "الفوترة والعملاء" : "Billing & CRM"} ({billingCrmCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setAttentionFilter("inventory_tasks")}
+              className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                attentionFilter === "inventory_tasks"
+                  ? "bg-primary text-primary-foreground font-semibold"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {isRtl ? "المخزون والمهام" : "Inventory & Tasks"} ({inventoryTasksCount})
+            </button>
+          </div>
         </CardHeader>
         <CardContent className="p-4">
-          {attentionItems.length === 0 ? (
+          {filteredAttentionItems.length === 0 ? (
             <div className="py-6 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-1.5">
               <CheckCircle2 className="h-6 w-6 text-emerald-600" />
               <span className="font-semibold text-foreground text-sm">
-                {isRtl ? "لا توجد مشاكل حرجة حالياً — كافة العمليات تسير وفق المعدلات الطبيعية" : "No critical issues right now — all operations normal"}
+                {isRtl ? "لا توجد مشاكل حرجة حالياً في هذا القسم — كافة العمليات تسير وفق المعدلات الطبيعية" : "No critical issues right now — all operations normal"}
               </span>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {attentionItems.map((item) => {
+              {filteredAttentionItems.map((item) => {
                 const getSeverityStyle = (sev: string) => {
                   if (sev === "critical") return "border-rose-200 dark:border-rose-900/60 bg-rose-50/50 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200";
                   if (sev === "warning") return "border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200";
                   return "border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 text-blue-900 dark:text-blue-200";
                 };
 
+                const isMilestoneAction = item.actionPayload?.type === "issue_milestone_invoice" && item.actionPayload.invoiceId;
+
                 return (
                   <Link key={item.id} to={item.link} className="block group">
                     <div className={`p-3.5 rounded-xl border transition-all group-hover:shadow-xs flex items-start justify-between gap-3 text-xs ${getSeverityStyle(item.severity)}`}>
-                      <div className="space-y-1 min-w-0">
+                      <div className="space-y-1 min-w-0 flex-1">
                         <div className="font-bold flex items-center gap-1.5 text-xs">
                           {item.severity === "critical" && <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />}
                           <span className="truncate">{item.title}</span>
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 mt-1 rtl:rotate-180 transition-transform" />
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isMilestoneAction && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={issuingInvoiceId === item.actionPayload!.invoiceId}
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              await handleIssueMilestone(item.actionPayload!.invoiceId!);
+                            }}
+                            className="h-7 text-[11px] px-2.5 bg-primary text-primary-foreground gap-1 shadow-2xs font-semibold"
+                          >
+                            {issuingInvoiceId === item.actionPayload!.invoiceId ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Receipt className="h-3 w-3" />
+                            )}
+                            <span>{isRtl ? "إصدار الفاتورة" : "Issue Invoice"}</span>
+                          </Button>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground shrink-0 rtl:rotate-180 transition-transform" />
+                      </div>
                     </div>
                   </Link>
                 );
@@ -634,6 +804,13 @@ function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Fast CRM Intake Drawer */}
+      <FastCrmIntakeDrawer
+        open={isFastIntakeOpen}
+        onOpenChange={setIsFastIntakeOpen}
+        onSuccess={() => refetch()}
+      />
     </div>
   );
 }

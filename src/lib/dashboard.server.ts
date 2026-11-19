@@ -11,6 +11,8 @@ import {
   deliveryHandovers,
   tasks,
   auditLog,
+  projects,
+  opportunities,
 } from "@/db/schema";
 import { eq, and, sql, desc } from "drizzle-orm";
 import type {
@@ -19,20 +21,31 @@ import type {
   RecentActivityEvent,
 } from "@/lib/dashboard-types";
 
+export interface FetchDashboardOptions {
+  canViewFinancials?: boolean;
+}
+
 /**
  * Pure data-fetching function executing all metrics aggregations
- * directly in PostgreSQL concurrently via Promise.all.
+ * directly in PostgreSQL concurrently via a single Promise.all.
  */
-export async function fetchExecutiveDashboardData(tenantId: string): Promise<ExecutiveDashboardData> {
+export async function fetchExecutiveDashboardData(
+  tenantId: string,
+  options: FetchDashboardOptions = {},
+): Promise<ExecutiveDashboardData> {
+  const canViewFinancials = options.canViewFinancials ?? true;
+
   try {
-    const invoiceAggPromise = db
-      .select({
-        totalInvoiced: sql<string>`COALESCE(SUM(${invoices.total}), 0)`,
-        totalCollected: sql<string>`COALESCE(SUM(${invoices.paidAmount}), 0)`,
-        unpaidCount: sql<number>`COUNT(CASE WHEN ${invoices.total} > ${invoices.paidAmount} THEN 1 END)::int`,
-      })
-      .from(invoices)
-      .where(eq(invoices.tenantId, tenantId));
+    const invoiceAggPromise = canViewFinancials
+      ? db
+          .select({
+            totalInvoiced: sql<string>`COALESCE(SUM(CASE WHEN ${invoices.billingStatus} = 'issued' OR ${invoices.billingStatus} IS NULL THEN ${invoices.total} ELSE 0 END), 0)`,
+            totalCollected: sql<string>`COALESCE(SUM(CASE WHEN ${invoices.billingStatus} = 'issued' OR ${invoices.billingStatus} IS NULL THEN ${invoices.paidAmount} ELSE 0 END), 0)`,
+            unpaidCount: sql<number>`COUNT(CASE WHEN (${invoices.billingStatus} = 'issued' OR ${invoices.billingStatus} IS NULL) AND ${invoices.total} > ${invoices.paidAmount} THEN 1 END)::int`,
+          })
+          .from(invoices)
+          .where(eq(invoices.tenantId, tenantId))
+      : Promise.resolve([{ totalInvoiced: "0", totalCollected: "0", unpaidCount: 0 }]);
 
     const quotesAggPromise = db
       .select({
@@ -105,7 +118,7 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
     const stockAggPromise = db
       .select({
         totalCount: sql<number>`COUNT(*)::int`,
-        lowCount: sql<number>`COUNT(CASE WHEN (${stockItems.physicalQuantity} - ${stockItems.reservedQuantity}) < 5 THEN 1 END)::int`,
+        lowCount: sql<number>`COUNT(CASE WHEN (${stockItems.physicalQuantity} - ${stockItems.reservedQuantity}) <= ${stockItems.minReorderLevel} THEN 1 END)::int`,
       })
       .from(stockItems)
       .where(eq(stockItems.tenantId, tenantId));
@@ -122,7 +135,7 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       .where(
         and(
           eq(stockItems.tenantId, tenantId),
-          sql`(${stockItems.physicalQuantity} - ${stockItems.reservedQuantity}) < 5`,
+          sql`(${stockItems.physicalQuantity} - ${stockItems.reservedQuantity}) <= ${stockItems.minReorderLevel}`,
         ),
       )
       .limit(5);
@@ -235,7 +248,94 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       .orderBy(desc(auditLog.createdAt))
       .limit(8);
 
-    // Concurrently await all 17 queries in parallel
+    // ── Morning Focus Queues (Zero N+1, Batched inside Promise.all) ──────────
+
+    // 1. QC Gate Blockers: Orders in quality_check without a passing inspection
+    const qcBlockersPromise = db
+      .select({
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+        customerName: customers.name,
+      })
+      .from(orders)
+      .leftJoin(customers, eq(orders.customerId, customers.id))
+      .where(
+        and(
+          eq(orders.tenantId, tenantId),
+          eq(orders.currentStage, "quality_check"),
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${qcInspections} qi
+            WHERE qi.order_id = ${orders.id}
+              AND qi.stage = 'quality_check'
+              AND qi.passed = true
+              AND qi.tenant_id = ${tenantId}
+          )`,
+        ),
+      )
+      .orderBy(desc(orders.createdAt))
+      .limit(5);
+
+    // 2. Milestones Ready to Bill: scheduled invoices whose linked order/project is delivery-ready
+    const milestonesReadyToBillPromise = canViewFinancials
+      ? db
+          .select({
+            id: invoices.id,
+            invoiceNumber: invoices.invoiceNumber,
+            milestoneLabel: invoices.milestoneLabel,
+            total: invoices.total,
+            dueStage: invoices.dueStage,
+            customerName: customers.name,
+          })
+          .from(invoices)
+          .leftJoin(customers, eq(invoices.customerId, customers.id))
+          .where(
+            and(
+              eq(invoices.tenantId, tenantId),
+              eq(invoices.billingStatus, "scheduled"),
+              sql`(
+                EXISTS (
+                  SELECT 1 FROM ${orders} o
+                  WHERE o.tenant_id = ${tenantId}
+                    AND o.quote_id = ${invoices.quoteId}
+                    AND o.current_stage IN ('ready_for_delivery', 'ready_for_pickup', 'delivered', 'completed')
+                )
+                OR
+                EXISTS (
+                  SELECT 1 FROM ${projects} p
+                  WHERE p.tenant_id = ${tenantId}
+                    AND (p.id = ${invoices.projectId} OR p.quote_id = ${invoices.quoteId})
+                    AND p.current_stage IN ('ready_for_delivery', 'delivery', 'handover', 'completed')
+                )
+              )`,
+            ),
+          )
+          .orderBy(desc(invoices.issuedAt))
+          .limit(5)
+      : Promise.resolve([]);
+
+    // 3. Overdue CRM Follow-ups: open opportunities with past nextActionDate
+    const overdueCrmPromise = db
+      .select({
+        id: opportunities.id,
+        opportunityNumber: opportunities.opportunityNumber,
+        title: opportunities.title,
+        nextAction: opportunities.nextAction,
+        nextActionDate: opportunities.nextActionDate,
+        customerName: customers.name,
+      })
+      .from(opportunities)
+      .leftJoin(customers, eq(opportunities.customerId, customers.id))
+      .where(
+        and(
+          eq(opportunities.tenantId, tenantId),
+          eq(opportunities.status, "open"),
+          sql`${opportunities.nextActionDate} IS NOT NULL AND ${opportunities.nextActionDate} <= NOW()`,
+        ),
+      )
+      .orderBy(opportunities.nextActionDate)
+      .limit(5);
+
+    // Concurrently await all 20 queries in a single Promise.all
     const [
       [invAgg],
       [qAgg],
@@ -254,6 +354,9 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       overdueTaskRows,
       [custRow],
       auditRows,
+      qcBlockerRows,
+      milestoneReadyRows,
+      overdueCrmRows,
     ] = await Promise.all([
       invoiceAggPromise,
       quotesAggPromise,
@@ -272,21 +375,40 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       overdueTasksPromise,
       custCountPromise,
       auditPromise,
+      qcBlockersPromise,
+      milestonesReadyToBillPromise,
+      overdueCrmPromise,
     ]);
 
-    // 1. Financial totals
-    const totalInvoiced = Number(invAgg?.totalInvoiced || 0);
-    const totalCollected = Number(invAgg?.totalCollected || 0);
-    const outstandingBalance = Math.max(0, totalInvoiced - totalCollected);
-    const collectionRate =
-      totalInvoiced > 0
-        ? Math.min(100, (totalCollected / totalInvoiced) * 100)
+    // 1. Financial totals (masked if user lacks permission)
+    const rawTotalInvoiced = Number(invAgg?.totalInvoiced || 0);
+    const rawTotalCollected = Number(invAgg?.totalCollected || 0);
+    const rawOutstanding = Math.max(0, rawTotalInvoiced - rawTotalCollected);
+    const rawCollectionRate =
+      rawTotalInvoiced > 0
+        ? Math.min(100, (rawTotalCollected / rawTotalInvoiced) * 100)
         : 0;
-    const unpaidInvoicesCount = Number(invAgg?.unpaidCount || 0);
+    const rawUnpaidCount = Number(invAgg?.unpaidCount || 0);
+
+    const financial = canViewFinancials
+      ? {
+          totalInvoiced: rawTotalInvoiced,
+          totalCollected: rawTotalCollected,
+          outstandingBalance: rawOutstanding,
+          collectionRate: rawCollectionRate,
+          unpaidInvoicesCount: rawUnpaidCount,
+        }
+      : {
+          totalInvoiced: 0,
+          totalCollected: 0,
+          outstandingBalance: 0,
+          collectionRate: 0,
+          unpaidInvoicesCount: 0,
+        };
 
     // 2. Commercial Quotes
     const totalQuotes = Number(qAgg?.totalQuotes || 0);
-    const totalPipelineValue = Number(qAgg?.totalPipelineValue || 0);
+    const totalPipelineValue = canViewFinancials ? Number(qAgg?.totalPipelineValue || 0) : 0;
     const quotesByStatus = {
       draft: Number(qAgg?.draft || 0),
       sent: Number(qAgg?.sent || 0),
@@ -302,7 +424,7 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       quoteNumber: q.quoteNumber,
       customerName: q.customerName || "—",
       status: q.status,
-      total: Number(q.total || 0),
+      total: canViewFinancials ? Number(q.total || 0) : 0,
       createdAt: q.createdAt ? new Date(q.createdAt).toISOString() : "",
     }));
 
@@ -331,7 +453,7 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       orderNumber: o.orderNumber,
       customerName: o.customerName || "—",
       currentStage: o.currentStage || "cutting",
-      total: Number(o.total || 0),
+      total: canViewFinancials ? Number(o.total || 0) : 0,
       expectedDelivery: o.expectedDelivery || null,
       trackingToken: null,
     }));
@@ -339,10 +461,54 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
     // 4. Attention Items Synthesis
     const attentionItems: AttentionItem[] = [];
 
+    // A. QC Gate Blockers (production)
+    for (const qcb of qcBlockerRows) {
+      attentionItems.push({
+        id: `att-qc-${qcb.id}`,
+        category: "production",
+        title: `حاجز فحص الجودة: ${qcb.orderNumber}`,
+        description: `أمر الإنتاج بانتظار فحص الجودة المعتمد قبل السماح بنقله للشحن والتسليم${qcb.customerName ? ` (${qcb.customerName})` : ""}`,
+        severity: "critical",
+        link: "/admin/orders",
+      });
+    }
+
+    // B. Milestones Ready to Bill (billing) - only if canViewFinancials
+    if (canViewFinancials) {
+      for (const ms of milestoneReadyRows) {
+        attentionItems.push({
+          id: `att-ms-${ms.id}`,
+          category: "billing",
+          title: `دفعة مرحلية جاهزة للإصدار: ${ms.invoiceNumber}`,
+          description: `${ms.milestoneLabel || "دفعة مرحلية"} بمبلغ ${Number(ms.total || 0).toLocaleString("en-US")} ج.م${ms.customerName ? ` • ${ms.customerName}` : ""}`,
+          severity: "warning",
+          link: "/admin/invoices",
+          actionPayload: {
+            type: "issue_milestone_invoice",
+            invoiceId: ms.id,
+            invoiceNumber: ms.invoiceNumber,
+          },
+        });
+      }
+    }
+
+    // C. Overdue CRM Follow-ups (crm)
+    for (const crm of overdueCrmRows) {
+      attentionItems.push({
+        id: `att-crm-${crm.id}`,
+        category: "crm",
+        title: `متابعة عميل متأخرة: ${crm.opportunityNumber || crm.title}`,
+        description: `${crm.nextAction || crm.title}${crm.customerName ? ` • ${crm.customerName}` : ""}`,
+        severity: "warning",
+        link: "/admin/crm",
+      });
+    }
+
+    // D. Critical Remakes (production)
     for (const cr of criticalRemakeRows) {
       attentionItems.push({
         id: `att-rmk-${cr.id}`,
-        category: "quality",
+        category: "production",
         title: `إعادة تصنيع حرجة: ${cr.remakeNumber}`,
         description: cr.defectDescription || cr.reason || "مشكلة جودة تستدعي التدخل",
         severity: "critical",
@@ -350,6 +516,7 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       });
     }
 
+    // E. Low Stock Items (inventory)
     for (const ls of lowStockRows.slice(0, 3)) {
       const avail = Number(ls.availableQuantity || 0);
       attentionItems.push({
@@ -358,14 +525,15 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
         title: `نقص خامات في المخزن: ${ls.materialCode}`,
         description: `المتبقي المتاح: ${avail} (محجوز: ${ls.reservedQuantity})`,
         severity: avail <= 0 ? "critical" : "warning",
-        link: "/admin/inventory",
+        link: "/admin/inventory?lowStock=true",
       });
     }
 
+    // F. Overdue Tasks (tasks)
     for (const ot of overdueTaskRows) {
       attentionItems.push({
         id: `att-task-${ot.id}`,
-        category: "task",
+        category: "tasks",
         title: `مهمة متأخرة: ${ot.taskCode}`,
         description: ot.title,
         severity: "warning",
@@ -373,6 +541,7 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       });
     }
 
+    // G. Pending Deliveries (delivery)
     for (const pd of pendingDelRows.slice(0, 2)) {
       attentionItems.push({
         id: `att-del-${pd.id}`,
@@ -407,13 +576,7 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
     });
 
     return {
-      financial: {
-        totalInvoiced,
-        totalCollected,
-        outstandingBalance,
-        collectionRate,
-        unpaidInvoicesCount,
-      },
+      financial,
       commercial: {
         totalQuotes,
         totalPipelineValue,
@@ -470,8 +633,9 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
         overdueTasks: Number(tskAgg?.overdue || 0),
       },
       customerCount: Number(custRow?.count || 0),
-      attentionItems: attentionItems.slice(0, 8),
+      attentionItems: attentionItems.slice(0, 16),
       recentActivities,
+      financialRestricted: !canViewFinancials,
     };
   } catch (err) {
     console.error("[getExecutiveDashboard] Error aggregating metrics:", err);
@@ -529,6 +693,7 @@ export async function fetchExecutiveDashboardData(tenantId: string): Promise<Exe
       customerCount: 0,
       attentionItems: [],
       recentActivities: [],
+      financialRestricted: !canViewFinancials,
     };
   }
 }

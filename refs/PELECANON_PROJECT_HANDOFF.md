@@ -208,13 +208,14 @@ fcf80b3 fix(security): fail-close mock auth bypass and harden public tracking en
 795b004 chore(core): update router guards, client middleware, operational tests and documentation
 ```
 
-### Recent Completed Sprints (Sprints 1 - 6A)
+### Recent Completed Sprints (Sprints 1 - 6B)
 - **Sprint 1 (Milestone Billing & Project Financial Health)**: Migration `20261118_milestone_billing_and_margin.sql`, milestone schedule creation (Deposit, Progress, Delivery), margin calculations, and `projects.financials.view` protection.
 - **Sprint 2 (Fast CRM Intake & Relational Opportunity Sync)**: `FastCrmIntakeDrawer` modal, quick lead/opportunity creation, bidirectional quote opportunity sync and auto stage advancement.
 - **Sprint 3 (Guided Production Stage, QC Gate & Remake Loop)**: Server-side `executeOrderStageTransition` and `executeQcInspection` in `production-workflow.server.ts`, strict QC gate on completion, automated remake task creation.
 - **Sprint 4 (Standalone Inventory Polish & Movement Audit Ledger)**: Directional Stock In (+) and Stock Out (-) modal with quick-add chips and reserved stock protection; `StockMovementsDrawer` global audit ledger; restock row shortcuts.
 - **Sprint 5 (SaaS Tenant Onboarding & Subscription Plan Enforcement)**: Self-serve workshop registration (`executeWorkshopOnboarding`), subscription plan tiers (`free`, `pro`, `enterprise`), active seat quota enforcement (`assertActiveSeatAvailable`), and monthly quotation quota limit checks (`assertMonthlyQuoteQuota`).
 - **Sprint 6A (Company Delivery & Installation Stage, Milestone Billing Prompt & After-Sales Warranty Loop)**: Transition `ready_for_pickup` to `ready_for_delivery` with backward-compatible aliases, default installation-first handover (`installationRequired = true`), milestone invoice issuance triggers upon delivery, order/project stage synchronization, after-sales warranty diagnostic drawer, and automated remake task generation.
+- **Sprint 6B (Actionable Morning Command Center & Dashboard Hardening)**: Hardened `getExecutiveDashboard` server engine with `forbidWorker` guard, permission-based financial masking (`projects.financials.view`), issued invoice filter, accurate low-stock reorder thresholds, 3 concurrent morning priority queues (QC Gate Blockers, Milestones Ready to Bill, Overdue CRM Follow-ups), Quick Inquiry drawer shortcut, filter pills, and 1-click milestone invoice issuance.
 
 ---
 
