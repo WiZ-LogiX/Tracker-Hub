@@ -7,6 +7,7 @@ import {
   getDeliveryById,
   updateDeliveryStatus,
 } from "@/lib/delivery.functions";
+import { issueMilestoneInvoice } from "@/lib/invoice-payment.functions";
 import { listTasks } from "@/lib/tasks.functions";
 import type { DeliveryStatus, DeliveryHandover } from "@/lib/delivery-types";
 import { CustomerSignaturePad } from "@/components/deliveries/CustomerSignaturePad";
@@ -41,6 +42,7 @@ import {
   Plus,
   ExternalLink,
   FileText,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatEGP } from "@/lib/pricing";
@@ -66,9 +68,11 @@ export function DeliveryDetailDrawer({
 
   const getDeliveryFn = useServerFn(getDeliveryById);
   const updateStatusFn = useServerFn(updateDeliveryStatus);
+  const issueMilestoneInvoiceFn = useServerFn(issueMilestoneInvoice);
   const listTasksFn = useServerFn(listTasks);
 
   const [updating, setUpdating] = useState(false);
+  const [issuingInvoiceId, setIssuingInvoiceId] = useState<string | null>(null);
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
 
   // Form inputs for transitions
@@ -79,6 +83,38 @@ export function DeliveryDetailDrawer({
   const [signerName, setSignerName] = useState("");
   const [handoverNotes, setHandoverNotes] = useState("");
   const [signatureDataUrl, setSignatureDataUrl] = useState("");
+
+  const handleCopyTrackingLink = (token: string) => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/track?ref=${token}`;
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(url);
+      toast.success(
+        isRtl ? "تم نسخ رابط متابعة العميل للحافظة" : "Client tracking link copied to clipboard",
+      );
+    } else {
+      toast.info(url);
+    }
+  };
+
+  const handleIssueMilestone = async (invoiceId: string) => {
+    setIssuingInvoiceId(invoiceId);
+    try {
+      const res = await issueMilestoneInvoiceFn({ data: { invoiceId } });
+      toast.success(
+        isRtl
+          ? `تم إصدار الفاتورة المرحلية بنجاح (${res.invoiceNumber})`
+          : `Milestone invoice issued successfully (${res.invoiceNumber})`,
+      );
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ["project"] });
+      queryClient.invalidateQueries({ queryKey: ["deliveries-list"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to issue milestone invoice");
+    } finally {
+      setIssuingInvoiceId(null);
+    }
+  };
 
   const { data: detail, isLoading, refetch } = useQuery({
     queryKey: ["delivery-detail", deliveryId],
@@ -221,10 +257,85 @@ export function DeliveryDetailDrawer({
                   </div>
                 </div>
               )}
+
+              {/* Client Public Tracking Link Action */}
+              {del.trackingToken && (
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleCopyTrackingLink(del.trackingToken!)}
+                    className="h-7 text-xs gap-1.5 text-primary border-primary/30 hover:bg-primary/5"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>{isRtl ? "نسخ رابط متابعة العميل" : "Copy Client Tracking Link"}</span>
+                  </Button>
+                  <a
+                    href={`/track?ref=${del.trackingToken}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-muted-foreground hover:text-primary flex items-center gap-1 font-mono"
+                  >
+                    <span>/track?ref={del.trackingToken.slice(0, 8)}...</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
             </SheetHeader>
 
             {/* Body */}
             <div className="p-6 flex-1 space-y-6">
+              {/* Scheduled Milestone Invoices Prompt Banner */}
+              {del.scheduledMilestoneInvoices && del.scheduledMilestoneInvoices.length > 0 && (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200 font-semibold text-xs">
+                      <DollarSign className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span>
+                        {isRtl
+                          ? "مطالبة مالية مرحلية مجدولة مستحقة عند التوريد / التركيب"
+                          : "Scheduled Milestone Invoice Due Upon Delivery"}
+                      </span>
+                    </div>
+                    <Badge className="bg-amber-600 text-white text-[10px] px-1.5 py-0.5">
+                      {del.scheduledMilestoneInvoices.length}
+                    </Badge>
+                  </div>
+                  {del.scheduledMilestoneInvoices.map((inv: any) => (
+                    <div
+                      key={inv.id}
+                      className="flex items-center justify-between bg-card p-2.5 rounded-xl border text-xs"
+                    >
+                      <div>
+                        <span className="font-mono font-bold text-primary">{inv.invoiceNumber}</span>
+                        <span className="text-muted-foreground mx-1.5">•</span>
+                        <span className="font-medium">
+                          {inv.milestoneLabel || (isRtl ? "دفعة مرحلية" : "Milestone Payment")}
+                        </span>
+                        {inv.milestonePct && (
+                          <span className="text-muted-foreground ml-1">({inv.milestonePct}%)</span>
+                        )}
+                        <div className="font-mono font-bold text-emerald-600 mt-0.5">
+                          {formatEGP(Number(inv.amount))}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => handleIssueMilestone(inv.id)}
+                        disabled={issuingInvoiceId === inv.id}
+                        className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1 px-3"
+                      >
+                        {issuingInvoiceId === inv.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+                        <span>{isRtl ? "إصدار الفاتورة الآن" : "Issue Invoice"}</span>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {/* Linked Commercial & Production Records */}
               <div className="space-y-2">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

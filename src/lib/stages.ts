@@ -5,7 +5,7 @@ export const ORDER_STAGES = [
   "assembly",
   "finishing",
   "quality_check",
-  "ready_for_pickup",
+  "ready_for_delivery",
   "delivered",
   "completed",
 ] as const;
@@ -19,7 +19,7 @@ export const STAGE_LABEL_AR: Record<OrderStage, string> = {
   assembly: "التجميع",
   finishing: "التشطيب والدهان",
   quality_check: "فحص الجودة",
-  ready_for_pickup: "جاهز للاستلام",
+  ready_for_delivery: "جاهز للتسليم والتركيب",
   delivered: "تم التسليم",
   completed: "مكتمل",
 };
@@ -69,6 +69,7 @@ export function mapInternalStageToCustomerStage(internalStage: string | null | u
       return "in_production";
     case "quality_check":
       return "quality_check";
+    case "ready_for_delivery":
     case "ready_for_pickup":
       return "ready_for_delivery";
     case "delivered":
@@ -125,6 +126,9 @@ export const QUOTATION_STAGE_LABEL_AR: Record<QuotationLifecycleStage, string> =
  */
 export function getStageLabelAr(stage: string | null | undefined): string {
   if (!stage) return "—";
+  if (stage === "ready_for_pickup") {
+    return STAGE_LABEL_AR.ready_for_delivery;
+  }
   if ((ORDER_STAGES as readonly string[]).includes(stage)) {
     return STAGE_LABEL_AR[stage as OrderStage];
   }

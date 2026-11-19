@@ -542,7 +542,7 @@ export async function handlePublicTrackingByRef(
       {
         stageKey: "production",
         title: `قيد التصنيع (${CUSTOMER_STAGE_LABEL_AR[orderCustStage]})`,
-        completed: ["cutting", "assembly", "finishing", "quality_check", "ready_for_pickup", "delivered", "completed"].includes(convertedOrder.current_stage),
+        completed: ["cutting", "assembly", "finishing", "quality_check", "ready_for_delivery", "ready_for_pickup", "delivered", "completed"].includes(convertedOrder.current_stage),
         timestamp: null,
       },
       {

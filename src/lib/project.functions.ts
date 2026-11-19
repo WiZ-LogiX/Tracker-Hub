@@ -316,6 +316,7 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
         deliveredAt: orders.deliveredAt,
         notes: orders.notes,
         createdAt: orders.createdAt,
+        trackingToken: orders.trackingToken,
       })
       .from(orders)
       .where(and(...orderQueryConditions))
@@ -419,6 +420,7 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
       deliveredAt: o.deliveredAt?.toISOString() || null,
       notes: o.notes,
       createdAt: o.createdAt.toISOString(),
+      trackingToken: o.trackingToken || null,
     }));
 
     // 6. Fetch Production Work Orders
@@ -635,6 +637,7 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
         deliveryNumber: d.deliveryNumber,
         orderId: d.orderId,
         orderNumber: parentOrder?.orderNumber || "—",
+        trackingToken: parentOrder?.trackingToken || null,
         customerId: cust.id,
         customerName: cust.name,
         customerPhone: cust.phone || "",
@@ -1152,7 +1155,18 @@ export const getProjectWorkspaceData = createServerFn({ method: "GET" })
         readiness: stockAllocations.length > 0 ? "READY" : "NOT_RESERVED",
       },
       delivery: {
-        handovers: projectDeliveries,
+        handovers: projectDeliveries.map((del) => ({
+          ...del,
+          scheduledMilestoneInvoices: scheduledInvoices.map((inv) => ({
+            id: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            milestoneLabel: inv.milestoneLabel ?? null,
+            milestonePct: inv.milestonePct ? String(inv.milestonePct) : null,
+            amount: String(inv.total),
+            billingStatus: inv.billingStatus || "scheduled",
+            dueStage: inv.dueStage ?? null,
+          })),
+        })),
         currentDeliveryStatus: projectDeliveries[0]?.status || (projectOrders.some((o) => o.deliveredAt) ? "delivered" : null),
       },
       financials: projectFinancials,

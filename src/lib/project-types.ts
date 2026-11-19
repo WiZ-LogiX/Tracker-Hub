@@ -110,6 +110,7 @@ export interface ProjectOrderRecord {
   deliveredAt?: string | null;
   notes?: string | null;
   createdAt: string;
+  trackingToken?: string | null;
 }
 
 export interface ProjectInventoryAllocation {

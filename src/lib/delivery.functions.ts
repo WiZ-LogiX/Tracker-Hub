@@ -11,8 +11,9 @@ import {
   invoicePayments,
   tenantCounters,
   auditLog,
+  projects,
 } from "@/db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, or } from "drizzle-orm";
 import { requirePermission, type TenantContext } from "@/lib/tenant-context";
 import {
   type DeliveryHandover,
@@ -50,7 +51,7 @@ const CreateDeliveryInput = z.object({
   recipientName: z.string().trim().optional().nullable(),
   recipientPhone: z.string().trim().optional().nullable(),
   scheduledDate: z.string().optional().nullable(),
-  installationRequired: z.boolean().optional().default(false),
+  installationRequired: z.boolean().optional().default(true),
   customerNotes: z.string().trim().optional().nullable(),
 });
 
@@ -78,7 +79,7 @@ const UpdateDeliveryStatusInput = z.object({
   signatureDataUrl: z.string().optional().nullable(),
 });
 
-// ── Helper: Atomic Concurrency-Safe Sequence Number ─────────────────────────
+// ── Atomic Counter Generation ───────────────────────────────────────────────
 
 async function getNextDeliveryNumber(tenantId: string): Promise<string> {
   const result = await db.transaction(async (tx) => {
@@ -124,51 +125,60 @@ async function getNextDeliveryNumber(tenantId: string): Promise<string> {
 // ── Server Functions ────────────────────────────────────────────────────────
 
 /**
- * List paginated deliveries with search, filters, and KPI metrics.
+ * List paginated delivery records with optional status, search, and ordering.
  */
 export const listDeliveries = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth, requireTenant])
-  .validator((input: unknown) => ListDeliveriesInput.parse(input ?? {}))
+  .validator((input: unknown) => ListDeliveriesInput.parse(input))
   .handler(async ({ data, context }): Promise<PaginatedDeliveryResult> => {
     const ctx = context.tenantContext as TenantContext;
     requirePermission(ctx, "deliveries.view");
     const { tenantId } = ctx;
 
+    const page = data?.page || 1;
+    const pageSize = data?.pageSize || 25;
+    const offset = (page - 1) * pageSize;
+
+    // Build filters
     const conditions = [eq(deliveryHandovers.tenantId, tenantId)];
 
-    if (data.status && data.status !== "all") {
-      conditions.push(eq(deliveryHandovers.status, data.status));
+    if (data?.status && data.status !== "all") {
+      conditions.push(eq(deliveryHandovers.status, data.status as DeliveryStatus));
     }
 
-    if (data.installationRequired !== undefined) {
+    if (data?.installationRequired !== undefined) {
       conditions.push(eq(deliveryHandovers.installationRequired, data.installationRequired));
     }
 
-    if (data.orderId) {
+    if (data?.orderId) {
       conditions.push(eq(deliveryHandovers.orderId, data.orderId));
     }
 
-    if (data.search && data.search.trim().length > 0) {
+    if (data?.search && data.search.trim()) {
       const q = `%${data.search.trim()}%`;
       conditions.push(
-        sql`(${deliveryHandovers.deliveryNumber} ILIKE ${q} OR ${orders.orderNumber} ILIKE ${q} OR ${customers.name} ILIKE ${q} OR ${customers.phone} ILIKE ${q} OR ${deliveryHandovers.deliveryAddress} ILIKE ${q})`,
+        or(
+          sql`${deliveryHandovers.deliveryNumber} ILIKE ${q}`,
+          sql`${deliveryHandovers.recipientName} ILIKE ${q}`,
+          sql`${deliveryHandovers.recipientPhone} ILIKE ${q}`,
+          sql`${deliveryHandovers.deliveryAddress} ILIKE ${q}`,
+          sql`${orders.orderNumber} ILIKE ${q}`,
+          sql`${customers.name} ILIKE ${q}`,
+        )!,
       );
     }
 
-    const page = Math.max(1, data.page || 1);
-    const pageSize = Math.min(100, Math.max(1, data.pageSize || 25));
-    const offset = (page - 1) * pageSize;
-
+    // Determine Sort Order
     let orderByClause = desc(deliveryHandovers.createdAt);
-    if (data.sort === "del_asc") {
-      orderByClause = sql`${deliveryHandovers.deliveryNumber} ASC`;
-    } else if (data.sort === "scheduled_asc") {
-      orderByClause = sql`${deliveryHandovers.scheduledDate} ASC NULLS LAST`;
-    } else if (data.sort === "order_asc") {
-      orderByClause = sql`${orders.orderNumber} ASC`;
+    if (data?.sort === "del_asc") {
+      orderByClause = sql`${deliveryHandovers.deliveryNumber} ASC` as any;
+    } else if (data?.sort === "scheduled_asc") {
+      orderByClause = sql`${deliveryHandovers.scheduledDate} ASC NULLS LAST` as any;
+    } else if (data?.sort === "order_asc") {
+      orderByClause = sql`${orders.orderNumber} ASC` as any;
     }
 
-    // 1. KPI Counts
+    // 1. KPI Aggregation (computed tenant-wide across all deliveries)
     const allTenantDeliveries = await db
       .select({
         status: deliveryHandovers.status,
@@ -324,6 +334,7 @@ export const getDeliveryById = createServerFn({ method: "GET" })
         quoteId: orders.quoteId,
         orderTotal: orders.total,
         invoiceId: orders.invoiceId,
+        trackingToken: orders.trackingToken,
         customerId: deliveryHandovers.customerId,
         customerName: customers.name,
         customerPhone: customers.phone,
@@ -381,6 +392,75 @@ export const getDeliveryById = createServerFn({ method: "GET" })
       }
     }
 
+    // Query scheduled milestone invoices for the linked quote or project
+    let scheduledMilestoneInvoices: Array<{
+      id: string;
+      invoiceNumber: string;
+      milestoneLabel: string | null;
+      milestonePct: string | null;
+      amount: string;
+      billingStatus: string;
+      dueStage: string | null;
+    }> = [];
+
+    try {
+      // Find linked project if any
+      const [linkedProj] = await db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(
+          and(
+            eq(projects.tenantId, tenantId),
+            or(
+              eq(projects.orderId, delRow.orderId),
+              delRow.quoteId ? eq(projects.quoteId, delRow.quoteId) : undefined,
+            ),
+          ),
+        )
+        .limit(1);
+
+      const parentFilters: any[] = [];
+      if (delRow.quoteId) {
+        parentFilters.push(eq(invoices.quoteId, delRow.quoteId));
+      }
+      if (linkedProj?.id) {
+        parentFilters.push(eq(invoices.projectId, linkedProj.id));
+      }
+
+      if (parentFilters.length > 0) {
+        const invRows = await db
+          .select({
+            id: invoices.id,
+            invoiceNumber: invoices.invoiceNumber,
+            milestoneLabel: invoices.milestoneLabel,
+            milestonePct: invoices.milestonePct,
+            amount: invoices.total,
+            billingStatus: invoices.billingStatus,
+            dueStage: invoices.dueStage,
+          })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.tenantId, tenantId),
+              eq(invoices.billingStatus, "scheduled"),
+              parentFilters.length > 1 ? or(...parentFilters) : parentFilters[0],
+            ),
+          );
+
+        scheduledMilestoneInvoices = invRows.map((r) => ({
+          id: r.id,
+          invoiceNumber: r.invoiceNumber,
+          milestoneLabel: r.milestoneLabel ?? null,
+          milestonePct: r.milestonePct ?? null,
+          amount: String(r.amount),
+          billingStatus: r.billingStatus,
+          dueStage: r.dueStage ?? null,
+        }));
+      }
+    } catch (e: any) {
+      console.warn("getDeliveryById: failed to load scheduled milestone invoices:", e?.message);
+    }
+
     return {
       delivery: {
         id: delRow.id,
@@ -411,6 +491,8 @@ export const getDeliveryById = createServerFn({ method: "GET" })
         createdBy: delRow.createdBy,
         createdAt: delRow.createdAt,
         updatedAt: delRow.updatedAt,
+        trackingToken: delRow.trackingToken || null,
+        scheduledMilestoneInvoices,
       },
       financialSummary: {
         orderTotal: invoiceTotal,
@@ -472,7 +554,7 @@ export const createDelivery = createServerFn({ method: "POST" })
         recipientName: data.recipientName || null,
         recipientPhone: data.recipientPhone || null,
         scheduledDate: data.scheduledDate || null,
-        installationRequired: data.installationRequired ?? false,
+        installationRequired: data.installationRequired ?? true,
         customerNotes: data.customerNotes || null,
         createdBy: userId ? (userId as any) : null,
       })
@@ -571,6 +653,104 @@ export const updateDeliveryStatus = createServerFn({ method: "POST" })
           eq(deliveryHandovers.tenantId, tenantId),
         ),
       );
+
+    // Synchronize order & project lifecycle stage when delivery reaches installed or completed
+    if (targetStatus === "installed" || targetStatus === "completed") {
+      try {
+        const [ord] = await db
+          .select({
+            id: orders.id,
+            currentStage: orders.currentStage,
+            deliveredAt: orders.deliveredAt,
+            quoteId: orders.quoteId,
+          })
+          .from(orders)
+          .where(and(eq(orders.id, delivery.orderId), eq(orders.tenantId, tenantId)))
+          .limit(1);
+
+        if (ord) {
+          const ordUpdates: any = {};
+          if (targetStatus === "installed") {
+            if (ord.currentStage !== "delivered" && ord.currentStage !== "completed") {
+              ordUpdates.currentStage = "delivered";
+            }
+            if (!ord.deliveredAt) {
+              ordUpdates.deliveredAt = new Date();
+            }
+          } else if (targetStatus === "completed") {
+            if (ord.currentStage !== "completed") {
+              ordUpdates.currentStage = "completed";
+            }
+            if (!ord.deliveredAt) {
+              ordUpdates.deliveredAt = new Date();
+            }
+          }
+
+          if (Object.keys(ordUpdates).length > 0) {
+            await db
+              .update(orders)
+              .set(ordUpdates)
+              .where(and(eq(orders.id, ord.id), eq(orders.tenantId, tenantId)));
+          }
+
+          // Also synchronize project lifecycle if linked via orderId or quoteId
+          const [proj] = await db
+            .select({ id: projects.id, currentStage: projects.currentStage })
+            .from(projects)
+            .where(
+              and(
+                eq(projects.tenantId, tenantId),
+                or(
+                  eq(projects.orderId, ord.id),
+                  ord.quoteId ? eq(projects.quoteId, ord.quoteId) : undefined,
+                ),
+              ),
+            )
+            .limit(1);
+
+          if (proj) {
+            const projTargetStage = targetStatus === "completed" ? "handover" : "delivery";
+            const earlierStages =
+              targetStatus === "completed"
+                ? [
+                    "lead",
+                    "opportunity",
+                    "measurement",
+                    "design",
+                    "quote",
+                    "won",
+                    "order",
+                    "production",
+                    "qc",
+                    "ready_for_delivery",
+                    "ready_for_pickup",
+                    "delivery",
+                  ]
+                : [
+                    "lead",
+                    "opportunity",
+                    "measurement",
+                    "design",
+                    "quote",
+                    "won",
+                    "order",
+                    "production",
+                    "qc",
+                    "ready_for_delivery",
+                    "ready_for_pickup",
+                  ];
+            if (earlierStages.includes(proj.currentStage)) {
+              await db
+                .update(projects)
+                .set({ currentStage: projTargetStage, updatedAt: new Date() })
+                .where(and(eq(projects.id, proj.id), eq(projects.tenantId, tenantId)));
+            }
+          }
+        }
+      } catch (syncErr: any) {
+        console.warn("updateDeliveryStatus: order/project synchronization failed:", syncErr?.message);
+      }
+    }
 
     await db.insert(auditLog).values({
       tenantId,

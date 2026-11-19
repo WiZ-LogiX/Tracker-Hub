@@ -204,7 +204,16 @@ describe("Sprint 3 — Guided Production Stage, QC Gate & Remake Loop Suite", ()
       expect(res.currentStage).toBe("quality_check");
     });
 
-    it("strictly blocks advancement from 'quality_check' to 'ready_for_pickup' when no passing QC exists", async () => {
+    it("strictly blocks advancement from 'quality_check' to 'ready_for_delivery' or legacy 'ready_for_pickup' when no passing QC exists", async () => {
+      await expect(
+        executeOrderStageTransition(db, {
+          tenantId: TEST_TENANT_ID,
+          userId: TEST_USER_ID,
+          orderId: testOrderId,
+          nextStage: "ready_for_delivery",
+        }),
+      ).rejects.toThrow(/Cannot advance order beyond Quality Check/i);
+
       await expect(
         executeOrderStageTransition(db, {
           tenantId: TEST_TENANT_ID,
@@ -298,7 +307,7 @@ describe("Sprint 3 — Guided Production Stage, QC Gate & Remake Loop Suite", ()
           tenantId: TEST_TENANT_ID,
           userId: TEST_USER_ID,
           orderId: testOrderId,
-          nextStage: "ready_for_pickup",
+          nextStage: "ready_for_delivery",
         }),
       ).rejects.toThrow(/Cannot advance order beyond Quality Check/i);
     });
@@ -319,15 +328,15 @@ describe("Sprint 3 — Guided Production Stage, QC Gate & Remake Loop Suite", ()
       expect(passingRes.remakeId).toBeUndefined();
       expect(passingRes.taskId).toBeUndefined();
 
-      // 2. Advance to ready_for_pickup - should now succeed!
+      // 2. Advance to ready_for_delivery - should now succeed!
       const advanceRes = await executeOrderStageTransition(db, {
         tenantId: TEST_TENANT_ID,
         userId: TEST_USER_ID,
         orderId: testOrderId,
-        nextStage: "ready_for_pickup",
+        nextStage: "ready_for_delivery",
       });
       expect(advanceRes.ok).toBe(true);
-      expect(advanceRes.currentStage).toBe("ready_for_pickup");
+      expect(advanceRes.currentStage).toBe("ready_for_delivery");
 
       // 3. Advance to delivered - verifies deliveredAt timestamp
       const deliveredRes = await executeOrderStageTransition(db, {

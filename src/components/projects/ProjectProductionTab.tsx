@@ -61,7 +61,8 @@ const STAGE_LABELS: Record<string, { en: string; ar: string; fr: string }> = {
   assembly: { en: "Assembly", ar: "التجميع", fr: "Assemblage" },
   finishing: { en: "Finishing", ar: "التشطيب والدهان", fr: "Finition" },
   quality_check: { en: "Quality Check", ar: "فحص الجودة", fr: "Contrôle qualité" },
-  ready_for_pickup: { en: "Ready for Pickup", ar: "جاهز للاستلام", fr: "Prêt pour enlèvement" },
+  ready_for_delivery: { en: "Ready for Delivery & Installation", ar: "جاهز للتسليم والتركيب", fr: "Prêt pour livraison et installation" },
+  ready_for_pickup: { en: "Ready for Delivery & Installation", ar: "جاهز للتسليم والتركيب", fr: "Prêt pour livraison et installation" },
   delivered: { en: "Delivered", ar: "تم التسليم", fr: "Livré" },
   completed: { en: "Completed", ar: "مكتمل", fr: "Terminé" },
 };
@@ -419,8 +420,8 @@ export function ProjectProductionTab({
                 </span>
                 <span className="text-muted-foreground block">
                   {isAr
-                    ? "يتطلب نظام الجودة تسجيل فحص مطابق للمواصفات أولاً عبر زر 'تسجيل فحص الجودة' أعلاه قبل فك القفل عن مرحلة الاستلام والتسليم."
-                    : "The quality assurance system requires a passing inspection via 'Log QC Check' above before unlocking the pickup and delivery stages."}
+                    ? "يتطلب نظام الجودة تسجيل فحص مطابق للمواصفات أولاً عبر زر 'تسجيل فحص الجودة' أعلاه قبل فك القفل عن مرحلة التوريد والتركيب والتسليم."
+                    : "The quality assurance system requires a passing inspection via 'Log QC Check' above before unlocking the delivery, installation, and handover stages."}
                 </span>
               </div>
             </div>

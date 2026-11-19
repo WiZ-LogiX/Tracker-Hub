@@ -172,6 +172,11 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
    - `executeWorkshopOnboarding` provisioning new workshops with Free plan, unique slug, owner role, and starter categories (`kitchen`, `dressing`, `door`).
    - Hard quota enforcement on active seats (`assertActiveSeatAvailable`) and monthly quotes (`assertMonthlyQuoteQuota`) based on tier (`Free`: 3 seats / 25 quotes/mo, `Pro`: 15 seats / unlimited quotes, `Enterprise`: unlimited).
    - Read-only Subscription Plan & Usage card in `/admin/settings` (system tab) and seat count badge in `/admin/team`.
+6. **Sprint 6A — Company Delivery & Installation Stage, Milestone Billing Prompt & After-Sales Warranty Loop**:
+   - Transitioned order stages from `ready_for_pickup` to `ready_for_delivery` ("Ready for Delivery & Installation" / "جاهز للتسليم والتركيب" / "Prêt pour livraison et installation") with backward-compatible alias fallback for legacy records.
+   - Company delivery & installation handover defaulting to `installationRequired = true`, public tracking link copy (`/track?ref=${token}`), and inline milestone invoice issuance prompts for handovers upon delivery.
+   - Project and order status auto-synchronization advancing order to `delivered`/`completed` and project to `delivery`/`handover` upon installation completion.
+   - After-sales warranty diagnostic drawer with 1-click warranty remake generation (`createRemakeForCase`), severity/technician selection, and automatic creation of high-priority corrective tasks (`TSK-XXXX`, category `quality`).
 
 ---
 
@@ -184,4 +189,5 @@ PeleCanon is a multi-tenant SaaS for **furniture pricing, quotation, and product
 - **Commercial Quotation & Projects**: ✅ canonical `PLC-XXXXX` numbering and unified commercial builder.
 - **Inventory & Shop Floor**: ✅ directional adjustments, global audit ledger, and QC gating.
 - **SaaS Onboarding & Quotas**: ✅ self-serve registration, seat limits, and monthly quotation quota enforcement.
-- **Full Verification**: ✅ 1,121 Vitest tests across 67 suites (100% pass), 165 Playwright E2E tests, 0 type errors, clean production build.
+- **Delivery & After-Sales**: ✅ company delivery & installation stage, milestone invoice prompts, warranty remake loop & corrective tasks.
+- **Full Verification**: ✅ 1,131 Vitest tests across 68 suites (100% pass), 165 Playwright E2E tests, 0 type errors, clean production build.

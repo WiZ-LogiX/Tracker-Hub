@@ -43,11 +43,13 @@ describe("1. Lifecycle & Code Integrity", () => {
     expect(ORDER_STAGES).toContain("cutting");
     expect(ORDER_STAGES).toContain("assembly");
     expect(ORDER_STAGES).toContain("finishing");
-    expect(ORDER_STAGES).toContain("ready_for_pickup");
+    expect(ORDER_STAGES).toContain("ready_for_delivery");
     expect(ORDER_STAGES).toContain("delivered");
 
     expect(getStageLabelAr("deposit_received")).toBe("استلام العربون");
     expect(getStageLabelAr("cutting")).toBe("قص الخامات");
+    expect(getStageLabelAr("ready_for_delivery")).toBe("جاهز للتسليم والتركيب");
+    expect(getStageLabelAr("ready_for_pickup")).toBe("جاهز للتسليم والتركيب");
     expect(getStageLabelAr("delivered")).toBe("تم التسليم");
 
     expect(nextStage("deposit_received")).toBe("design_approved");
@@ -254,9 +256,10 @@ describe("2. Commercial Invariants (INV-001 through INV-008)", () => {
     currentStage = "cutting";
     expect(getStageLabelAr(currentStage)).toBe("قص الخامات");
 
-    // Stage 3: Ready for pickup
-    currentStage = "ready_for_pickup";
-    expect(getStageLabelAr(currentStage)).toBe("جاهز للاستلام");
+    // Stage 3: Ready for delivery & installation
+    currentStage = "ready_for_delivery";
+    expect(getStageLabelAr(currentStage)).toBe("جاهز للتسليم والتركيب");
+    expect(getStageLabelAr("ready_for_pickup")).toBe("جاهز للتسليم والتركيب");
 
     // Stage 4: Delivered
     currentStage = "delivered";

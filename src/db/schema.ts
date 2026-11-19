@@ -43,7 +43,7 @@ export const orderStageEnum = pgEnum("order_stage", [
   "assembly",
   "finishing",
   "quality_check",
-  "ready_for_pickup",
+  "ready_for_delivery",
   "delivered",
   "completed",
 ]);

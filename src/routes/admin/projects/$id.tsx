@@ -273,6 +273,7 @@ function ProjectWorkspacePage() {
         <TabsContent value="delivery">
           <ProjectDeliveryTab
             delivery={data.delivery}
+            onRefresh={() => loadData()}
           />
         </TabsContent>
 

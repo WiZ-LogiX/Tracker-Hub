@@ -421,7 +421,7 @@ function OrdersPage() {
       const event =
         next === "delivered"
           ? "delivered"
-          : next === "ready_for_pickup"
+          : (next as string) === "ready_for_delivery" || (next as string) === "ready_for_pickup"
           ? "delivery_scheduled"
           : "stage_changed";
       await notify({

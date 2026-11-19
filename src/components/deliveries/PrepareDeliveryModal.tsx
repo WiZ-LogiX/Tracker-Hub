@@ -45,7 +45,7 @@ export function PrepareDeliveryModal({
   const [recipientName, setRecipientName] = useState(customerName || "");
   const [recipientPhone, setRecipientPhone] = useState(customerPhone || "");
   const [scheduledDate, setScheduledDate] = useState("");
-  const [installationRequired, setInstallationRequired] = useState(false);
+  const [installationRequired, setInstallationRequired] = useState(true);
   const [customerNotes, setCustomerNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 

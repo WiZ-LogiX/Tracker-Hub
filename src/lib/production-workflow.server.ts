@@ -60,6 +60,7 @@ export async function executeOrderStageTransition(
   // If the order is at quality_check and moving forward, require at least one passing QC inspection
   if (currentStage === "quality_check" && nextStage !== "quality_check") {
     const isAdvancingForward =
+      nextStage === "ready_for_delivery" ||
       nextStage === "ready_for_pickup" ||
       nextStage === "delivered" ||
       nextStage === "completed";

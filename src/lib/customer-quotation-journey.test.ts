@@ -481,6 +481,7 @@ describe("PELECANON CUSTOMER-CENTRIC LIFECYCLE & TRACKING VERIFICATION", () => {
       expect(mapInternalStageToCustomerStage("assembly")).toBe("in_production");
       expect(mapInternalStageToCustomerStage("finishing")).toBe("in_production");
       expect(mapInternalStageToCustomerStage("quality_check")).toBe("quality_check");
+      expect(mapInternalStageToCustomerStage("ready_for_delivery")).toBe("ready_for_delivery");
       expect(mapInternalStageToCustomerStage("ready_for_pickup")).toBe("ready_for_delivery");
       expect(mapInternalStageToCustomerStage("delivered")).toBe("delivered");
       expect(mapInternalStageToCustomerStage("completed")).toBe("delivered");

@@ -35,6 +35,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { AttachmentList } from "@/components/attachment-list";
 import { toast } from "sonner";
@@ -97,6 +104,8 @@ export function ServiceCaseDetailDrawer({
   const [isRemakeModalOpen, setIsRemakeModalOpen] = useState(false);
   const [remakeReason, setRemakeReason] = useState("");
   const [remakeDefectDesc, setRemakeDefectDesc] = useState("");
+  const [remakeSeverity, setRemakeSeverity] = useState<"low" | "medium" | "high" | "critical">("high");
+  const [remakeAssignedTo, setRemakeAssignedTo] = useState<string>("");
 
   const isWorker = userRole === "worker";
   const isViewer = userRole === "viewer";
@@ -169,13 +178,16 @@ export function ServiceCaseDetailDrawer({
           caseId,
           reason: remakeReason.trim(),
           defectDescription: remakeDefectDesc.trim() || undefined,
-          severity: caseData?.priority || "medium",
+          severity: remakeSeverity,
+          assignedTo: remakeAssignedTo.trim() || caseData?.assignedTo || undefined,
         },
       });
       toast.success(isRtl ? "تم إصدار أمر إعادة تصنيع للورشة بنجاح" : "Remake order issued");
       setIsRemakeModalOpen(false);
       setRemakeReason("");
       setRemakeDefectDesc("");
+      setRemakeSeverity("high");
+      setRemakeAssignedTo("");
       loadCase();
     } catch (err: any) {
       toast.error(err?.message || "Failed to create remake order");
@@ -356,6 +368,28 @@ export function ServiceCaseDetailDrawer({
                   </div>
                 </div>
               )}
+
+              {/* 1-Click Warranty Remake Action */}
+              {!isViewer && !caseData?.linkedRemake && caseData?.orderId && (
+                <div className="pt-2 border-t border-border/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <span className="text-[11px] text-rose-700 dark:text-rose-400 font-medium">
+                    {isRtl
+                      ? "يوجد أمر تنفيذ مرتبط — يمكنك إصدار أمر ورشة لتصنيع بديل"
+                      : "Linked order detected — issue a workshop remake"}
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setRemakeSeverity("high");
+                      setIsRemakeModalOpen(true);
+                    }}
+                    className="h-7 text-xs bg-rose-600 hover:bg-rose-700 text-white font-medium gap-1 px-3 shrink-0"
+                  >
+                    <Wrench className="h-3 w-3" />
+                    <span>{isRtl ? "إصدار أمر إعادة تصنيع ضمان" : "Create Warranty Remake"}</span>
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* 3. Description & Details */}
@@ -456,7 +490,7 @@ export function ServiceCaseDetailDrawer({
                     className="h-7 text-xs gap-1 text-rose-600 border-rose-500/30"
                   >
                     <Plus className="h-3 w-3" />
-                    <span>{isRtl ? "إصدار أمر إعادة تصنيع" : "Issue Remake"}</span>
+                    <span>{isRtl ? "إصدار أمر إعادة تصنيع ضمان" : "Create Warranty Remake"}</span>
                   </Button>
                 )}
               </div>
@@ -577,8 +611,9 @@ export function ServiceCaseDetailDrawer({
         <DialogContent className="sm:max-w-md">
           <form onSubmit={handleCreateRemake}>
             <DialogHeader>
-              <DialogTitle className="text-base font-bold font-serif">
-                {isRtl ? "إصدار أمر إعادة تصنيع بالورشة" : "Issue Workshop Remake"}
+              <DialogTitle className="text-base font-bold font-serif flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-rose-600" />
+                <span>{isRtl ? "إصدار أمر إعادة تصنيع ضمان بالورشة" : "Create Warranty Remake"}</span>
               </DialogTitle>
             </DialogHeader>
 
@@ -588,10 +623,62 @@ export function ServiceCaseDetailDrawer({
                 <Input
                   value={remakeReason}
                   onChange={(e) => setRemakeReason(e.target.value)}
-                  placeholder={isRtl ? "مثال: دلفة مكسورة أثناء النقل" : "e.g. Damaged door during transport"}
+                  placeholder={isRtl ? "مثال: دلفة مكسورة أثناء النقل أو تلف تشطيب" : "e.g. Damaged door during transport or finish defect"}
                   className="h-8 text-xs"
                   required
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">{isRtl ? "درجة الخطورة" : "Severity"}</Label>
+                  <Select
+                    value={remakeSeverity}
+                    onValueChange={(val: any) => setRemakeSeverity(val)}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">{isRtl ? "منخفضة" : "Low"}</SelectItem>
+                      <SelectItem value="medium">{isRtl ? "متوسطة" : "Medium"}</SelectItem>
+                      <SelectItem value="high">{isRtl ? "عالية (افتراضي)" : "High (Default)"}</SelectItem>
+                      <SelectItem value="critical">{isRtl ? "حرجة جداً" : "Critical"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">{isRtl ? "الفني المسؤول" : "Technician"}</Label>
+                  <Select
+                    value={remakeAssignedTo ? "assigned" : "default"}
+                    onValueChange={(val) => {
+                      if (val === "assigned" && caseData?.assignedTo) {
+                        setRemakeAssignedTo(caseData.assignedTo);
+                      } else {
+                        setRemakeAssignedTo("");
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">
+                        {caseData?.assignedToName
+                          ? `${isRtl ? "مسؤول البلاغ: " : "Case Owner: "}${caseData.assignedToName}`
+                          : isRtl
+                          ? "فريق الورشة العام"
+                          : "General Workshop Team"}
+                      </SelectItem>
+                      {caseData?.assignedTo && (
+                        <SelectItem value="assigned">
+                          {caseData.assignedToName || (isRtl ? "المسؤول المحدد" : "Assigned Tech")}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -618,9 +705,10 @@ export function ServiceCaseDetailDrawer({
               <Button
                 type="submit"
                 size="sm"
-                className="text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white"
+                className="text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white gap-1"
               >
-                {isRtl ? "إصدار أمر الورشة" : "Issue Remake"}
+                <Wrench className="h-3 w-3" />
+                <span>{isRtl ? "إصدار أمر إعادة تصنيع الضمان" : "Create Warranty Remake"}</span>
               </Button>
             </DialogFooter>
           </form>

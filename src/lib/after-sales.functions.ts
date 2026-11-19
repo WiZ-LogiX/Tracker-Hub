@@ -9,11 +9,13 @@ import {
   remakes,
   deliveryHandovers,
   tasks,
+  taskAssignees,
   tenantCounters,
   appUsers,
   auditLog,
   attachments,
 } from "@/db/schema";
+import { sendTaskAssignmentNotifications } from "@/lib/notifications.functions";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";
@@ -1048,45 +1050,39 @@ export const createRemakeForCase = createServerFn({ method: "POST" })
     requireAnyPermission(ctx, ["after-sales.create", "remakes.create"]);
     const { tenantId, userId } = ctx;
 
-    let customerId: string | null = null;
-    let orderId: string | null = null;
-    let caseType = "complaint";
+    const [c] = await db
+      .select({
+        customerId: serviceCases.customerId,
+        orderId: serviceCases.orderId,
+        type: serviceCases.type,
+        status: serviceCases.status,
+        caseNumber: serviceCases.caseNumber,
+        title: serviceCases.title,
+      })
+      .from(serviceCases)
+      .where(and(eq(serviceCases.id, data.caseId), eq(serviceCases.tenantId, tenantId)))
+      .limit(1);
 
-    const mem = inMemoryCases.get(data.caseId);
-    if (mem) {
-      customerId = mem.customerId;
-      orderId = mem.orderId || null;
-      caseType = mem.type;
-    } else {
-      const [c] = await db
-        .select({ customerId: serviceCases.customerId, orderId: serviceCases.orderId, type: serviceCases.type })
-        .from(serviceCases)
-        .where(and(eq(serviceCases.id, data.caseId), eq(serviceCases.tenantId, tenantId)))
-        .limit(1);
-
-      if (c) {
-        customerId = c.customerId;
-        orderId = c.orderId;
-        caseType = c.type;
-      }
+    if (!c) {
+      throw new Error("Service case not found or access denied");
     }
 
-    if (!orderId) {
+    if (!c.orderId) {
       throw new Error("Cannot issue a workshop remake without a linked order");
     }
 
     const remakeNumber = await getNextRemakeCode(tenantId);
-    const remakeType = caseType === "warranty" ? "warranty" : "customer_complaint";
+    const remakeType = c.type === "warranty" ? "warranty" : "customer_complaint";
 
     const [newRemake] = await db
       .insert(remakes)
       .values({
         tenantId,
         remakeNumber,
-        orderId,
-        customerId,
+        orderId: c.orderId,
+        customerId: c.customerId,
         type: remakeType,
-        severity: data.severity,
+        severity: data.severity || "medium",
         status: "reported",
         reason: data.reason,
         defectDescription: data.defectDescription || null,
@@ -1096,15 +1092,76 @@ export const createRemakeForCase = createServerFn({ method: "POST" })
       })
       .returning();
 
-    // Link remake to service case
+    // Create linked high-priority corrective task for the workshop
+    const taskCode = await getNextTaskCode(tenantId);
+    const taskTitle = `[${remakeNumber}] تصحيح عيب: ${data.reason.slice(0, 60)}`;
+    const taskDescription = `مهمة تصحيح جودة من بلاغ خدمة ما بعد البيع ${c.caseNumber} (أمر إعادة تصنيع ${remakeNumber}). السبب: ${data.reason}. ${data.defectDescription || ""}`;
+
+    let createdTaskId: string | null = null;
     try {
-      await db
-        .update(serviceCases)
-        .set({ remakeId: newRemake.id })
-        .where(and(eq(serviceCases.id, data.caseId), eq(serviceCases.tenantId, tenantId)));
-    } catch {
-      if (mem) mem.remakeId = newRemake.id;
+      const [taskRow] = await db
+        .insert(tasks)
+        .values({
+          tenantId,
+          taskCode,
+          title: taskTitle,
+          description: taskDescription,
+          status: "not_started",
+          priority: "high",
+          category: "quality",
+          orderId: c.orderId,
+          customerId: c.customerId,
+          remakeId: newRemake.id,
+          dueDate: data.dueDate ? new Date(data.dueDate) : null,
+          createdBy: userId,
+        })
+        .returning({ id: tasks.id, taskCode: tasks.taskCode });
+
+      if (taskRow) {
+        createdTaskId = taskRow.id;
+        const targetAssignee = data.assignedTo || null;
+        if (targetAssignee) {
+          try {
+            await db.insert(taskAssignees).values({
+              tenantId,
+              taskId: taskRow.id,
+              userId: targetAssignee,
+            });
+            await sendTaskAssignmentNotifications(db, {
+              tenantId,
+              taskId: taskRow.id,
+              taskCode: taskRow.taskCode,
+              title: taskTitle,
+              priority: "high",
+              actorId: userId || tenantId,
+              assigneeIds: [targetAssignee],
+              event: "task_assigned",
+            });
+          } catch (assignErr) {
+            console.warn("[createRemakeForCase] assignment notification fallback:", assignErr);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn("[createRemakeForCase] Could not auto-create linked corrective task:", err?.message);
     }
+
+    // Atomically link remake and task to service case, and set status to 'in_progress' if currently 'new' or 'under_review'
+    const caseUpdates: any = {
+      remakeId: newRemake.id,
+      updatedAt: new Date(),
+    };
+    if (createdTaskId) {
+      caseUpdates.taskId = createdTaskId;
+    }
+    if (c.status === "new" || c.status === "under_review") {
+      caseUpdates.status = "in_progress";
+    }
+
+    await db
+      .update(serviceCases)
+      .set(caseUpdates)
+      .where(and(eq(serviceCases.id, data.caseId), eq(serviceCases.tenantId, tenantId)));
 
     return newRemake;
   });

@@ -58,6 +58,18 @@ export interface DeliveryHandover {
   createdBy?: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
+  trackingToken?: string | null;
+  scheduledMilestoneInvoices?: ScheduledMilestoneInvoiceSummary[];
+}
+
+export interface ScheduledMilestoneInvoiceSummary {
+  id: string;
+  invoiceNumber: string;
+  milestoneLabel: string | null;
+  milestonePct: string | null;
+  amount: string;
+  billingStatus: string;
+  dueStage: string | null;
 }
 
 export interface DeliveryKpis {
