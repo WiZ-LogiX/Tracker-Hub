@@ -919,7 +919,7 @@ export const seedSampleData = createServerFn({ method: "POST" })
         name_ar: "طاولة اجتماعات",
         name_en: "Meeting Table",
         base_price: 6000,
-        category_id: officeCatId,
+        category_id: tableCatId,
         description_ar: "طاولة اجتماعات 6 أشخاص مع قاعدة خشب",
         labor_pct: 15,
         wastage_pct: 8,

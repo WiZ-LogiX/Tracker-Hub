@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
-import { GenericCrud } from "@/components/admin/GenericCrud";
+import { ProductsCatalogManager } from "@/components/products/ProductsCatalogManager";
 import { CommercialCategoriesSettings } from "@/components/settings/CommercialCategoriesSettings";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -79,22 +79,7 @@ function ProductsPage() {
         </TabsList>
 
         <TabsContent value="products" className="space-y-6">
-          <GenericCrud
-            title={t("products.title")}
-            subtitle={t("products.subtitle")}
-            table="products"
-            fields={[
-              { key: 'code', label: t("products.code") },
-              { key: 'name_ar', label: t("products.nameAr") },
-              { key: 'name_en', label: t("products.nameEn") },
-              { key: 'base_price', label: t("products.basePrice"), type: 'number' },
-              { key: 'labor_pct', label: t("products.laborPct"), type: 'number', default: 15 },
-              { key: 'wastage_pct', label: t("products.wastagePct"), type: 'number', default: 8 },
-              { key: 'overhead_pct', label: t("products.overheadPct"), type: 'number', default: 10 },
-              { key: 'margin_pct', label: t("products.marginPct"), type: 'number', default: 25 },
-              { key: 'description_ar', label: t("products.description"), showInTable: false },
-            ]}
-          />
+          <ProductsCatalogManager />
         </TabsContent>
 
         <TabsContent value="options" className="space-y-6">
