@@ -12,16 +12,17 @@
  * 9. writeSnapshot helper signature.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function readMigration(filename: string): string {
-  return readFileSync(
-    resolve(`supabase/migrations/${filename}`),
-    "utf-8",
-  );
+  const migPath = resolve(`supabase/migrations/${filename}`);
+  if (existsSync(migPath)) {
+    return readFileSync(migPath, "utf-8");
+  }
+  return readFileSync(resolve(`supabase/rollbacks/${filename}`), "utf-8");
 }
 
 function readSchema(): string {
@@ -268,40 +269,40 @@ describe("snapshot-freeze integration", () => {
 // ── 8. PDF snapshot-reading ────────────────────────────────────────────────
 
 describe("PDF snapshot reading", () => {
-  it("pdf.functions.tsx reads quote_snapshots for non-draft quotes", () => {
-    const pdfFuncs = readFileSync(
-      resolve("src/lib/pdf.functions.tsx"),
+  it("pdf-data.server.ts reads quote_snapshots for non-draft quotes", () => {
+    const pdfData = readFileSync(
+      resolve("src/lib/pdf-data.server.ts"),
       "utf-8",
     );
-    expect(pdfFuncs).toContain("quote_snapshots");
-    expect(pdfFuncs).toContain("breakdown_json");
+    expect(pdfData).toContain("quote_snapshots");
+    expect(pdfData).toContain("breakdown_json");
   });
 
-  it("pdf.functions.tsx renders DRAFT watermark for draft quotes", () => {
-    const pdfFuncs = readFileSync(
-      resolve("src/lib/pdf.functions.tsx"),
+  it("pdf-data.server.ts renders DRAFT watermark for draft quotes", () => {
+    const pdfData = readFileSync(
+      resolve("src/lib/pdf-data.server.ts"),
       "utf-8",
     );
-    expect(pdfFuncs).toContain("isDraft");
-    expect(pdfFuncs).toContain("DRAFT");
+    expect(pdfData).toContain("isDraft");
+    expect(pdfData).toContain("DRAFT");
   });
 
-  it("pdf.functions.tsx overrides quote totals from snapshot breakdown", () => {
-    const pdfFuncs = readFileSync(
-      resolve("src/lib/pdf.functions.tsx"),
+  it("pdf-data.server.ts overrides quote totals from snapshot breakdown", () => {
+    const pdfData = readFileSync(
+      resolve("src/lib/pdf-data.server.ts"),
       "utf-8",
     );
-    expect(pdfFuncs).toContain("snapshotBreakdown");
-    expect(pdfFuncs).toContain("subTotal");
-    expect(pdfFuncs).toContain("vatAmount");
+    expect(pdfData).toContain("snapshotBreakdown");
+    expect(pdfData).toContain("subTotal");
+    expect(pdfData).toContain("vatAmount");
   });
 
-  it("pdf.functions.tsx falls back when snapshot is missing", () => {
-    const pdfFuncs = readFileSync(
-      resolve("src/lib/pdf.functions.tsx"),
+  it("pdf-data.server.ts falls back when snapshot is missing", () => {
+    const pdfData = readFileSync(
+      resolve("src/lib/pdf-data.server.ts"),
       "utf-8",
     );
-    expect(pdfFuncs).toContain("Missing snapshot for non-draft quote");
+    expect(pdfData).toContain("Missing snapshot for non-draft quote");
   });
 });
 

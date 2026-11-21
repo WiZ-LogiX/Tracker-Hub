@@ -21,10 +21,12 @@ import {
 import {
   renderQuotePdfBuffer,
   renderInvoicePdfBuffer,
-  loadQuotePdfData,
-  type QuoteData,
-  type InvoiceData,
-  type TenantInfo,
+} from "./pdf-renderer.server";
+import { loadQuotePdfData } from "./pdf-data.server";
+import type {
+  QuoteData,
+  InvoiceData,
+  TenantInfo,
 } from "./pdf.functions";
 
 describe("1. V2 Hierarchy Scoping & Isolation", () => {

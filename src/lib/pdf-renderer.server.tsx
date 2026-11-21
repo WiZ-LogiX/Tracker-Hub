@@ -25,15 +25,16 @@ import {
   PHONE_ICON_DATA_URI,
 } from "@/lib/pdf/branding-assets";
 import { formatEGP } from "@/lib/pricing";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   fetchTenantInfo,
   fetchLogoAsDataUri,
   loadQuotePdfData,
-  type TenantInfo,
-  type PdfLineItem,
-  type QuoteData,
-  type InvoiceData,
+} from "./pdf-data.server";
+import type {
+  TenantInfo,
+  PdfLineItem,
+  QuoteData,
+  InvoiceData,
 } from "./pdf.functions";
 
 Font.register({
@@ -1213,7 +1214,7 @@ export async function renderQuotePdfBuffer(
 export async function generateQuotePdfBufferDirect(
   quoteId: string,
   tenantId: string,
-  client: any = supabaseAdmin,
+  client?: any,
 ): Promise<Buffer> {
   const tenantInfo = await fetchTenantInfo(tenantId, client);
   let logoDataUri: string | null = null;

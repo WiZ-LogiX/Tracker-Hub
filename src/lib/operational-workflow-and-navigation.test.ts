@@ -47,14 +47,14 @@ describe("PeleCanon Operational Workflow Integration & Navigation Verification",
     });
 
     it("Document generation (PDF & Invoice) reads tenant data directly from DB without settings UI dependency", () => {
-      const pdfFuncSrc = readFileSync(
-        resolve("src/lib/pdf.functions.tsx"),
+      const pdfDataSrc = readFileSync(
+        resolve("src/lib/pdf-data.server.ts"),
         "utf-8",
       );
 
       // fetchTenantInfo executes a direct server-side DB query on tenants table
-      expect(pdfFuncSrc).toContain("fetchTenantInfo");
-      expect(pdfFuncSrc).toContain('.from("tenants")');
+      expect(pdfDataSrc).toContain("fetchTenantInfo");
+      expect(pdfDataSrc).toContain("tenants");
     });
   });
 

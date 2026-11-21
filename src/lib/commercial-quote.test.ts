@@ -7,7 +7,8 @@ import {
   DEFAULT_COMMERCIAL_TERMS,
   type CommercialQuoteLine,
 } from "./commercial-quote-types";
-import { renderQuotePdfBuffer, type QuoteData, type TenantInfo } from "./pdf.functions";
+import { renderQuotePdfBuffer } from "./pdf-renderer.server";
+import type { QuoteData, TenantInfo } from "./pdf.functions";
 
 describe("Commercial Quotation System & PDF Replication", () => {
   it("calculates commercial line totals and quote totals accurately", () => {

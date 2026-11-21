@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import {
   maskPhone,
@@ -27,8 +27,9 @@ describe("Order tracking token schema & migration parity", () => {
   });
 
   it("down migration cleans up tracking_token column and index", () => {
+    const downPath = resolve("supabase/rollbacks/20260902_order_tracking_tokens_down.sql");
     const sql = readFileSync(
-      resolve("supabase/migrations/20260902_order_tracking_tokens_down.sql"),
+      existsSync(downPath) ? downPath : resolve("supabase/migrations/20260902_order_tracking_tokens_down.sql"),
       "utf-8",
     );
     expect(sql).toContain("DROP INDEX IF EXISTS public.orders_tracking_token_idx");

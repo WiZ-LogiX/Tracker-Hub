@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { renderQuotePdfBuffer, type QuoteData, type TenantInfo } from "./pdf.functions";
+import { renderQuotePdfBuffer } from "./pdf-renderer.server";
+import type { QuoteData, TenantInfo } from "./pdf.functions";
 
 describe("PDF Arabic Ligature & Bidi Layout Safety", () => {
   const tenantInfo: TenantInfo = {

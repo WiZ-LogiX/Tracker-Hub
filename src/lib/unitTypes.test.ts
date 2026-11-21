@@ -10,17 +10,16 @@
  * 7. Business rules — material without catalog_ref or area_function_key rejected.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { z } from "zod";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function readMigration(filename: string): string {
-  return readFileSync(
-    resolve(`supabase/migrations/${filename}`),
-    "utf-8",
-  );
+  const migPath = resolve(`supabase/migrations/${filename}`);
+  if (existsSync(migPath)) return readFileSync(migPath, "utf-8");
+  return readFileSync(resolve(`supabase/rollbacks/${filename}`), "utf-8");
 }
 
 function readSchema(): string {
