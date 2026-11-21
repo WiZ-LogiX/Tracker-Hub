@@ -22,9 +22,39 @@ const CommercialCategoryInput = z.object({
   active: z.boolean().default(true),
 });
 
+function matchCategory(
+  dbCat: { id: string; name_ar: string; name_en?: string | null },
+  commercialCats: CommercialProductCategory[],
+) {
+  // 1. Exact ID match
+  const byId = commercialCats.find((c) => c.id === dbCat.id);
+  if (byId) return byId;
+
+  // 2. Exact Arabic or English Name match
+  const dbAr = dbCat.name_ar.trim();
+  const dbEn = (dbCat.name_en || "").toLowerCase().trim();
+
+  const byName = commercialCats.find(
+    (c) =>
+      c.nameAr.trim() === dbAr ||
+      (dbEn && c.nameEn?.toLowerCase().trim() === dbEn),
+  );
+  if (byName) return byName;
+
+  // 3. Known canonical mapping
+  if (dbEn === "kitchens" || dbAr === "مطابخ") {
+    return commercialCats.find((c) => c.code === "kitchen");
+  }
+  if (dbEn === "wardrobes" || dbAr === "دواليب ملابس" || dbAr === "دواليب") {
+    return commercialCats.find((c) => c.code === "dressing" || c.code === "wardrobes");
+  }
+
+  return undefined;
+}
+
 /**
  * List all commercial product categories configured for the current tenant.
- * Merges tenant-customized categories with the core defaults (Kitchen, Dressing, Door, etc.).
+ * Merges tenant-customized categories and catalog database categories with the core defaults.
  */
 export const listCommercialCategories = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth, requireTenant])
@@ -33,16 +63,23 @@ export const listCommercialCategories = createServerFn({ method: "GET" })
     const { tenantId } = ctx;
 
     try {
-      const { data: tenant } = await supabaseAdmin
-        .from("tenants")
-        .select("feature_flags")
-        .eq("id", tenantId)
-        .single();
+      const [{ data: tenant }, { data: dbCategories }] = await Promise.all([
+        supabaseAdmin
+          .from("tenants")
+          .select("feature_flags")
+          .eq("id", tenantId)
+          .single(),
+        supabaseAdmin
+          .from("categories")
+          .select("id, name_ar, name_en, pricing_unit")
+          .eq("tenant_id", tenantId)
+          .order("name_ar"),
+      ]);
 
       const flags = (tenant?.feature_flags as Record<string, any>) || {};
       const customCats: CommercialProductCategory[] = flags.commercialCategories || [];
 
-      // If tenant has custom configured categories, return them (ensuring defaults exist if not explicitly defined)
+      let mergedCats: CommercialProductCategory[] = [];
       if (Array.isArray(customCats) && customCats.length > 0) {
         const existingCodes = new Set(customCats.map((c) => c.code));
         const missingDefaults = DEFAULT_COMMERCIAL_CATEGORIES.filter(
@@ -55,13 +92,49 @@ export const listCommercialCategories = createServerFn({ method: "GET" })
           }
           return c;
         });
-        return [...normalizedCats, ...missingDefaults];
+        mergedCats = [...normalizedCats, ...missingDefaults];
+      } else {
+        mergedCats = DEFAULT_COMMERCIAL_CATEGORIES.map((c) => ({ ...c, active: true }));
       }
+
+      // Merge database catalog categories (e.g. Tables, Bedrooms, Office Furniture)
+      if (Array.isArray(dbCategories) && dbCategories.length > 0) {
+        for (const dbCat of dbCategories) {
+          const match = matchCategory(dbCat, mergedCats);
+          if (match) {
+            match.id = dbCat.id;
+            match.active = true;
+          } else {
+            const code = dbCat.name_en
+              ? dbCat.name_en.toLowerCase().replace(/[^a-z0-9]/g, "_")
+              : `cat_${dbCat.id.slice(0, 8)}`;
+            mergedCats.push({
+              id: dbCat.id,
+              code,
+              nameAr: dbCat.name_ar,
+              nameEn: dbCat.name_en || dbCat.name_ar,
+              defaultDimensionUnit:
+                dbCat.pricing_unit === "linear_meter" || dbCat.pricing_unit === "m"
+                  ? "m"
+                  : "cm",
+              defaultPricingUnit:
+                dbCat.pricing_unit === "linear_meter"
+                  ? "m"
+                  : dbCat.pricing_unit === "m2"
+                    ? "m2"
+                    : "pcs",
+              defaultSpecsTemplateAr: `• تصنيع وتوريد ${dbCat.name_ar} بأعلى معايير الجودة والمواصفات المعتمدة.`,
+              active: true,
+            });
+          }
+        }
+      }
+
+      return mergedCats;
     } catch {
       // Fallback to default categories
+      return DEFAULT_COMMERCIAL_CATEGORIES.map((c) => ({ ...c, active: true }));
     }
-
-    return DEFAULT_COMMERCIAL_CATEGORIES.map((c) => ({ ...c, active: true }));
   });
 
 /**

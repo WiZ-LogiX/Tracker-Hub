@@ -56,6 +56,8 @@ import {
   BookOpen,
   Archive,
   Tv,
+  Table,
+  Bed,
 } from "lucide-react";
 import { formatEGP } from "@/lib/pricing";
 import { toast } from "sonner";
@@ -87,16 +89,125 @@ export const Route = createFileRoute("/admin/quotes/new")({
   validateSearch: searchSchema,
 });
 
-function getCategoryIcon(code: string) {
+export function getCategoryIcon(code: string) {
   const c = (code || "").toLowerCase();
   if (c.includes("kitchen")) return UtensilsCrossed;
   if (c.includes("dressing") || c.includes("wardrobe")) return Shirt;
   if (c.includes("door")) return DoorOpen;
+  if (c.includes("table")) return Table;
+  if (c.includes("bed")) return Bed;
+  if (c.includes("office") || c.includes("desk")) return Briefcase;
   if (c.includes("library") || c.includes("shelf")) return BookOpen;
   if (c.includes("buffet") || c.includes("console")) return Archive;
   if (c.includes("cladding") || c.includes("wall")) return Layers;
   if (c.includes("tv")) return Tv;
   return Sparkles;
+}
+
+/**
+ * Filters products based on selected category in the quotation builder line.
+ */
+export function getCategoryProducts(
+  lineCatCode: string,
+  lineCatNameAr: string,
+  categoriesList: CommercialProductCategory[],
+  allProducts: QuotableProduct[],
+) {
+  if (!lineCatCode || lineCatCode === "custom") {
+    return { inCategory: allProducts, otherCategory: [] };
+  }
+
+  const catObj = categoriesList.find((c) => c.code === lineCatCode || c.id === lineCatCode);
+  const catCode = lineCatCode.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const catAr = (lineCatNameAr || catObj?.nameAr || "").trim().toLowerCase();
+  const catEn = (catObj?.nameEn || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const inCategory: QuotableProduct[] = [];
+  const otherCategory: QuotableProduct[] = [];
+
+  for (const p of allProducts) {
+    let isMatch = false;
+
+    // 1. Direct DB category ID match
+    if (catObj?.id && p.categoryId && catObj.id === p.categoryId) {
+      isMatch = true;
+    } else {
+      const pCatAr = (p.categoryNameAr || "").trim().toLowerCase();
+      const pCatEn = (p.categoryNameEn || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+      // 2. Category name or code match
+      if (pCatAr && (pCatAr === catAr || catAr.includes(pCatAr) || pCatAr.includes(catAr))) {
+        isMatch = true;
+      } else if (
+        pCatEn &&
+        (pCatEn === catEn || pCatEn === catCode || catCode.includes(pCatEn) || pCatEn.includes(catCode))
+      ) {
+        isMatch = true;
+      } else if (
+        catCode.includes("kitchen") &&
+        (pCatEn.includes("kitchen") || pCatAr.includes("مطبخ") || pCatAr.includes("مطابخ"))
+      ) {
+        isMatch = true;
+      } else if (
+        (catCode.includes("dressing") || catCode.includes("wardrobe")) &&
+        (pCatEn.includes("wardrobe") || pCatEn.includes("dressing") || pCatAr.includes("دولاب") || pCatAr.includes("دواليب"))
+      ) {
+        isMatch = true;
+      } else if (
+        catCode.includes("table") &&
+        (pCatEn.includes("table") || pCatAr.includes("طاول"))
+      ) {
+        isMatch = true;
+      } else if (
+        catCode.includes("bed") &&
+        (pCatEn.includes("bed") || pCatAr.includes("نوم"))
+      ) {
+        isMatch = true;
+      } else if (
+        (catCode.includes("office") || catCode.includes("desk")) &&
+        (pCatEn.includes("office") || pCatAr.includes("مكتب"))
+      ) {
+        isMatch = true;
+      } else if (
+        catCode.includes("door") &&
+        (pCatEn.includes("door") || pCatAr.includes("باب") || pCatAr.includes("أبواب"))
+      ) {
+        isMatch = true;
+      } else if (!p.categoryId && !p.categoryNameAr) {
+        // 3. Fallback code prefix matching only for unassigned items
+        if (
+          catCode.includes("table") &&
+          (p.code.startsWith("TBL") || p.code.startsWith("DIN") || p.code.includes("MT-"))
+        ) {
+          isMatch = true;
+        } else if (catCode.includes("kitchen") && p.code.startsWith("KIT")) {
+          isMatch = true;
+        } else if (
+          (catCode.includes("dressing") || catCode.includes("wardrobe")) &&
+          p.code.startsWith("WRD")
+        ) {
+          isMatch = true;
+        } else if (catCode.includes("bed") && (p.code.startsWith("BED") || p.code.startsWith("BRD"))) {
+          isMatch = true;
+        } else if (
+          (catCode.includes("office") || catCode.includes("desk")) &&
+          p.code.startsWith("OFF")
+        ) {
+          isMatch = true;
+        } else if (catCode.includes("door") && p.code.startsWith("DOR")) {
+          isMatch = true;
+        }
+      }
+    }
+
+    if (isMatch) {
+      inCategory.push(p);
+    } else {
+      otherCategory.push(p);
+    }
+  }
+
+  return { inCategory, otherCategory };
 }
 
 /**
@@ -385,7 +496,7 @@ function CommercialQuoteBuilder() {
 
   // Handle category switch on an item
   function handleCategoryChange(idx: number, newCategoryCode: string) {
-    const cat = categories.find((c) => c.code === newCategoryCode);
+    const cat = categories.find((c) => c.code === newCategoryCode || c.id === newCategoryCode);
     if (!cat) return;
 
     setLines((prev) =>
@@ -402,8 +513,18 @@ function CommercialQuoteBuilder() {
           !line.technicalSpecs ||
           categories.some((c) => c.defaultSpecsTemplateAr === line.technicalSpecs);
 
+        // Check if existing selected product belongs to new category; if not, clear product selection
+        const currentProd = products.find((p) => p.id === line.productId);
+        const prodStillMatches = currentProd
+          ? (cat.id && currentProd.categoryId === cat.id) ||
+            currentProd.categoryNameAr === cat.nameAr ||
+            (currentProd.categoryNameEn && cat.nameEn && currentProd.categoryNameEn.toLowerCase() === cat.nameEn.toLowerCase())
+          : false;
+
         return {
           ...line,
+          productId: prodStillMatches ? line.productId : null,
+          productCode: prodStillMatches ? line.productCode : null,
           category: cat.code,
           categoryNameAr: cat.nameAr,
           categoryNameEn: cat.nameEn,
@@ -438,22 +559,25 @@ function CommercialQuoteBuilder() {
     // Match or find closest category
     let matchedCat = categories.find(
       (c) =>
-        c.code.toLowerCase() === (prod.categoryNameEn || "").toLowerCase() ||
-        c.nameAr === prod.categoryNameAr ||
-        c.nameEn.toLowerCase() === (prod.categoryNameEn || "").toLowerCase(),
+        (prod.categoryId && c.id === prod.categoryId) ||
+        c.code.toLowerCase() === (prod.categoryNameEn || "").toLowerCase().replace(/[^a-z0-9]/g, "_") ||
+        c.nameAr.trim() === (prod.categoryNameAr || "").trim() ||
+        c.nameEn.toLowerCase().trim() === (prod.categoryNameEn || "").toLowerCase().trim(),
     );
 
     if (!matchedCat && prod.categoryNameEn) {
       const en = prod.categoryNameEn.toLowerCase();
       if (en.includes("kitchen")) matchedCat = categories.find((c) => c.code === "kitchen");
-      else if (en.includes("wardrobe") || en.includes("dressing")) matchedCat = categories.find((c) => c.code === "dressing");
+      else if (en.includes("wardrobe") || en.includes("dressing")) matchedCat = categories.find((c) => c.code === "dressing" || c.code === "wardrobes");
       else if (en.includes("door")) matchedCat = categories.find((c) => c.code === "door");
-      else if (en.includes("table") || en.includes("bed") || en.includes("office")) matchedCat = categories.find((c) => c.code === "custom");
+      else if (en.includes("table")) matchedCat = categories.find((c) => c.code === "tables");
+      else if (en.includes("bed")) matchedCat = categories.find((c) => c.code === "bedrooms");
+      else if (en.includes("office")) matchedCat = categories.find((c) => c.code === "office_furniture" || c.code === "office");
     }
 
     const categoryCode = matchedCat ? matchedCat.code : (categories[0]?.code || "custom");
-    const categoryNameAr = prod.categoryNameAr || matchedCat?.nameAr || "منتج";
-    const categoryNameEn = prod.categoryNameEn || matchedCat?.nameEn || "Product";
+    const categoryNameAr = matchedCat?.nameAr || prod.categoryNameAr || "منتج";
+    const categoryNameEn = matchedCat?.nameEn || prod.categoryNameEn || "Product";
 
     // Map pricing unit
     let pUnit: CommercialPricingUnit = "pcs";
@@ -954,6 +1078,11 @@ function CommercialQuoteBuilder() {
                             <SelectItem key={p.id} value={p.id} className="text-xs sm:text-sm py-1.5">
                               <span className="font-mono text-[10px] text-muted-foreground mr-1.5">[{p.code}]</span>
                               <span className="font-semibold">{p.nameAr}</span>
+                              {p.categoryNameAr && (
+                                <span className="text-[10px] text-muted-foreground mx-1.5 font-normal">
+                                  ({p.categoryNameAr})
+                                </span>
+                              )}
                               {p.basePrice > 0 && (
                                 <span className="text-primary font-mono text-xs ml-1.5 font-bold">
                                   ({formatEGP(p.basePrice)})
@@ -993,104 +1122,164 @@ function CommercialQuoteBuilder() {
               ) : (
                 /* Full Step-by-Step Form Once Category / Item Is Selected */
                 <>
-                  {/* STEP 1: Select Catalog Item, Title & Quantity */}
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                    {/* Catalog Item Combobox/Dropdown */}
-                    <div className="sm:col-span-4 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-semibold flex items-center gap-1">
-                          <Database className="h-3.5 w-3.5 text-primary" />
-                          <span>{isRtl ? "صنف الكتالوج" : "Catalog Item"}</span>
-                        </Label>
-                        {line.productCode && (
-                          <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 text-primary border-primary/30">
-                            {line.productCode}
-                          </Badge>
-                        )}
-                      </div>
-                      <Select
-                        value={line.productId || (line.isCustom ? "custom" : "")}
-                        onValueChange={(v) => handleProductSelect(idx, v)}
-                      >
-                        <SelectTrigger className="h-9 font-medium text-xs">
-                          <SelectValue placeholder={isRtl ? "اختر من الكتالوج..." : "Select catalog product..."} />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-60">
-                          <SelectItem value="custom" className="text-xs font-semibold text-primary">
-                            {isRtl ? "✦ صنف مخصص / غير مدرج بالكتالوج" : "✦ Custom / Non-Catalog Item"}
-                          </SelectItem>
-                          {products.map((p) => (
-                            <SelectItem key={p.id} value={p.id} className="text-xs">
-                              <span className="font-mono text-[10px] text-muted-foreground mr-1.5">[{p.code}]</span>
-                              <span className="font-medium">{p.nameAr}</span>
-                              {p.basePrice > 0 && (
-                                <span className="text-muted-foreground text-[10px] ml-1.5">
-                                  ({formatEGP(p.basePrice)})
+                  {/* STEP 1: Select Category, Catalog Item, Title & Quantity */}
+                  {(() => {
+                    const categoryProducts = getCategoryProducts(
+                      line.category,
+                      line.categoryNameAr,
+                      categories,
+                      products,
+                    );
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        {/* 1. Category Selector (Prominent & Connected) */}
+                        <div className="sm:col-span-3 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-semibold flex items-center gap-1 text-primary">
+                              <Layers className="h-3.5 w-3.5" />
+                              <span>{isRtl ? "نوع المنتج / التصنيف" : "Product Category"}</span>
+                            </Label>
+                          </div>
+                          <Select
+                            value={line.category || ""}
+                            onValueChange={(v) => handleCategoryChange(idx, v)}
+                          >
+                            <SelectTrigger className="h-9 font-medium text-xs bg-primary/5 border-primary/30 focus:ring-primary shadow-2xs">
+                              <SelectValue placeholder={isRtl ? "اختر التصنيف..." : "Select category..."} />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60">
+                              {activeCategories.map((c) => {
+                                const Icon = getCategoryIcon(c.code);
+                                return (
+                                  <SelectItem key={c.id || c.code} value={c.code} className="text-xs py-1.5 font-medium">
+                                    <div className="flex items-center gap-2">
+                                      <Icon className="h-3.5 w-3.5 text-primary shrink-0" />
+                                      <span className="font-semibold">{c.nameAr}</span>
+                                      <span className="text-[11px] text-muted-foreground font-normal">({c.nameEn})</span>
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* 2. Catalog Item Combobox/Dropdown (Filtered by Selected Category) */}
+                        <div className="sm:col-span-4 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-semibold flex items-center gap-1">
+                              <Database className="h-3.5 w-3.5 text-primary" />
+                              <span>{isRtl ? "صنف الكتالوج" : "Catalog Item"}</span>
+                            </Label>
+                            {line.productCode ? (
+                              <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 text-primary border-primary/30">
+                                {line.productCode}
+                              </Badge>
+                            ) : (
+                              categoryProducts.inCategory.length > 0 && (
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  {isRtl ? `${categoryProducts.inCategory.length} أصناف في الفئة` : `${categoryProducts.inCategory.length} in category`}
                                 </span>
-                              )}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Item Name / Description (Fully Editable) */}
-                    <div className="sm:col-span-5 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-semibold">{isRtl ? "اسم البند والوصف" : "Item Title / Description"}</Label>
-                        <span className="text-[10px] text-muted-foreground">
-                          {line.categoryNameAr ? `(${line.categoryNameAr})` : ""}
-                        </span>
-                      </div>
-                      <Input
-                        value={line.name}
-                        onChange={(e) => updateLine(idx, { name: e.target.value })}
-                        placeholder={isRtl ? `مثال: ${line.categoryNameAr} مودرن` : "e.g. Modern Custom Cabinet"}
-                        className="h-9 text-xs"
-                      />
-                    </div>
-
-                    {/* Quantity & Commercial Pricing Unit */}
-                    <div className="sm:col-span-3 space-y-1">
-                      <Label className="text-xs font-semibold">{isRtl ? "الكمية والوحدة" : "Quantity & Unit"}</Label>
-                      <div className="flex gap-1.5">
-                        <Input
-                          type="number"
-                          step="any"
-                          min={0.01}
-                          value={line.quantity === 0 ? "" : line.quantity}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            updateLine(idx, { quantity: val === "" ? 0 : Math.max(0.01, Number(val)) });
-                          }}
-                          placeholder="1"
-                          className="h-9 w-20 text-xs font-semibold text-center"
-                        />
-                        <Select
-                          value={line.pricingUnit}
-                          onValueChange={(v: CommercialPricingUnit) => {
-                            const u = COMMERCIAL_PRICING_UNITS.find((unit) => unit.code === v);
-                            updateLine(idx, {
-                              pricingUnit: v,
-                              pricingUnitAr: u?.labelAr ?? "عدد",
-                              pricingUnitEn: u?.labelEn ?? "pcs",
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="h-9 text-xs flex-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {COMMERCIAL_PRICING_UNITS.map((u) => (
-                              <SelectItem key={u.code} value={u.code} className="text-xs">
-                                {u.labelAr} ({u.labelEn})
+                              )
+                            )}
+                          </div>
+                          <Select
+                            value={line.productId || (line.isCustom ? "custom" : "")}
+                            onValueChange={(v) => handleProductSelect(idx, v)}
+                          >
+                            <SelectTrigger className="h-9 font-medium text-xs bg-background">
+                              <SelectValue placeholder={isRtl ? `اختر من أصناف ${line.categoryNameAr || "الكتالوج"}...` : "Select catalog product..."} />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60">
+                              <SelectItem value="custom" className="text-xs font-semibold text-primary">
+                                {isRtl ? "✦ صنف مخصص / غير مدرج بالكتالوج" : "✦ Custom / Non-Catalog Item"}
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                              {categoryProducts.inCategory.map((p) => (
+                                <SelectItem key={p.id} value={p.id} className="text-xs py-1.5">
+                                  <span className="font-mono text-[10px] text-muted-foreground mr-1.5">[{p.code}]</span>
+                                  <span className="font-semibold">{p.nameAr}</span>
+                                  {p.basePrice > 0 && (
+                                    <span className="text-primary font-mono text-xs ml-1.5 font-bold">
+                                      ({formatEGP(p.basePrice)})
+                                    </span>
+                                  )}
+                                </SelectItem>
+                              ))}
+                              {categoryProducts.otherCategory.length > 0 && (
+                                <>
+                                  <Separator className="my-1" />
+                                  <div className="px-2 py-1 text-[10px] text-muted-foreground font-semibold">
+                                    {isRtl ? "أصناف من تصنيفات أخرى:" : "From other categories:"}
+                                  </div>
+                                  {categoryProducts.otherCategory.map((p) => (
+                                    <SelectItem key={p.id} value={p.id} className="text-xs opacity-75">
+                                      <span className="font-mono text-[10px] text-muted-foreground mr-1">[{p.code}]</span>
+                                      <span>{p.nameAr}</span>
+                                      <span className="text-[10px] text-muted-foreground ml-1">({p.categoryNameAr || "عام"})</span>
+                                    </SelectItem>
+                                  ))}
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* 3. Item Name / Description (Fully Editable) */}
+                        <div className="sm:col-span-3 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-semibold">{isRtl ? "اسم البند والوصف" : "Item Title / Description"}</Label>
+                          </div>
+                          <Input
+                            value={line.name}
+                            onChange={(e) => updateLine(idx, { name: e.target.value })}
+                            placeholder={isRtl ? `مثال: ${line.categoryNameAr} مودرن` : "e.g. Modern Custom Cabinet"}
+                            className="h-9 text-xs"
+                          />
+                        </div>
+
+                        {/* 4. Quantity & Commercial Pricing Unit */}
+                        <div className="sm:col-span-2 space-y-1">
+                          <Label className="text-xs font-semibold">{isRtl ? "الكمية والوحدة" : "Quantity & Unit"}</Label>
+                          <div className="flex gap-1">
+                            <Input
+                              type="number"
+                              step="any"
+                              min={0.01}
+                              value={line.quantity === 0 ? "" : line.quantity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateLine(idx, { quantity: val === "" ? 0 : Math.max(0.01, Number(val)) });
+                              }}
+                              placeholder="1"
+                              className="h-9 w-14 text-xs font-semibold text-center px-1"
+                            />
+                            <Select
+                              value={line.pricingUnit}
+                              onValueChange={(v: CommercialPricingUnit) => {
+                                const u = COMMERCIAL_PRICING_UNITS.find((unit) => unit.code === v);
+                                updateLine(idx, {
+                                  pricingUnit: v,
+                                  pricingUnitAr: u?.labelAr ?? "عدد",
+                                  pricingUnitEn: u?.labelEn ?? "pcs",
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="h-9 text-xs flex-1 px-1.5">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {COMMERCIAL_PRICING_UNITS.map((u) => (
+                                  <SelectItem key={u.code} value={u.code} className="text-xs">
+                                    {u.labelAr} ({u.labelEn})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* STEP 2 & 3: Dimensions & Commercial Price */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">

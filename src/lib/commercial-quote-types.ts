@@ -93,6 +93,39 @@ export const DEFAULT_COMMERCIAL_CATEGORIES: CommercialProductCategory[] = [
     active: true,
   },
   {
+    id: "tables",
+    code: "tables",
+    nameAr: "طاولات",
+    nameEn: "Tables",
+    defaultDimensionUnit: "cm",
+    defaultPricingUnit: "pcs",
+    defaultSpecsTemplateAr:
+      "• تصنيع وتوريد طاولات خشب طبيعي/كونتر عالي الجودة مع شاسيه قوي وتشطيب دهان أستر أو دوكو أو إلكتروستاتيك مقاوم للخدش.",
+    active: true,
+  },
+  {
+    id: "bedrooms",
+    code: "bedrooms",
+    nameAr: "غرف نوم",
+    nameEn: "Bedrooms",
+    defaultDimensionUnit: "cm",
+    defaultPricingUnit: "pcs",
+    defaultSpecsTemplateAr:
+      "• غرف نوم وأسرة خشب طبيعي ومصنع عالي الجودة مع تنجيد وتشطيب راقي.",
+    active: true,
+  },
+  {
+    id: "office",
+    code: "office",
+    nameAr: "أثاث مكتبي",
+    nameEn: "Office Furniture",
+    defaultDimensionUnit: "cm",
+    defaultPricingUnit: "pcs",
+    defaultSpecsTemplateAr:
+      "• مكاتب ووحدات إدارية من خشب عالي الجودة مع مخارج كهرباء ومجر أدراج هيدروليك.",
+    active: true,
+  },
+  {
     id: "custom",
     code: "custom",
     nameAr: "مخصص",
