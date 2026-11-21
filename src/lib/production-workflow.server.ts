@@ -11,7 +11,7 @@ import {
   tenantCounters,
 } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { sendTaskAssignmentNotifications } from "@/lib/notifications.functions";
+import { sendTaskAssignmentNotifications } from "@/lib/notifications.server";
 import { log } from "@/lib/log";
 
 export interface OrderStageTransitionInput {

@@ -24,7 +24,7 @@ import {
   isValidDeliveryTransition,
   type DeliveryStatus,
 } from "@/lib/delivery-types";
-import { sendTaskAssignmentNotifications } from "@/lib/notifications.functions";
+import { sendTaskAssignmentNotifications } from "@/lib/notifications.server";
 import { calculateWarrantyStatus } from "@/lib/after-sales.pure";
 import { getDownloadUrl } from "@/lib/r2.server";
 

@@ -31,7 +31,7 @@ import {
   maskName,
   isTrackingTokenUuid,
   handlePublicTrackingByRef,
-} from "./tracking.functions";
+} from "./tracking.server";
 
 describe("PELECANON CUSTOMER-CENTRIC LIFECYCLE & TRACKING VERIFICATION", () => {
   const tenantId = "11111111-2222-3333-4444-555555555555";

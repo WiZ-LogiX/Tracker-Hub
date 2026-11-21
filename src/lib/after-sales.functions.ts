@@ -15,7 +15,7 @@ import {
   auditLog,
   attachments,
 } from "@/db/schema";
-import { sendTaskAssignmentNotifications } from "@/lib/notifications.functions";
+import { sendTaskAssignmentNotifications } from "@/lib/notifications.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
 import { requirePermission, requireAnyPermission, type TenantContext } from "@/lib/tenant-context";

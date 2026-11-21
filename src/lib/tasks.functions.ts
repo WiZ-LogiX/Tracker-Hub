@@ -31,7 +31,7 @@ import {
 import {
   sendTaskAssignmentNotifications,
   sendTaskLifecycleNotification,
-} from "@/lib/notifications.functions";
+} from "@/lib/notifications.server";
 
 function isSchemaFallbackError(err: any): boolean {
   const code = err?.code || err?.cause?.code;

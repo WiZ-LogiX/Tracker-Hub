@@ -18,8 +18,8 @@ import {
   handlePublicAttachmentDownload,
   handlePublicOrderAttachments,
   handlePublicTrackingByRef,
-} from "@/lib/tracking.functions";
-import * as trackingModule from "@/lib/tracking.functions";
+} from "@/lib/tracking.server";
+import * as trackingModule from "@/lib/tracking.server";
 import * as attachmentsModule from "@/lib/attachments.functions";
 import * as dbSchema from "@/db/schema";
 

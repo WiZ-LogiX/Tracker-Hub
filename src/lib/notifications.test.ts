@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { type InAppNotification } from "@/lib/notifications.functions";
 import {
-  type InAppNotification,
   sendTaskAssignmentNotifications,
   sendTaskLifecycleNotification,
-} from "@/lib/notifications.functions";
+} from "@/lib/notifications.server";
 
 describe("PELECANON TASK MANAGEMENT — In-App Notifications & Deep Linking", () => {
   let mockInsertedRows: any[] = [];

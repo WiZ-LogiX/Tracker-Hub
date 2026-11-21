@@ -15,7 +15,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { requireTenant } from "@/integrations/supabase/tenant-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { TenantContext } from "@/lib/tenant-context";
@@ -565,7 +564,7 @@ export async function renderQuotePdfBuffer(
 export async function generateQuotePdfBufferDirect(
   quoteId: string,
   tenantId: string,
-  client: any = supabaseAdmin,
+  client?: any,
 ): Promise<Buffer> {
   const { generateQuotePdfBufferDirect: fn } = await import("./pdf-renderer.server");
   return fn(quoteId, tenantId, client);
