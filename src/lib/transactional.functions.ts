@@ -258,7 +258,7 @@ export const convertQuoteToOrder = createServerFn({ method: "POST" })
 
         await tx.insert(schema.auditLog).values({
           tenantId,
-          actorId: ctx.userId ?? "system",
+          actorId: ctx.userId ? (ctx.userId as any) : null,
           action: "opportunity_won",
           entityType: "opportunity",
           entityId: linkedOpportunityId,
@@ -269,6 +269,7 @@ export const convertQuoteToOrder = createServerFn({ method: "POST" })
             quoteId: quoteRow.id,
             amount: quoteRow.total,
             milestones: presetKey,
+            actorType: ctx.userId ? "user" : "system",
           },
         });
       }

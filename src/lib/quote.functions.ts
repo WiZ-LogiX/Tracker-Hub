@@ -835,7 +835,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
 
             await db.insert(auditLog).values({
               tenantId: tid,
-              actorId: ctx.userId ?? "system",
+              actorId: ctx.userId ? (ctx.userId as any) : null,
               entityType: "opportunity",
               entityId: opp.id,
               action: "quote_sent_sync",
@@ -845,6 +845,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
                 stage: newStage,
                 taskId: insertedTask?.id,
                 taskCode,
+                actorType: ctx.userId ? "user" : "system",
               },
             });
           } else if (data.status === "accepted") {
@@ -863,7 +864,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
 
             await db.insert(auditLog).values({
               tenantId: tid,
-              actorId: ctx.userId ?? "system",
+              actorId: ctx.userId ? (ctx.userId as any) : null,
               entityType: "opportunity",
               entityId: opp.id,
               action: "opportunity_won",
@@ -872,6 +873,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
                 quoteId: quoteRow.id,
                 quoteNumber: quoteRow.quoteNumber,
                 amount: quoteTotalNum,
+                actorType: ctx.userId ? "user" : "system",
               },
             });
           } else if (data.status === "rejected") {
@@ -919,7 +921,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
 
             await db.insert(auditLog).values({
               tenantId: tid,
-              actorId: ctx.userId ?? "system",
+              actorId: ctx.userId ? (ctx.userId as any) : null,
               entityType: "opportunity",
               entityId: opp.id,
               action: "quote_rejected_negotiation",
@@ -929,6 +931,7 @@ export const updateQuoteStatus = createServerFn({ method: "POST" })
                 stage: "negotiation",
                 taskId: insertedTask?.id,
                 taskCode,
+                actorType: ctx.userId ? "user" : "system",
               },
             });
           }
@@ -1078,7 +1081,7 @@ export const approveQuoteAndRequestConfirmation = createServerFn({ method: "POST
     // 7. Audit log
     await db.insert(auditLog).values({
       tenantId: tid,
-      actorId: ctx.userId ?? "system",
+      actorId: ctx.userId ? (ctx.userId as any) : null,
       entityType: "quotation",
       entityId: quoteRow.id,
       action: "quote_approved_and_confirmation_requested",
@@ -1086,6 +1089,7 @@ export const approveQuoteAndRequestConfirmation = createServerFn({ method: "POST
         quoteNumber: quoteRow.quoteNumber,
         trackingToken,
         stage: "awaiting_customer_confirmation",
+        actorType: ctx.userId ? "user" : "system",
       },
     });
 
@@ -1120,11 +1124,14 @@ export const recordCustomerQuoteConsent = createServerFn({ method: "POST" })
         .limit(1);
       quoteRow = q ?? null;
     } else if (data.trackingToken) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.trackingToken);
       const [q] = await db
         .select()
         .from(quotes)
         .where(
-          sql`${quotes.id} = ${data.trackingToken}::uuid OR ${quotes.snapshot}->>'tracking_token' = ${data.trackingToken}`,
+          isUuid
+            ? sql`${quotes.id} = ${data.trackingToken}::uuid OR ${quotes.snapshot}->>'tracking_token' = ${data.trackingToken}`
+            : sql`${quotes.snapshot}->>'tracking_token' = ${data.trackingToken}`,
         )
         .limit(1);
       quoteRow = q ?? null;
@@ -1227,7 +1234,7 @@ export const recordCustomerQuoteConsent = createServerFn({ method: "POST" })
 
       await db.insert(auditLog).values({
         tenantId: tid,
-        actorId: "customer",
+        actorId: null,
         entityType: "quotation",
         entityId: quoteRow.id,
         action: "quote_pdf_delivery_consented",
@@ -1235,6 +1242,7 @@ export const recordCustomerQuoteConsent = createServerFn({ method: "POST" })
           quoteNumber: quoteRow.quoteNumber,
           trackingToken,
           trackingLink,
+          actorType: "customer",
         },
       });
 
@@ -1269,13 +1277,14 @@ export const recordCustomerQuoteConsent = createServerFn({ method: "POST" })
 
       await db.insert(auditLog).values({
         tenantId: tid,
-        actorId: "customer",
+        actorId: null,
         entityType: "quotation",
         entityId: quoteRow.id,
         action: "quote_confirmation_declined",
         details: {
           quoteNumber: quoteRow.quoteNumber,
           notes: data.notes || null,
+          actorType: "customer",
         },
       });
 
@@ -2633,7 +2642,7 @@ async function executeSaveCommercialQuote(
     try {
       await db.insert(auditLog).values({
         tenantId,
-        actorId: userId ?? "system",
+        actorId: userId ? (userId as any) : null,
         action: data.quoteId ? "quote_updated" : "quote_created",
         entityType: "quote",
         entityId: quoteId!,
@@ -2643,6 +2652,7 @@ async function executeSaveCommercialQuote(
           total: totals.total,
           itemCount: data.lines.length,
           status: data.status,
+          actorType: userId ? "user" : "system",
         },
       });
     } catch {

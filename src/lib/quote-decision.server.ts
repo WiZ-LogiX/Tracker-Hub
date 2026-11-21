@@ -32,11 +32,14 @@ export async function handleCustomerQuoteDecisionInternal({
       .limit(1);
     quoteRow = q ?? null;
   } else if (trackingToken) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trackingToken);
     const [q] = await db
       .select()
       .from(quotes)
       .where(
-        sql`${quotes.id} = ${trackingToken}::uuid OR ${quotes.snapshot}->>'tracking_token' = ${trackingToken}`,
+        isUuid
+          ? sql`${quotes.id} = ${trackingToken}::uuid OR ${quotes.snapshot}->>'tracking_token' = ${trackingToken}`
+          : sql`${quotes.snapshot}->>'tracking_token' = ${trackingToken}`,
       )
       .limit(1);
     quoteRow = q ?? null;
@@ -105,7 +108,7 @@ export async function handleCustomerQuoteDecisionInternal({
 
     await db.insert(auditLog).values({
       tenantId: tid,
-      actorId: userId ?? "customer",
+      actorId: userId ? (userId as any) : null,
       entityType: "quotation",
       entityId: quoteRow.id,
       action: "quote_accepted_by_customer",
@@ -113,6 +116,7 @@ export async function handleCustomerQuoteDecisionInternal({
         quoteNumber: quoteRow.quoteNumber,
         channel,
         notes: notes || null,
+        actorType: userId ? "user" : "customer",
       },
     });
 
@@ -179,7 +183,7 @@ export async function handleCustomerQuoteDecisionInternal({
 
     await db.insert(auditLog).values({
       tenantId: tid,
-      actorId: userId ?? "customer",
+      actorId: userId ? (userId as any) : null,
       entityType: "quotation",
       entityId: quoteRow.id,
       action: "quote_rejected_by_customer",
@@ -187,6 +191,7 @@ export async function handleCustomerQuoteDecisionInternal({
         quoteNumber: quoteRow.quoteNumber,
         channel,
         reason: notes || null,
+        actorType: userId ? "user" : "customer",
       },
     });
 
@@ -254,7 +259,7 @@ export async function handleCustomerQuoteDecisionInternal({
 
     await db.insert(auditLog).values({
       tenantId: tid,
-      actorId: userId ?? "customer",
+      actorId: userId ? (userId as any) : null,
       entityType: "quotation",
       entityId: quoteRow.id,
       action: "quote_revision_requested_by_customer",
@@ -263,6 +268,7 @@ export async function handleCustomerQuoteDecisionInternal({
         channel,
         version: nextVersion,
         revisionNotes: notes || null,
+        actorType: userId ? "user" : "customer",
       },
     });
 
