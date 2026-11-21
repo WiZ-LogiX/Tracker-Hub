@@ -14,10 +14,24 @@ export const LANG_META: Record<SupportedLang, { label: string; dir: "rtl" | "ltr
   fr: { label: "Français", dir: "ltr" },
 };
 
+const fallbackSingleBracesPostProcessor = {
+  type: "postProcessor" as const,
+  name: "fallbackSingleBraces",
+  process(value: string, _key: string, options: any) {
+    if (typeof value === "string" && options && typeof options === "object") {
+      return value.replace(/(?<!\{)\{([a-zA-Z0-9_]+)\}(?!\})/g, (match, varName) => {
+        return options[varName] !== undefined ? String(options[varName]) : match;
+      });
+    }
+    return value;
+  },
+};
+
 if (!i18n.isInitialized) {
   i18n
     .use(LanguageDetector)
     .use(initReactI18next)
+    .use(fallbackSingleBracesPostProcessor)
     .init({
       resources: {
         ar: { translation: ar },
@@ -30,6 +44,7 @@ if (!i18n.isInitialized) {
       fallbackLng: "en",
       supportedLngs: SUPPORTED_LANGS as unknown as string[],
       load: "languageOnly",
+      postProcess: ["fallbackSingleBraces"],
       interpolation: {
         escapeValue: false,
         prefix: "{{",

@@ -435,7 +435,7 @@ function OrdersPage() {
     } catch {
       /* notifications are best-effort */
     }
-    toast.success(t("orders.advance", { stage: STAGE_LABEL_AR[next] }));
+    toast.success(t("orders.advance", { stage: STAGE_LABEL_AR[next] || next }));
     queryClient.invalidateQueries({ queryKey: ["executive-dashboard"] });
     queryClient.invalidateQueries({ queryKey: ["orders"] });
     await load();
@@ -1070,7 +1070,7 @@ function OrderDetail({
           <Label className="text-xs">{t("orders.notes")}</Label>
           <Textarea rows={2} value={note} onChange={e => setNote(e.target.value)} />
           <Button className="w-full" onClick={onAdvance} disabled={!gateOk}>
-            {t("orders.advance", { stage: STAGE_LABEL_AR[next] })}
+            {t("orders.advance", { stage: STAGE_LABEL_AR[next] || next })}
           </Button>
         </div>
       )}
