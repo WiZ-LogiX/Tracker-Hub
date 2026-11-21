@@ -1878,7 +1878,8 @@ export const listQuotableProducts = createServerFn({ method: "GET" })
       `)
       .eq("tenant_id", ctx.tenantId)
       .eq("active", true)
-      .order("name_ar", { ascending: true });
+      .order("name_ar", { ascending: true })
+      .limit(250);
 
     if (data?.categoryId) {
       query = query.eq("category_id", data.categoryId);

@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { saveCommercialQuote, getCommercialQuote } from "@/lib/quote.functions";
 import { listCommercialCategories } from "@/lib/commercial-category.functions";
 import { listQuotableProducts, type QuotableProduct } from "@/lib/catalog.functions";
+import { listLeanCustomers } from "@/lib/customers.functions";
 import { generatePdf } from "@/lib/pdf.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -149,6 +150,7 @@ function CommercialQuoteBuilder() {
   const getCommercialQuoteFn = useServerFn(getCommercialQuote);
   const listCategoriesFn = useServerFn(listCommercialCategories);
   const listQuotableProductsFn = useServerFn(listQuotableProducts);
+  const listLeanCustomersFn = useServerFn(listLeanCustomers);
   const pdfFn = useServerFn(generatePdf);
 
   const [categories, setCategories] = useState<CommercialProductCategory[]>(DEFAULT_COMMERCIAL_CATEGORIES);
@@ -187,81 +189,139 @@ function CommercialQuoteBuilder() {
     [categories],
   );
 
-  // 1. Initial Load: Categories, Customers & Existing Quote or Numbering
+  // 1. Concurrent Initial Load: Categories, Products, Customers & Existing Quote/Numbering
   useEffect(() => {
     async function init() {
       setLoading(true);
       try {
-        // Load custom configured categories from server
-        try {
-          const loadedCats = await listCategoriesFn();
-          if (Array.isArray(loadedCats) && loadedCats.length > 0) {
-            setCategories(loadedCats);
-          }
-        } catch {
-          // Fallback to DEFAULT_COMMERCIAL_CATEGORIES
+        const [catsRes, prodsRes, custsRes, quoteRes, rfqRes, oppRes, nextNo] =
+          await Promise.all([
+            // Categories cached in TanStack Query (staleTime: 60s)
+            queryClient.ensureQueryData({
+              queryKey: ["commercial-categories"],
+              queryFn: async () => {
+                const res = await listCategoriesFn();
+                return Array.isArray(res) && res.length > 0 ? res : DEFAULT_COMMERCIAL_CATEGORIES;
+              },
+              staleTime: 60_000,
+            }),
+
+            // Quotable products cached in TanStack Query (staleTime: 60s)
+            queryClient.ensureQueryData({
+              queryKey: ["quotable-products"],
+              queryFn: async () => {
+                const res = await listQuotableProductsFn();
+                return Array.isArray(res) ? res : [];
+              },
+              staleTime: 60_000,
+            }),
+
+            // Lean customers list cached in TanStack Query (staleTime: 60s)
+            queryClient.ensureQueryData({
+              queryKey: ["lean-customers"],
+              queryFn: async () => {
+                const res = await listLeanCustomersFn();
+                return Array.isArray(res) ? res : [];
+              },
+              staleTime: 60_000,
+            }),
+
+            // Existing quote if editing
+            search.quoteId
+              ? getCommercialQuoteFn({ data: { quoteId: search.quoteId } }).catch(() => null)
+              : Promise.resolve(null),
+
+            // Linked RFQ if present
+            search.rfq
+              ? Promise.resolve(
+                  supabase
+                    .from("quote_requests")
+                    .select("customer_id")
+                    .eq("id", search.rfq)
+                    .maybeSingle(),
+                )
+                  .then((r) => r.data)
+                  .catch(() => null)
+              : Promise.resolve(null),
+
+            // Linked Opportunity if present in search params
+            search.opportunityId
+              ? Promise.resolve(
+                  supabase
+                    .from("opportunities")
+                    .select("id, opportunity_number, title, project_type, stage, customer_id")
+                    .eq("id", search.opportunityId)
+                    .maybeSingle(),
+                )
+                  .then((r) => r.data)
+                  .catch(() => null)
+              : Promise.resolve(null),
+
+            // PLC Quote Number for new quotes
+            !search.quoteId
+              ? getNextPLCNumber("quote").catch(() => generatePLCId())
+              : Promise.resolve(""),
+          ]);
+
+        if (Array.isArray(catsRes) && catsRes.length > 0) {
+          setCategories(catsRes);
+        }
+        if (Array.isArray(prodsRes)) {
+          setProducts(prodsRes);
+        }
+        if (Array.isArray(custsRes)) {
+          setCustomers(custsRes);
         }
 
-        // Load catalog products from database
-        try {
-          setProductsLoading(true);
-          const prods = await listQuotableProductsFn();
-          if (Array.isArray(prods) && prods.length > 0) {
-            setProducts(prods);
-          }
-        } catch (err) {
-          console.warn("Failed to load catalog products:", err);
-        } finally {
-          setProductsLoading(false);
+        // Apply Linked Opportunity if found from search.opportunityId
+        if (oppRes) {
+          setLinkedOpp(oppRes);
+          setOpportunityId(oppRes.id);
         }
 
-        const { data: custData } = await supabase
-          .from("customers")
-          .select("id, name, phone, email, address")
-          .order("name", { ascending: true });
-        setCustomers(custData ?? []);
+        // Determine preselected customer: explicit customerId > opportunity customer > rfq customer
+        let preselectedCustId = search.customerId ?? "";
+        if (!preselectedCustId && oppRes?.customer_id) {
+          preselectedCustId = oppRes.customer_id;
+        }
+        if (!preselectedCustId && rfqRes?.customer_id) {
+          preselectedCustId = rfqRes.customer_id;
+        }
 
         // If editing existing quote
-        if (search.quoteId) {
-          const res = await getCommercialQuoteFn({ data: { quoteId: search.quoteId } });
-          if (res?.quote) {
-            setQuoteNumber(res.quote.quoteNumber);
-            setCustomerId(res.quote.customerId);
-            setOpportunityId(res.quote.opportunityId ?? "");
-            setStatus(res.quote.status === "sent" ? "sent" : "draft");
-            setValidUntil(res.quote.validUntil || "");
-            const disc = Number(res.quote.discountAmount) || 0;
-            setDiscountAmount(disc);
-            setDiscountValue(disc);
-            setDiscountType("amount");
-            setDiscountCode(res.quote.discountCode || "");
-            setApplyVat(Number(res.quote.vatAmount) > 0);
-            if (res.lines && res.lines.length > 0) {
-              setLines(res.lines);
-            }
-            if (res.terms) {
-              setTerms(res.terms);
-            }
+        if (quoteRes?.quote) {
+          setQuoteNumber(quoteRes.quote.quoteNumber);
+          setCustomerId(quoteRes.quote.customerId);
+          const qOppId = quoteRes.quote.opportunityId ?? "";
+          setOpportunityId(qOppId);
+
+          if (qOppId && (!oppRes || oppRes.id !== qOppId)) {
+            const { data: quoteOpp } = await supabase
+              .from("opportunities")
+              .select("id, opportunity_number, title, project_type, stage, customer_id")
+              .eq("id", qOppId)
+              .maybeSingle();
+            if (quoteOpp) setLinkedOpp(quoteOpp);
+          }
+
+          setStatus(quoteRes.quote.status === "sent" ? "sent" : "draft");
+          setValidUntil(quoteRes.quote.validUntil || "");
+          const disc = Number(quoteRes.quote.discountAmount) || 0;
+          setDiscountAmount(disc);
+          setDiscountValue(disc);
+          setDiscountType("amount");
+          setDiscountCode(quoteRes.quote.discountCode || "");
+          setApplyVat(Number(quoteRes.quote.vatAmount) > 0);
+          if (quoteRes.lines && quoteRes.lines.length > 0) {
+            setLines(quoteRes.lines);
+          }
+          if (quoteRes.terms) {
+            setTerms(quoteRes.terms);
           }
         } else {
-          // Generate new PLC quote number
-          try {
-            const nextNo = await getNextPLCNumber("quote");
-            setQuoteNumber(nextNo);
-          } catch {
-            setQuoteNumber(generatePLCId());
-          }
-        }
-
-        // Linked RFQ if present
-        if (search.rfq) {
-          const { data: rfqRow } = await supabase
-            .from("quote_requests")
-            .select("customer_id")
-            .eq("id", search.rfq)
-            .maybeSingle();
-          if (rfqRow?.customer_id) {
-            setCustomerId(rfqRow.customer_id);
+          setQuoteNumber(nextNo || generatePLCId());
+          if (preselectedCustId) {
+            setCustomerId(preselectedCustId);
           }
         }
       } catch (err: any) {
@@ -271,26 +331,7 @@ function CommercialQuoteBuilder() {
       }
     }
     init();
-  }, [search.quoteId, search.rfq]);
-
-  // 2. Load Opportunity if linked
-  useEffect(() => {
-    if (opportunityId) {
-      supabase
-        .from("opportunities")
-        .select("id, opportunity_number, title, project_type, stage, customer_id")
-        .eq("id", opportunityId)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data) {
-            setLinkedOpp(data);
-            if (!customerId && data.customer_id) {
-              setCustomerId(data.customer_id);
-            }
-          }
-        });
-    }
-  }, [opportunityId, customerId]);
+  }, [search.quoteId, search.rfq, search.opportunityId, search.customerId]);
 
   // Selected customer details
   const selectedCustomer = useMemo(

@@ -1502,3 +1502,28 @@ export const deleteCustomer = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+/**
+ * Lean customer list for dropdowns (e.g. quote builder, order intake).
+ * Returns only id, name, phone, email, address, ordered by name, capped at 250 rows.
+ */
+export const listLeanCustomers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth, requireTenant])
+  .handler(async ({ context }) => {
+    const ctx = context.tenantContext as TenantContext;
+    const rows = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        phone: customers.phone,
+        email: customers.email,
+        address: customers.address,
+      })
+      .from(customers)
+      .where(eq(customers.tenantId, ctx.tenantId))
+      .orderBy(customers.name)
+      .limit(250);
+
+    return rows;
+  });
+
